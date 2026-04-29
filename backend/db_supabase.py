@@ -57,6 +57,7 @@ def insert_profile(
     password: str,
     role: str = "student",
     approval_status: str = "pending",
+    auth_user_id: str | None = None,
 ) -> dict[str, Any]:
     row = {
         "full_name": full_name,
@@ -66,6 +67,11 @@ def insert_profile(
         "role": role,
         "approval_status": approval_status,
     }
+    
+    # If auth_user_id is provided, use it as the profile ID
+    if auth_user_id:
+        row["id"] = auth_user_id
+    
     res = _sb().table("profiles").insert(row).execute()
     return res.data[0] if res.data else row
 
