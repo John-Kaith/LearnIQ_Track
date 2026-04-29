@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Dashboard | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher workspace</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a class="active" href="teacher-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Dashboard</a>
+        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar">TR</div>
+          <div>
+            <strong>Prof. Reyes</strong>
+            <div class="small-note">Teacher account</div>
+          </div>
+        </div>
+        <span class="status-badge online">AI tools enabled</span>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Teacher Dashboard</h1>
+          <p>Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
+          <p id="teacher-api-status" class="api-status-line" role="status">Checking server…</p>
+        </div>
+        <a class="btn btn-ghost" href="ai-result.html"><i class="fa-solid fa-eye"></i> Open full lesson review</a>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="content-stack">
+          <article class="glass-card content-card upload-box dashboard-upload-panel" data-upload-role="teacher">
+            <div>
+              <h3>Upload File</h3>
+              <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. PDF gives the best text for AI.</p>
+            </div>
+
+            <label class="upload-hint" for="lesson-file">
+              <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+              <strong>Choose a lesson file</strong>
+              <span class="small-note">Click the dashed area or use Upload File below—your file is sent to the server when you confirm.</span>
+            </label>
+            <input id="lesson-file" class="file-input-sr-only" type="file" accept=".pdf,.ppt,.pptx" />
+            <div class="button-group">
+              <button class="btn btn-primary" type="button" id="upload-lesson-btn"><i class="fa-solid fa-upload"></i> Upload File</button>
+            </div>
+            <div id="file-meta" class="file-meta">No file selected yet</div>
+            <div class="button-group" style="margin-top: 0.75rem;">
+              <button class="btn btn-secondary" type="button" id="teacher-generate-ai-pack-btn"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI content (reviewer, activities &amp; quiz)</button>
+            </div>
+            <div class="button-group" style="margin-top: 0.75rem;">
+              <button class="btn btn-primary" type="button" id="publish-lesson-btn"><i class="fa-solid fa-share-from-square"></i> Publish lesson for students</button>
+              <button class="btn btn-ghost" type="button" id="refresh-lessons-btn"><i class="fa-solid fa-rotate"></i> Refresh lesson list</button>
+            </div>
+            <p id="publish-hint" class="small-note" style="margin-top: 0.75rem;">
+              Upload a file, generate AI content, then publish. Students see the published lesson on their dashboard.
+            </p>
+          </article>
+
+          <article class="glass-card table-card">
+            <div class="table-header">
+              <div>
+                <h3>Uploaded lessons</h3>
+                <p class="table-note">Click a row to select which lesson you are working on. Publish when ready for students.</p>
+              </div>
+            </div>
+
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>AI content</th>
+                  <th>Published</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-lessons-tbody">
+                <tr>
+                  <td colspan="3" class="small-note">Run the backend server and upload a file to see lessons here.</td>
+                </tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+
+        <div class="content-stack">
+          <article class="glass-card preview-card">
+            <div class="preview-head">
+              <div>
+                <h3>AI Output Preview</h3>
+                <p class="small-note">Preview matches the selected lesson. Students only see content after you publish.</p>
+              </div>
+              <span class="pill"><i class="fa-solid fa-bolt"></i> Live preview</span>
+            </div>
+
+            <div id="ai-preview-body" class="preview-body">
+              <div class="preview-snippet">
+                <h4>Reviewer Summary</h4>
+                <p>Upload a file, then run “Generate AI content” to preview reviewer, activities, and quiz here.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Quick Teaching Insights</h3>
+            <ul class="bullet-list">
+              <li>26 students completed the latest reviewer set.</li>
+              <li>Average quiz accuracy improved by 12% this week.</li>
+              <li>18 immersion journals were submitted on time.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

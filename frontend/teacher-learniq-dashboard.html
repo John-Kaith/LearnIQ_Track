@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher LearnIQ Dashboard | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a class="active" href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> LearnIQ Dashboard</a>
+        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar">TR</div>
+          <div>
+            <strong>Prof. Reyes</strong>
+            <div class="small-note">Teacher account</div>
+          </div>
+        </div>
+        <span class="status-badge online">AI tools enabled</span>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Teacher LearnIQ Dashboard</h1>
+          <p>Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
+        </div>
+        <div class="panel-actions">
+          <a class="btn btn-primary" href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full Lesson Review</a>
+          <button class="btn btn-secondary" id="unpublish-lesson-btn"><i class="fa-solid fa-eye-slash"></i> Unpublish Lesson</button>
+        </div>
+      </section>
+
+      <article class="glass-card content-card upload-box" data-upload-role="teacher" aria-label="Lesson upload form">
+        <div>
+          <h3>Upload Lesson File</h3>
+          <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. Extracted text is used for AI generation.</p>
+        </div>
+        <form id="upload-form" class="upload-form">
+          <div class="file-input-wrapper">
+            <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file">
+            <label for="file-input" class="file-input-label">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span id="file-input-text">Choose file or drag here</span>
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary" id="upload-btn">
+            <i class="fa-solid fa-upload"></i> Upload File
+          </button>
+          <p class="file-meta small-note" id="file-meta"></p>
+        </form>
+      </article>
+
+      <section class="stats-grid">
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
+          <div>
+            <span class="small-note">Lessons Uploaded</span>
+            <strong class="metric-value">12</strong>
+            <span class="metric-note">+3 this month</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
+          <div>
+            <span class="small-note">Active Students</span>
+            <strong class="metric-value">28</strong>
+            <span class="metric-note">All enrolled</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-chart-line"></i></div>
+          <div>
+            <span class="small-note">Avg Quiz Score</span>
+            <strong class="metric-value">85%</strong>
+            <span class="metric-note">+5% improvement</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>Recent Lessons</h3>
+            <div class="lesson-list" id="recent-lessons-list">
+              <div class="lesson-item">
+                <div class="lesson-info">
+                  <h4>Introduction to Web Development</h4>
+                  <span class="small-note">PDF • Uploaded 2 days ago</span>
+                </div>
+                <div class="lesson-actions">
+                  <button class="btn btn-sm btn-secondary">Generate AI</button>
+                  <button class="btn btn-sm btn-primary">Publish</button>
+                </div>
+              </div>
+              <div class="lesson-item">
+                <div class="lesson-info">
+                  <h4>Database Design Principles</h4>
+                  <span class="small-note">PowerPoint • Uploaded 1 week ago</span>
+                </div>
+                <div class="lesson-actions">
+                  <button class="btn btn-sm btn-primary">Published</button>
+                </div>
+              </div>
+              <div class="lesson-item">
+                <div class="lesson-info">
+                  <h4>Frontend Frameworks Overview</h4>
+                  <span class="small-note">PDF • Uploaded 2 weeks ago</span>
+                </div>
+                <div class="lesson-actions">
+                  <button class="btn btn-sm btn-primary">Published</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Published Lessons</h3>
+            <div class="published-lessons" id="published-lessons-list">
+              <div class="published-lesson">
+                <div class="lesson-header">
+                  <h4>Database Design Principles</h4>
+                  <span class="status-badge online">Published</span>
+                </div>
+                <div class="lesson-stats">
+                  <span><i class="fa-solid fa-users"></i> 28 students</span>
+                  <span><i class="fa-solid fa-star"></i> 87% avg score</span>
+                  <span><i class="fa-solid fa-check"></i> 25 completed</span>
+                </div>
+              </div>
+              <div class="published-lesson">
+                <div class="lesson-header">
+                  <h4>Frontend Frameworks Overview</h4>
+                  <span class="status-badge online">Published</span>
+                </div>
+                <div class="lesson-stats">
+                  <span><i class="fa-solid fa-users"></i> 28 students</span>
+                  <span><i class="fa-solid fa-star"></i> 82% avg score</span>
+                  <span><i class="fa-solid fa-check"></i> 22 completed</span>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>AI Generation Queue</h3>
+            <div class="ai-queue" id="ai-queue-list">
+              <div class="queue-item">
+                <div class="queue-info">
+                  <h4>Introduction to Web Development</h4>
+                  <span class="small-note">Waiting for AI processing</span>
+                </div>
+                <div class="queue-status">
+                  <span class="status-badge warning">Pending</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Student Performance</h3>
+            <div class="performance-stats">
+              <div class="perf-stat">
+                <span class="small-note">Top Performer</span>
+                <strong>Andrea R.</strong>
+                <span class="small-note">95% average</span>
+              </div>
+              <div class="perf-stat">
+                <span class="small-note">Needs Attention</span>
+                <strong>3 students</strong>
+                <span class="small-note">Below 70%</span>
+              </div>
+              <div class="perf-stat">
+                <span class="small-note">Completion Rate</span>
+                <strong>89%</strong>
+                <span class="small-note">This month</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

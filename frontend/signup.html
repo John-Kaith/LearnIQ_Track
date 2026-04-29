@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="auth-page container">
+    <section class="auth-layout">
+      <article class="glass-card auth-info fade-up">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Student registration with approval flow</small>
+          </span>
+        </a>
+        <h1>Create your student profile</h1>
+        <p>Register using your official ID number. Student accounts remain pending until the Admin/Principal approves the ID.</p>
+
+        <div class="feature-stack">
+          <div><i class="fa-solid fa-user-clock"></i><span>Pending approval after signup</span></div>
+          <div><i class="fa-solid fa-check-double"></i><span>Admin reviews student IDs</span></div>
+          <div><i class="fa-solid fa-graduation-cap"></i><span>Approved students access the full system</span></div>
+        </div>
+      </article>
+
+      <article class="glass-card auth-form-card fade-up delay-1">
+        <div class="section-heading left-align compact">
+          <span class="pill"><i class="fa-solid fa-user-plus"></i> Sign Up</span>
+          <h2>Student registration</h2>
+        </div>
+
+        <form id="signup-form" class="auth-form">
+          <label>
+            <span>Full Name</span>
+            <input id="signup-name" type="text" placeholder="Juan Dela Cruz" required />
+          </label>
+
+          <label>
+            <span>ID Number</span>
+            <input id="signup-id" type="text" placeholder="e.g. 2024-12345" required />
+          </label>
+
+          <label>
+            <span>Email</span>
+            <input id="signup-email" type="email" placeholder="name@school.edu" required />
+          </label>
+
+          <div class="two-field-grid">
+            <label>
+              <span>Password</span>
+              <input id="signup-password" type="password" placeholder="Create password" required />
+            </label>
+            <label>
+              <span>Confirm Password</span>
+              <input id="signup-confirm" type="password" placeholder="Repeat password" required />
+            </label>
+          </div>
+
+          <button class="btn btn-primary btn-block" type="submit">Create Account</button>
+        </form>
+
+        <p id="signup-message" class="auth-card-note" style="display:none;"></p>
+        <p class="auth-link">Already registered? <a href="login.html">Login</a></p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,42 @@
+LearnIQ-Track/
+│
+├── backend/
+│   ├── main.py
+│   ├── routes/
+│   │   ├── auth.py
+│   │   ├── upload.py
+│   │   ├── ai.py
+│   │   ├── quiz.py
+│   │   ├── immersion.py
+│   │
+│   ├── services/
+│   │   ├── ai_service.py
+│   │   ├── file_service.py
+│   │
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── lesson.py
+│   │   ├── quiz.py
+│   │   ├── attendance.py
+│   │   ├── journal.py
+│   │
+│   ├── database/
+│   │   ├── db.py
+│   │
+│   ├── utils/
+│   │   ├── helper.py
+│   │
+│   ├── .env
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── index.html
+│   ├── login.html
+│   ├── signup.html
+│   ├── dashboard.html
+│   ├── quiz.html
+│   ├── journal.html
+│   ├── css/
+│   ├── js/
+│
+└── README.md

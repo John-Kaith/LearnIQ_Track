@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Module Selection | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="auth-page container">
+    <section class="auth-layout">
+      <article class="glass-card auth-info fade-up">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Choose your module</small>
+          </span>
+        </a>
+        <h1>Welcome to LearnIQ Track</h1>
+        <p>Select which module you'd like to access today. Each module serves a different purpose for your learning journey.</p>
+
+        <div class="feature-stack">
+          <div><i class="fa-solid fa-graduation-cap"></i><span>LearnIQ: Lessons, quizzes, and activities</span></div>
+          <div><i class="fa-solid fa-clock"></i><span>Immersion Tracker: Time tracking and journals</span></div>
+          <div><i class="fa-solid fa-shuffle"></i><span>Switch between modules anytime</span></div>
+        </div>
+      </article>
+
+      <article class="glass-card auth-form-card fade-up delay-1">
+        <div class="section-heading left-align compact">
+          <span class="pill"><i class="fa-solid fa-th-large"></i> Module Selection</span>
+          <h2>Choose Module</h2>
+        </div>
+
+        <div class="module-selection-grid">
+          <a href="#" id="learniq-module-link" class="module-card glass-card hover-lift">
+            <div class="module-icon">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="module-content">
+              <h3>LearnIQ</h3>
+              <p>Access lessons, review materials, take quizzes, and complete learning activities.</p>
+              <div class="module-features">
+                <span><i class="fa-solid fa-book"></i> Lessons</span>
+                <span><i class="fa-solid fa-file-lines"></i> Reviewer</span>
+                <span><i class="fa-solid fa-list-check"></i> Quiz</span>
+                <span><i class="fa-solid fa-gamepad"></i> Activities</span>
+              </div>
+            </div>
+            <div class="module-action">
+              <span class="btn btn-primary">Enter LearnIQ</span>
+            </div>
+          </a>
+
+          <a href="immersion-dashboard.html" class="module-card glass-card hover-lift">
+            <div class="module-icon">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+            <div class="module-content">
+              <h3>Immersion Tracker</h3>
+              <p>Track work immersion hours, log daily activities, and maintain attendance records.</p>
+              <div class="module-features">
+                <span><i class="fa-solid fa-right-to-bracket"></i> Time In</span>
+                <span><i class="fa-solid fa-right-from-bracket"></i> Time Out</span>
+                <span><i class="fa-solid fa-book"></i> Journal</span>
+                <span><i class="fa-solid fa-chart-line"></i> Reports</span>
+              </div>
+            </div>
+            <div class="module-action">
+              <span class="btn btn-primary">Enter Immersion Tracker</span>
+            </div>
+          </a>
+        </div>
+
+        <div class="auth-footer">
+          <p>
+            <a href="login.html"><i class="fa-solid fa-left-long"></i> Back to Login</a>
+          </p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const learniqLink = document.getElementById('learniq-module-link');
+      const currentUser = getCurrentUserSession();
+      
+      if (learniqLink && currentUser) {
+        if (currentUser.role === 'Teacher') {
+          learniqLink.href = 'teacher-learniq-dashboard.html';
+        } else {
+          learniqLink.href = 'learniq-dashboard.html';
+        }
+      } else if (learniqLink) {
+        // Fallback to student dashboard if no user session
+        learniqLink.href = 'learniq-dashboard.html';
+      }
+    });
+  </script>
+</body>
+</html>

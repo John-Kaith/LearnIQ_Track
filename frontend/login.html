@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="auth-page container">
+    <section class="auth-layout">
+      <article class="glass-card auth-info fade-up">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Student access & approval flow</small>
+          </span>
+        </a>
+        <h1>Login to LearnIQ Track</h1>
+        <p>Enter your student credentials to continue. Approved users can access the learning dashboard.</p>
+
+        <div class="feature-stack">
+          <div><i class="fa-solid fa-id-card"></i><span>ID-based approval process</span></div>
+          <div><i class="fa-solid fa-user-check"></i><span>Pending review for new accounts</span></div>
+          <div><i class="fa-solid fa-lock"></i><span>Secure access for approved students</span></div>
+        </div>
+      </article>
+
+      <article class="glass-card auth-form-card fade-up delay-1">
+        <div class="section-heading left-align compact">
+          <span class="pill"><i class="fa-solid fa-right-to-bracket"></i> Login</span>
+          <h2>Log in</h2>
+        </div>
+
+        <form id="login-form" class="auth-form">
+          <label>
+            <span>ID Number</span>
+            <input id="login-id" type="text" placeholder="e.g. 123456789012" required />
+          </label>
+
+          <label>
+            <span>Email</span>
+            <input id="login-email" type="email" placeholder="name@gmail.com" required />
+          </label>
+
+          <label>
+            <span>Password</span>
+            <input id="login-password" type="password" placeholder="Enter your password" required />
+          </label>
+
+          <button class="btn btn-primary btn-block" type="submit">Login</button>
+        </form>
+
+        <p id="login-message" class="auth-card-note" style="display:none;"></p>
+        <p class="auth-link">Forgot your password? <a href="forgot-password.html">Reset Password</a></p>
+        <p class="auth-link">Don’t have an account? <a href="signup.html">Sign Up</a></p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

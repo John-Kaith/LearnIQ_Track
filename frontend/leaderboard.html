@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">LQ</span>
+        <span>
+          <strong>LearnIQ Track</strong>
+          <small>Leaderboard</small>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="student-dashboard.html">Student Dashboard</a>
+        <a class="btn btn-primary" href="teacher-dashboard.html">Teacher Dashboard</a>
+      </div>
+    </header>
+
+    <main class="container section-block">
+      <article class="glass-card content-card upload-box dashboard-upload-panel upload-readonly section-block" data-upload-role="leaderboard" aria-label="Lesson upload information" style="margin-bottom: 0;">
+        <div>
+          <h3>Upload File</h3>
+          <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials.</p>
+        </div>
+        <div class="upload-hint upload-readonly-hint">
+          <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <strong>Lesson materials</strong>
+          <span class="small-note">Rankings are separate from lesson uploads. Teachers add class files from the Teacher Dashboard.</span>
+        </div>
+        <button type="button" class="btn btn-primary" disabled aria-disabled="true"><i class="fa-solid fa-upload"></i> Upload File</button>
+        <p class="file-meta small-note">This page is for scores and ranks only.</p>
+      </article>
+
+      <div class="section-heading left-align">
+        <span class="pill"><i class="fa-solid fa-trophy"></i> Rankings</span>
+        <h2>Leaderboard Page</h2>
+        <p>Top performers are highlighted to motivate friendly competition and engagement.</p>
+      </div>
+
+      <section class="top-rank-grid">
+        <article class="glass-card top-rank-card second">
+          <div class="rank-badge">#2</div>
+          <h3>Juan Miguel</h3>
+          <p>1,280 points</p>
+          <small>Excellent immersion journal consistency</small>
+        </article>
+        <article class="glass-card top-rank-card first">
+          <div class="rank-badge">#1</div>
+          <h3>Andrea Reyes</h3>
+          <p>1,360 points</p>
+          <small>Highest quiz mastery this month</small>
+        </article>
+        <article class="glass-card top-rank-card third">
+          <div class="rank-badge">#3</div>
+          <h3>Kevin Lopez</h3>
+          <p>1,210 points</p>
+          <small>Strong task completion streak</small>
+        </article>
+      </section>
+
+      <section class="glass-card table-card section-block">
+        <div class="ranking-head">
+          <div>
+            <h3>Full Ranking Table</h3>
+            <p class="table-note">Sample data for your capstone UI presentation</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Student</th>
+              <th>Score</th>
+              <th>Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>#1</td><td>Andrea Reyes</td><td>1,360</td><td>92%</td></tr>
+            <tr><td>#2</td><td>Juan Miguel</td><td>1,280</td><td>78%</td></tr>
+            <tr><td>#3</td><td>Kevin Lopez</td><td>1,210</td><td>75%</td></tr>
+            <tr><td>#4</td><td>Sofia Cruz</td><td>1,150</td><td>71%</td></tr>
+            <tr><td>#5</td><td>Mark Villanueva</td><td>1,090</td><td>68%</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

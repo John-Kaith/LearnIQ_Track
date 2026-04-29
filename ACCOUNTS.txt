@@ -1,0 +1,185 @@
+================================================================================
+                   LearnIQ TRACK - TEST ACCOUNTS & CREDENTIALS
+================================================================================
+
+PROJECT: LearnIQ Track (Capstone Project)
+DATE: April 5, 2026
+SYSTEM: HTML/CSS/JavaScript Frontend
+
+================================================================================
+                              ADMIN ACCOUNT
+================================================================================
+
+Full Name:      Principal Cruz
+ID Number:      ADMIN-01
+Email:          principal@school.edu
+Password:       AdminPass1
+Role:           Admin / Principal
+Status:         Approved
+Created Date:   Dec 01, 2023
+
+Dashboard:      admin-approval.html
+Permissions:    - Approve/Reject Student Registrations
+                - View Dashboard Metrics
+                - Manage Users
+                - View Activity Logs
+                - Access System Status
+
+================================================================================
+                            TEACHER ACCOUNTS
+================================================================================
+
+--- Teacher Account 1 ---
+Full Name:      Teacher Ronaldo
+ID Number:      TEACH-01
+Email:          ronaldo@school.edu
+Password:       TeacherPass1
+Role:           Teacher
+Status:         Approved
+Created Date:   Feb 08, 2024
+
+Dashboard:      teacher-dashboard.html
+Permissions:    - Upload Lesson Files
+                - Generate AI Content
+                - View Student Results
+
+--- Teacher Account 2 ---
+Full Name:      Teacher Miriam
+ID Number:      TEACH-02
+Email:          miriam@school.edu
+Password:       TeacherPass2
+Role:           Teacher
+Status:         Approved
+Created Date:   Mar 01, 2024
+
+Dashboard:      teacher-dashboard.html
+Permissions:    - Upload Lesson Files
+                - Generate AI Content
+                - View Student Results
+
+================================================================================
+                           STUDENT ACCOUNTS
+================================================================================
+
+--- Student Account 1 (Pending Approval) ---
+Full Name:      Maria Santos
+ID Number:      2024-10001
+Email:          maria.santos@school.edu
+Password:       StudentPass1
+Role:           Student
+Status:         Pending
+Created Date:   Mar 25, 2024
+
+Dashboard:      student-dashboard.html
+Note:           Requires admin approval before login is successful
+
+--- Student Account 2 (Approved) ---
+Full Name:      Jose dela Cruz
+ID Number:      2024-10002
+Email:          jose.delacruz@school.edu
+Password:       StudentPass2
+Role:           Student
+Status:         Approved
+Created Date:   Mar 16, 2024
+
+Dashboard:      student-dashboard.html
+Permissions:    - Access Student Dashboard
+                - View AI Results
+                - Check Leaderboard
+
+--- Student Account 3 (Rejected) ---
+Full Name:      Anna Reyes
+ID Number:      2024-10003
+Email:          anna.reyes@school.edu
+Password:       StudentPass3
+Role:           Student
+Status:         Rejected
+Created Date:   Mar 18, 2024
+
+Dashboard:      student-dashboard.html
+Note:           Registration was not approved. Cannot login successfully.
+
+================================================================================
+                            HOW TO LOGIN
+================================================================================
+
+1. Open frontend/login.html in your browser
+2. Enter ID Number (from list above)
+3. Enter Email (from list above)
+4. Enter Password (from list above)
+5. Click Login
+
+Note: Role field has been removed from login form.
+      The system automatically determines user's dashboard based on their role.
+
+Admin → admin-approval.html
+Teacher → teacher-dashboard.html
+Student → student-dashboard.html
+
+================================================================================
+                         AVAILABLE DASHBOARDS
+================================================================================
+
+Admin Dashboard:     frontend/admin-approval.html
+                    - Student approvals management
+                    - Dashboard metrics and statistics
+                    - User management table
+                    - Recent activity logs
+                    - System status monitoring
+
+Teacher Dashboard:   frontend/teacher-dashboard.html
+                    - AI lesson content generation
+                    - File upload functionality
+                    - Student results preview
+                    - Leaderboard access
+
+Student Dashboard:   frontend/student-dashboard.html
+                    - View generated AI content
+                    - Check AI results
+                    - Access leaderboard
+                    - Journal submissions
+
+Login Page:          frontend/login.html
+Signup Page:         frontend/signup.html
+Leaderboard:         frontend/leaderboard.html
+AI Results:          frontend/ai-result.html
+
+================================================================================
+                         FEATURES
+================================================================================
+
+✓ User Authentication (Login/Signup)
+✓ Role-Based Dashboard Routing
+✓ Admin Approval System
+✓ AI Content Generation
+✓ File Upload Management
+✓ Leaderboard System
+✓ Activity Logging
+✓ Dark Theme UI
+✓ Responsive Design
+✓ Logout Functionality
+
+================================================================================
+                         TECH STACK
+================================================================================
+
+Frontend:       HTML5, CSS3, JavaScript
+Storage:        LocalStorage (for session data)
+Icons:          Font Awesome 6.5.2
+Fonts:          Google Fonts - Inter
+Design:         Glassmorphism + Dark Theme
+
+================================================================================
+                         NOTES
+================================================================================
+
+- All credentials are stored in localStorage
+- Sample data is used for demonstration purposes
+- No backend server required for frontend testing
+- All user data resets on localStorage clear
+- Status badges indicate account approval state:
+  * Pending = Awaiting admin approval
+  * Approved = Can login successfully
+  * Rejected = Login attempt blocked
+
+================================================================================

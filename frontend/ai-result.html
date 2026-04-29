@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Result Page | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">LQ</span>
+        <span>
+          <strong>LearnIQ Track</strong>
+          <small>AI results</small>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" href="teacher-dashboard.html">Back to Teacher Dashboard</a>
+        <a class="btn btn-primary" href="student-dashboard.html">How students see the published lesson</a>
+      </div>
+    </header>
+
+    <main class="container section-block">
+      <div class="section-heading left-align">
+        <span class="pill"><i class="fa-solid fa-sparkles"></i> Generated content</span>
+        <h2>Teacher: full lesson review</h2>
+        <p>Reviewer, quiz, and activities for the lesson you selected on the Teacher Dashboard (same data students see after you publish).</p>
+      </div>
+
+      <section class="result-grid">
+        <article class="glass-card result-card">
+          <h3><i class="fa-solid fa-file-lines"></i> Reviewer</h3>
+          <ul id="reviewer-result" class="result-list">
+            <li>Sample reviewer content will appear here.</li>
+          </ul>
+        </article>
+
+        <article class="glass-card result-card">
+          <h3><i class="fa-solid fa-list-check"></i> Quiz</h3>
+          <ol id="quiz-result" class="result-list">
+            <li>Sample quiz items will appear here.</li>
+          </ol>
+        </article>
+
+        <article class="glass-card result-card">
+          <h3><i class="fa-solid fa-shapes"></i> Activities</h3>
+          <ul id="activities-result" class="result-list">
+            <li>Sample learning activities will appear here.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

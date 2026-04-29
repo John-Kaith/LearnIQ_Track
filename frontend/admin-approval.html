@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Approval | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="page-shell container">
+    <div class="dashboard-shell">
+      <aside class="sidebar glass-card fade-up">
+        <div class="sidebar-header">
+          <div class="brand" style="gap:0.85rem;">
+            <span class="brand-mark">LQ</span>
+            <span>
+              <strong>LearnIQ Track</strong>
+              <small>Admin Control Center</small>
+            </span>
+          </div>
+          <p class="small-note">Review approvals, activity, and system health from one view.</p>
+        </div>
+
+        <nav class="side-links">
+          <a href="admin-approval.html" class="active"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+          <a href="admin-approval.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
+          <a href="student-dashboard.html"><i class="fa-solid fa-users"></i> Users</a>
+          <a href="ai-result.html"><i class="fa-solid fa-robot"></i> AI Results</a>
+          <a href="#"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
+          <a href="leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
+          <a href="#"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
+          <a href="#"><i class="fa-solid fa-book"></i> Journals</a>
+          <a href="#"><i class="fa-solid fa-file-lines"></i> Reports</a>
+          <a href="#"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <span class="avatar">PC</span>
+            <div>
+              <strong>Principal Cruz</strong>
+              <small>Admin / Principal</small>
+            </div>
+          </div>
+          <button id="sidebar-logout" type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()" title="End your admin session"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
+          <div class="pill">Live system view</div>
+        </div>
+      </aside>
+
+      <section class="main-panel">
+        <section class="topbar glass-card fade-up delay-1">
+          <div class="topbar-title">
+            <div>
+              <p class="small-note">Admin Dashboard</p>
+              <h2>LearnIQ Track</h2>
+            </div>
+          </div>
+          <div class="topbar-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="topbar-search" type="search" placeholder="Search approvals, users, or files" />
+          </div>
+          <div class="topbar-actions">
+            <button class="btn btn-ghost" aria-label="Notifications"><i class="fa-solid fa-bell"></i></button>
+            <button class="btn btn-ghost profile-btn" type="button"><i class="fa-solid fa-user-circle"></i> Admin</button>
+            <button id="logout-button" type="button" class="btn btn-secondary" onclick="logoutAdmin()" title="End your admin session"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
+          </div>
+        </section>
+
+        <section class="glass-card panel-header fade-up delay-1">
+          <div class="panel-title">
+            <h1>Welcome back, Admin</h1>
+            <p>Review approval requests, track daily registrations, and check system health.</p>
+          </div>
+          <button id="refresh-dashboard" class="btn btn-primary">Refresh Overview</button>
+        </section>
+
+        <section class="glass-card stats-grid fade-up delay-1">
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Total Students</span>
+              <strong id="metric-total-students" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-user-graduate"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Pending Approvals</span>
+              <strong id="metric-pending-approvals" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-hourglass-half"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Approved Accounts</span>
+              <strong id="metric-approved-accounts" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-user-check"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Rejected Accounts</span>
+              <strong id="metric-rejected-accounts" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-user-slash"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Total Teachers</span>
+              <strong id="metric-total-teachers" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-chalkboard-user"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Active Users Today</span>
+              <strong id="metric-active-users" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-signal"></i>
+          </article>
+        </section>
+
+        <section class="glass-card content-card upload-box dashboard-upload-panel upload-readonly fade-up delay-2" data-upload-role="admin" aria-label="Lesson upload information">
+          <div>
+            <h3>Upload File</h3>
+            <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials.</p>
+          </div>
+          <div class="upload-hint upload-readonly-hint">
+            <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <strong>Class lesson files</strong>
+            <span class="small-note">Teachers upload PDFs and slides on the Teacher Dashboard. Principals manage accounts and approvals here.</span>
+          </div>
+          <button type="button" class="btn btn-primary" disabled aria-disabled="true"><i class="fa-solid fa-upload"></i> Upload File</button>
+          <p class="file-meta small-note">Go to Teacher Dashboard to upload lesson materials.</p>
+        </section>
+
+        <section class="glass-card content-card fade-up delay-2">
+          <div class="panel-header">
+            <div>
+              <h2>Quick Actions</h2>
+              <p class="small-note">Speed up common admin tasks with one click.</p>
+            </div>
+          </div>
+          <div class="button-group">
+            <button id="approve-all-btn" class="btn btn-primary">Approve All Pending</button>
+            <button id="export-reports-btn" class="btn btn-secondary">Export Reports</button>
+            <button id="view-students-btn" class="btn btn-ghost">View All Students</button>
+            <button id="upload-file-btn" class="btn btn-secondary">Upload New File</button>
+          </div>
+          <input id="dashboard-upload-input" type="file" hidden />
+        </section>
+
+        <section class="dashboard-grid">
+          <div class="content-stack">
+            <section class="glass-card chart-card fade-up delay-2">
+              <div class="panel-header">
+                <div>
+                  <h2>Approval Statistics</h2>
+                  <p class="small-note">Track registration outcomes and the current approval funnel.</p>
+                </div>
+              </div>
+              <div class="chart-row">
+                <div class="chart-item">
+                  <span>Pending</span>
+                  <div class="progress-bar"><span id="chart-pending" data-progress="0"></span></div>
+                  <small class="metric-note"><span class="dot violet"></span> Pending approvals</small>
+                </div>
+                <div class="chart-item">
+                  <span>Approved</span>
+                  <div class="progress-bar"><span id="chart-approved" data-progress="0"></span></div>
+                  <small class="metric-note"><span class="dot blue"></span> Approved accounts</small>
+                </div>
+                <div class="chart-item">
+                  <span>Rejected</span>
+                  <div class="progress-bar"><span id="chart-rejected" data-progress="0"></span></div>
+                  <small class="metric-note"><span class="dot violet"></span> Rejected accounts</small>
+                </div>
+              </div>
+            </section>
+
+            <section class="glass-card table-card fade-up delay-2">
+              <div class="panel-header">
+                <div>
+                  <h3>User Management</h3>
+                  <p class="small-note">Browse current users and process pending registrations.</p>
+                </div>
+              </div>
+              <div class="search-box">
+                <input id="admin-search" type="search" placeholder="Search by name or ID number" />
+                <button id="admin-reset" class="btn btn-secondary">Reset</button>
+              </div>
+              <div class="table-overflow">
+                <table class="data-table" id="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Full Name</th>
+                      <th>ID Number</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="content-stack">
+            <section class="glass-card fade-up delay-2">
+              <div class="panel-header">
+                <div>
+                  <h3>Recent Activity</h3>
+                  <p class="small-note">Latest approvals, uploads, AI generations, and journal entries.</p>
+                </div>
+              </div>
+              <ul class="activity-list" id="recent-activity-list"></ul>
+            </section>
+          </div>
+        </section>
+
+        <section class="glass-card fade-up delay-2">
+          <div class="panel-header">
+            <div>
+              <h3>System Status</h3>
+              <p class="small-note">Monitor infrastructure health and backups at a glance.</p>
+            </div>
+          </div>
+          <div class="status-grid wide-status-grid">
+            <div class="status-card">
+              <div>
+                <strong>AI API</strong>
+                <p class="small-note">Third-party intelligence service</p>
+              </div>
+              <span class="status-badge online">Online</span>
+            </div>
+            <div class="status-card">
+              <div>
+                <strong>Database</strong>
+                <p class="small-note">Registration and reporting store</p>
+              </div>
+              <span class="status-badge online">Connected</span>
+            </div>
+            <div class="status-card">
+              <div>
+                <strong>Last Backup</strong>
+                <p class="small-note">Recent automated save</p>
+              </div>
+              <span class="status-badge warning">2h ago</span>
+            </div>
+            <div class="status-card">
+              <div>
+                <strong>Server</strong>
+                <p class="small-note">App delivery and performance</p>
+              </div>
+              <span class="status-badge online">Healthy</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

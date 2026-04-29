@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Dashboard | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Student portal</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a class="active" href="student-dashboard.html"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="#student-learning-block"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div>
+            <strong id="student-display-name">Student</strong>
+            <div class="small-note" id="student-display-track">STEM - 12 A</div>
+          </div>
+        </div>
+        <span class="status-badge online">Active learner</span>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Student Dashboard</h1>
+          <p>Study the lesson your teacher published, take the quiz, and track work immersion below.</p>
+        </div>
+        <a class="btn btn-primary" href="leaderboard.html"><i class="fa-solid fa-ranking-star"></i> View Rankings</a>
+      </section>
+
+      <article class="glass-card content-card upload-box dashboard-upload-panel upload-readonly" data-upload-role="student" aria-label="Lesson upload information">
+        <div>
+          <h3>Upload File</h3>
+          <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials.</p>
+        </div>
+        <div class="upload-hint upload-readonly-hint">
+          <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <strong>Lesson materials</strong>
+          <span class="small-note">Teachers upload class files. You open the published lesson under “My lesson” below.</span>
+        </div>
+        <button type="button" class="btn btn-primary" disabled aria-disabled="true"><i class="fa-solid fa-upload"></i> Upload File</button>
+        <p class="file-meta small-note">Students do not upload lesson sources—only teachers do.</p>
+      </article>
+
+      <section class="stats-grid">
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-star"></i></div>
+          <div>
+            <span class="small-note">Score</span>
+            <strong class="metric-value">1,280</strong>
+            <span class="metric-note">+120 this week</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-trophy"></i></div>
+          <div>
+            <span class="small-note">Leaderboard Rank</span>
+            <strong class="metric-value">#2</strong>
+            <span class="metric-note">Top 10% of students</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-chart-simple"></i></div>
+          <div>
+            <span class="small-note">Progress</span>
+            <strong class="metric-value">78%</strong>
+            <div class="progress-bar"><span data-progress="78%"></span></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="student-learning-block" class="dashboard-grid">
+        <div class="content-stack">
+          <article id="student-lesson-empty" class="glass-card content-card">
+            <h3>Your lesson</h3>
+            <p class="content-subtitle" id="student-lesson-empty-text">
+              No published lesson yet. When your teacher uploads material and publishes it, your reviewer, quiz, and activities will appear here.
+            </p>
+            <button type="button" class="btn btn-secondary" id="student-refresh-lesson-btn"><i class="fa-solid fa-rotate"></i> Check again</button>
+          </article>
+
+          <article id="student-lesson-meta" class="glass-card content-card" hidden>
+            <h3 id="student-lesson-title">Lesson</h3>
+            <p class="content-subtitle" id="student-lesson-filename"></p>
+            <button type="button" class="btn btn-secondary" id="student-open-actions-btn" onclick="window.openStudentLessonActions && window.openStudentLessonActions()">
+              <i class="fa-solid fa-list"></i> Open lesson actions
+            </button>
+          </article>
+
+          <article id="student-reviewer-card" class="glass-card content-card" hidden>
+            <h3>Reviewer</h3>
+            <p class="content-subtitle">From your teacher’s uploaded material</p>
+            <ul id="student-reviewer-list" class="bullet-list"></ul>
+          </article>
+
+          <article id="student-quiz-card" class="glass-card content-card" hidden>
+            <h3>Quiz</h3>
+            <p class="small-note" id="student-quiz-progress"></p>
+            <div id="student-quiz-body"></div>
+            <p class="metric-note" id="student-quiz-score" style="margin-top: 1rem;"></p>
+          </article>
+
+          <article id="student-activities-card" class="glass-card content-card" hidden>
+            <h3>Activities</h3>
+            <p class="content-subtitle">Tasks based on the same lesson file</p>
+            <div id="student-activities-list" class="activity-list"></div>
+          </article>
+        </div>
+
+        <div class="content-stack">
+          <article class="glass-card leaderboard-card">
+            <h3>Leaderboard Preview</h3>
+            <ul class="leaderboard-mini">
+              <li><strong>1. Andrea R.</strong> <small>1,360 pts</small></li>
+              <li><strong id="student-leaderboard-name">2. Student</strong> <small>1,280 pts</small></li>
+              <li><strong>3. Kevin L.</strong> <small>1,210 pts</small></li>
+            </ul>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Time In / Time Out</h3>
+            <ul class="time-log-list">
+              <li class="time-log-item">
+                <div>
+                  <strong>Time In</strong>
+                  <span class="time-note">08:03 AM</span>
+                </div>
+                <span class="status-badge online">Present</span>
+              </li>
+              <li class="time-log-item">
+                <div>
+                  <strong>Time Out</strong>
+                  <span class="time-note">05:01 PM</span>
+                </div>
+                <span class="status-badge warning">Pending sign-off</span>
+              </li>
+            </ul>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Journal</h3>
+            <div class="journal-list">
+              <div class="journal-entry">
+                <strong>March 29 Entry</strong>
+                <p>Observed how workflow tools improve communication during office tasks.</p>
+              </div>
+              <div class="journal-entry">
+                <strong>March 30 Entry</strong>
+                <p>Learned the value of documentation and task tracking in professional work.</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="student-lesson-action-modal" class="action-modal-backdrop" hidden>
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="student-lesson-action-modal-title">
+      <div class="action-modal-head">
+        <h3 id="student-lesson-action-modal-title">Choose lesson content</h3>
+        <button id="student-lesson-action-modal-close" class="btn btn-ghost" type="button" aria-label="Close lesson actions">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p id="student-lesson-action-modal-meta" class="small-note">Selected lesson</p>
+      <div class="action-modal-actions">
+        <button class="btn btn-secondary" type="button" data-student-lesson-action="reviewer">
+          <i class="fa-solid fa-file-lines"></i> Create a reviewer
+        </button>
+        <button class="btn btn-secondary" type="button" data-student-lesson-action="quiz">
+          <i class="fa-solid fa-list-check"></i> Create a quiz
+        </button>
+        <button class="btn btn-secondary" type="button" data-student-lesson-action="activity">
+          <i class="fa-solid fa-gamepad"></i> Create a activity
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

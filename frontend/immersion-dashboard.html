@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Immersion Tracker | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Immersion Tracker</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a class="active" href="immersion-dashboard.html"><i class="fa-solid fa-clock"></i> Immersion Tracker</a>
+        <a href="#time-tracking-block"><i class="fa-solid fa-right-to-bracket"></i> Time Tracking</a>
+        <a href="#journal-block"><i class="fa-solid fa-book"></i> Daily Journal</a>
+        <a href="#reports-block"><i class="fa-solid fa-chart-line"></i> Reports</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div>
+            <strong id="student-display-name">Student</strong>
+            <div class="small-note" id="student-display-track">STEM - 12 A</div>
+          </div>
+        </div>
+        <span class="status-badge online">Tracking active</span>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Immersion Tracker</h1>
+          <p>Track your work immersion hours, log daily activities, and maintain attendance records.</p>
+        </div>
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="time-in-btn"><i class="fa-solid fa-right-to-bracket"></i> Time In</button>
+          <button class="btn btn-secondary" id="time-out-btn" disabled><i class="fa-solid fa-right-from-bracket"></i> Time Out</button>
+        </div>
+      </section>
+
+      <section class="stats-grid">
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-clock"></i></div>
+          <div>
+            <span class="small-note">Total Hours</span>
+            <strong class="metric-value">142.5</strong>
+            <span class="metric-note">This month: 28.3</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-calendar-check"></i></div>
+          <div>
+            <span class="small-note">Days Attended</span>
+            <strong class="metric-value">18 / 20</strong>
+            <span class="metric-note">90% attendance</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-book"></i></div>
+          <div>
+            <span class="small-note">Journal Entries</span>
+            <strong class="metric-value">15</strong>
+            <span class="metric-note">Last entry: Today</span>
+          </div>
+        </article>
+      </section>
+
+      <section id="time-tracking-block" class="dashboard-grid">
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>Today's Time Log</h3>
+            <div class="time-status" id="current-time-status">
+              <div class="time-display">
+                <span class="small-note">Current Status</span>
+                <strong id="time-status-text">Not Clocked In</strong>
+              </div>
+              <div class="time-display">
+                <span class="small-note">Time In</span>
+                <strong id="time-in-display">--:--</strong>
+              </div>
+              <div class="time-display">
+                <span class="small-note">Time Out</span>
+                <strong id="time-out-display">--:--</strong>
+              </div>
+              <div class="time-display">
+                <span class="small-note">Duration</span>
+                <strong id="duration-display">0h 0m</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Recent Attendance</h3>
+            <ul class="time-log-list" id="recent-attendance-list">
+              <li class="time-log-item">
+                <div>
+                  <strong>Today</strong>
+                  <span class="small-note">Time In: 8:00 AM | Time Out: --</span>
+                </div>
+                <span class="status-badge active">Currently In</span>
+              </li>
+              <li class="time-log-item">
+                <div>
+                  <strong>Yesterday</strong>
+                  <span class="small-note">Time In: 8:15 AM | Time Out: 5:30 PM</span>
+                </div>
+                <span class="status-badge completed">9h 15m</span>
+              </li>
+              <li class="time-log-item">
+                <div>
+                  <strong>Monday</strong>
+                  <span class="small-note">Time In: 8:00 AM | Time Out: 5:00 PM</span>
+                </div>
+                <span class="status-badge completed">9h 0m</span>
+              </li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>Weekly Summary</h3>
+            <div class="weekly-stats">
+              <div class="week-stat">
+                <span class="small-note">This Week</span>
+                <strong>42.5 hours</strong>
+              </div>
+              <div class="week-stat">
+                <span class="small-note">Average Daily</span>
+                <strong>8.5 hours</strong>
+              </div>
+              <div class="week-stat">
+                <span class="small-note">Days Present</span>
+                <strong>5 / 5</strong>
+              </div>
+            </div>
+            <div class="progress-bar">
+              <span data-progress="100%"></span>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Monthly Progress</h3>
+            <div class="monthly-chart">
+              <div class="month-bar" style="height: 80%">
+                <span class="small-note">Week 1</span>
+                <strong>32h</strong>
+              </div>
+              <div class="month-bar" style="height: 90%">
+                <span class="small-note">Week 2</span>
+                <strong>36h</strong>
+              </div>
+              <div class="month-bar" style="height: 85%">
+                <span class="small-note">Week 3</span>
+                <strong>34h</strong>
+              </div>
+              <div class="month-bar" style="height: 70%">
+                <span class="small-note">Week 4</span>
+                <strong>28h</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="journal-block" class="dashboard-grid">
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>Daily Journal</h3>
+            <form id="journal-form" class="journal-form">
+              <div class="form-group">
+                <label for="journal-date">Date</label>
+                <input type="date" id="journal-date" required>
+              </div>
+              <div class="form-group">
+                <label for="journal-body">Today's Activities</label>
+                <textarea id="journal-body" rows="6" placeholder="Describe what you did today, what you learned, challenges faced, etc."></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-save"></i> Save Entry
+              </button>
+            </form>
+          </article>
+        </div>
+
+        <div class="content-stack">
+          <article class="glass-card content-card">
+            <h3>Recent Journal Entries</h3>
+            <div class="journal-list" id="recent-journal-list">
+              <article class="journal-entry">
+                <div class="journal-header">
+                  <strong>Today</strong>
+                  <span class="small-note">2:30 PM</span>
+                </div>
+                <p class="journal-content">Today I worked on the frontend development project, implementing the new dashboard design. I learned about responsive design principles and CSS Grid layout...</p>
+              </article>
+              <article class="journal-entry">
+                <div class="journal-header">
+                  <strong>Yesterday</strong>
+                  <span class="small-note">5:45 PM</span>
+                </div>
+                <p class="journal-content">Attended the team meeting in the morning, then continued with backend API development. Fixed several bugs in the authentication system...</p>
+              </article>
+              <article class="journal-entry">
+                <div class="journal-header">
+                  <strong>Monday</strong>
+                  <span class="small-note">6:00 PM</span>
+                </div>
+                <p class="journal-content">Started the week with database optimization tasks. Improved query performance and implemented new indexing strategies...</p>
+              </article>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="reports-block" class="dashboard-grid">
+        <article class="glass-card content-card full-width">
+          <h3>Immersion Reports</h3>
+          <div class="reports-grid">
+            <div class="report-card">
+              <h4>Attendance Report</h4>
+              <p>Monthly attendance summary with detailed time logs.</p>
+              <button class="btn btn-secondary">
+                <i class="fa-solid fa-download"></i> Download PDF
+              </button>
+            </div>
+            <div class="report-card">
+              <h4>Hours Summary</h4>
+              <p>Weekly and monthly hours breakdown with trends.</p>
+              <button class="btn btn-secondary">
+                <i class="fa-solid fa-download"></i> Download PDF
+              </button>
+            </div>
+            <div class="report-card">
+              <h4>Journal Compilation</h4>
+              <p>All journal entries compiled into a single document.</p>
+              <button class="btn btn-secondary">
+                <i class="fa-solid fa-download"></i> Download PDF
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
