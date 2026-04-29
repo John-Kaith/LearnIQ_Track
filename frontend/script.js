@@ -120,13 +120,15 @@ function getUserInitials(fullName) {
 }
 
 function setCurrentUserSession(user) {
-  if (!user) return;
   const safeUser = {
-    fullName: user.fullName || "",
-    idNumber: user.idNumber || "",
-    email: user.email || "",
-    role: user.role || "Student",
-    status: user.status || "Approved"
+    id: user.id,
+    id_number: user.id_number,
+    email: user.email,
+    full_name: user.full_name,
+    role: user.role || "student",
+    approval_status: user.approval_status || "approved",
+    access_token: user.access_token,
+    refresh_token: user.refresh_token
   };
   sessionStorage.setItem(authSessionKey, JSON.stringify(safeUser));
 }
@@ -393,7 +395,7 @@ function setupSignupPage() {
     }
 
     try {
-      // Call backend register endpoint
+      // Call backend register endpoint (now uses Supabase Auth)
       const response = await fetch(apiUrl("/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -402,8 +404,7 @@ function setupSignupPage() {
           id_number: idNumber,
           email: email,
           password: password,
-          role: "student", // Public signup only allows student
-          approval_status: "pending"
+          role: "student"
         })
       });
 
@@ -414,7 +415,7 @@ function setupSignupPage() {
 
       const result = await response.json();
       signupForm.reset();
-      showAuthMessage("Your account is pending approval by the Admin/Principal.", signupMessage, "success");
+      showAuthMessage(result.message || "Your account is pending approval by the Admin/Principal.", signupMessage, "success");
       showToast("Student registration submitted for review.", "success");
     } catch (error) {
       showAuthMessage(error.message || "Registration failed. Please try again.", signupMessage, "error");
@@ -424,42 +425,67 @@ function setupSignupPage() {
 }
 
 function setupLoginPage() {
+  console.log("setupLoginPage running");
+  
   const loginForm = document.querySelector("#login-form");
   const loginMessage = document.querySelector("#login-message");
-  if (!loginForm) return;
+  
+  console.log("login form found:", loginForm);
+  console.log("login message found:", loginMessage);
+  
+  if (!loginForm) {
+    console.error("Login form not found!");
+    return;
+  }
 
   loginForm.addEventListener("submit", async (event) => {
+    console.log("login submit fired");
     event.preventDefault();
-    if (!loginMessage) return;
 
-    const idNumber = document.querySelector("#login-id").value.trim();
     const email = document.querySelector("#login-email").value.trim().toLowerCase();
     const password = document.querySelector("#login-password").value;
 
-    if (!idNumber || !email || !password) {
-      showAuthMessage("All fields are required.", loginMessage, "error");
+    console.log("login attempt with email:", email);
+
+    if (!email || !password) {
+      const errorMsg = "Email and password are required.";
+      console.error(errorMsg);
+      if (loginMessage) {
+        showAuthMessage(errorMsg, loginMessage, "error");
+      } else {
+        alert(errorMsg);
+      }
       return;
     }
 
     try {
-      // Call backend login endpoint
+      console.log("sending login request to:", apiUrl("/login"));
+      
+      // Call backend login endpoint (now uses Supabase Auth)
       const response = await fetch(apiUrl("/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id_number: idNumber,
           email: email,
           password: password
         })
       });
 
+      console.log("login response status:", response.status);
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        console.error("login error response:", error);
         throw new Error(error.error || "Login failed");
       }
 
       const result = await response.json();
+      console.log("login success result:", result);
+      
       const user = result.user;
+      if (!user) {
+        throw new Error("Invalid response format: missing user data");
+      }
 
       const successMessage =
         user.role === "admin"
@@ -467,6 +493,8 @@ function setupLoginPage() {
           : user.role === "teacher"
           ? "Welcome Teacher. Redirecting to teacher dashboard..."
           : "Login successful. Redirecting to student dashboard...";
+      
+      console.log("login successful, redirecting...");
       showAuthMessage(successMessage, loginMessage, "success");
       showToast(successMessage, "success");
 
@@ -480,8 +508,14 @@ function setupLoginPage() {
         }
       }, 1000);
     } catch (error) {
-      showAuthMessage(error.message || "Login failed. Please try again.", loginMessage, "error");
-      showToast(`Login failed: ${error.message}`, "error");
+      console.error("login error:", error);
+      const errorMsg = error.message || "Login failed. Please try again.";
+      if (loginMessage) {
+        showAuthMessage(errorMsg, loginMessage, "error");
+      } else {
+        alert(errorMsg);
+      }
+      showToast(`Login failed: ${errorMsg}`, "error");
     }
   });
 }

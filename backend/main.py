@@ -3,7 +3,6 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import hashlib
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -11,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
+from supabase import create_client, Client
 
 import db_supabase
 from supabase_client import is_configured
@@ -21,16 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 API_KEY = os.getenv("API_KEY")
 
-# Password hashing utilities
-def hash_password(password: str) -> str:
-    """Hash a password using SHA-256 with salt"""
-    salt = "learniq_salt_2024"  # In production, use random salt per user
-    combined = password + salt
-    return hashlib.sha256(combined.encode()).hexdigest()
-
-def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
-    return hash_password(password) == hashed_password
+# Supabase Auth client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(supabase_url, supabase_key)
 
 app = FastAPI(title="LearnIQ Track API")
 
@@ -161,36 +155,43 @@ async def login_user(body: dict):
     if err is not None:
         return err
     try:
-        id_number = (body.get("id_number") or "").strip()
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
         
-        if not id_number or not email or not password:
-            return JSONResponse({"error": "id_number, email, and password are required."}, status_code=400)
+        if not email or not password:
+            return JSONResponse({"error": "email and password are required."}, status_code=400)
         
-        # Get user from database
-        user = db_supabase.get_profile_by_credentials(id_number, email)
-        if not user:
+        # Authenticate with Supabase
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        
+        if not auth_response.user:
             return JSONResponse({"error": "Invalid credentials."}, status_code=401)
         
-        # Verify password
-        if not verify_password(password, user.get("password", "")):
-            return JSONResponse({"error": "Invalid credentials."}, status_code=401)
+        # Get user profile from our profiles table
+        user_profile = db_supabase.get_profile_by_email(email)
+        if not user_profile:
+            return JSONResponse({"error": "User profile not found."}, status_code=404)
         
         # Check approval status
-        approval_status = user.get("approval_status", "pending")
+        approval_status = user_profile.get("approval_status", "pending")
         if approval_status == "pending":
             return JSONResponse({"error": "Your account is still pending approval."}, status_code=403)
-        if approval_status == "rejected":
+        elif approval_status == "rejected":
             return JSONResponse({"error": "Your registration was not approved. Please contact the administrator."}, status_code=403)
         
-        # Return safe user data (without password)
+        # Return safe user data with auth session
         safe_user = {
-            "full_name": user.get("full_name"),
-            "id_number": user.get("id_number"),
-            "email": user.get("email"),
-            "role": user.get("role"),
-            "approval_status": user.get("approval_status")
+            "id": user_profile.get("id"),
+            "full_name": user_profile.get("full_name"),
+            "id_number": user_profile.get("id_number"),
+            "email": user_profile.get("email"),
+            "role": user_profile.get("role"),
+            "approval_status": user_profile.get("approval_status"),
+            "access_token": auth_response.session.access_token,
+            "refresh_token": auth_response.session.refresh_token
         }
         
         return {"user": safe_user, "message": "Login successful"}
@@ -209,17 +210,49 @@ async def forgot_password(body: dict):
         if not email:
             return JSONResponse({"error": "Email is required."}, status_code=400)
         
-        # Check if email exists in database
-        user = db_supabase.get_profile_by_email(email)
-        if not user:
-            # Don't reveal if email exists or not for security
-            return {"message": "If an account with this email exists, password reset instructions will be sent."}
+        # Use Supabase Auth to send password reset email
+        supabase.auth.reset_password_for_email(email, {
+            "redirectTo": "http://localhost:8000/login.html"  # Update this to your frontend URL
+        })
         
-        # TODO: Implement actual email sending logic
-        # For now, just return success message
-        print(f"[DEBUG] Password reset requested for email: {email}")
+        return {"message": "Password reset instructions have been sent to your email."}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/validate-session")
+async def validate_session(body: dict):
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        access_token = body.get("access_token")
+        if not access_token:
+            return JSONResponse({"error": "Access token required."}, status_code=400)
         
-        return {"message": "If an account with this email exists, password reset instructions will be sent."}
+        # Set the session and get current user
+        supabase.auth.set_session(access_token)
+        user = supabase.auth.get_user()
+        
+        if not user.user:
+            return JSONResponse({"error": "Invalid session."}, status_code=401)
+        
+        # Get user profile from our profiles table
+        user_profile = db_supabase.get_profile_by_email(user.user.email)
+        if not user_profile:
+            return JSONResponse({"error": "User profile not found."}, status_code=404)
+        
+        # Return safe user data
+        safe_user = {
+            "id": user_profile.get("id"),
+            "full_name": user_profile.get("full_name"),
+            "id_number": user_profile.get("id_number"),
+            "email": user_profile.get("email"),
+            "role": user_profile.get("role"),
+            "approval_status": user_profile.get("approval_status")
+        }
+        
+        return {"user": safe_user, "message": "Session valid"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -235,7 +268,6 @@ async def register_user(body: dict):
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
         role = (body.get("role") or "student").strip().lower()
-        status = (body.get("approval_status") or "pending").strip().lower()
         
         if not full_name or not id_number or not email or not password:
             return JSONResponse({"error": "full_name, id_number, email, and password are required."}, status_code=400)
@@ -244,16 +276,40 @@ async def register_user(body: dict):
         if role not in ("student", "teacher"):
             role = "student"
         
-        if status not in ("pending", "approved", "rejected"):
-            status = "pending"
+        # Create user with Supabase Auth (this sends confirmation email)
+        auth_response = supabase.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {
+                    "full_name": full_name,
+                    "id_number": id_number,
+                    "role": role
+                }
+            }
+        })
         
-        # Hash password before storing
-        hashed_password = hash_password(password)
+        if not auth_response.user:
+            return JSONResponse({"error": "Failed to create account."}, status_code=400)
         
-        row = db_supabase.insert_profile(full_name, id_number, email, hashed_password, role=role, approval_status=status)
-        row = dict(row)
-        row.pop("password", None)
-        return row
+        # Insert user profile into our profiles table with matching auth user ID
+        profile = db_supabase.insert_profile(
+            full_name=full_name,
+            id_number=id_number,
+            email=email,
+            password="",  # No password stored in profiles table anymore
+            role=role,
+            approval_status="pending",
+            auth_user_id=auth_response.user.id  # Use Supabase Auth user ID
+        )
+        
+        profile = dict(profile)
+        profile.pop("password", None)
+        
+        return {
+            "user": profile,
+            "message": "Account created successfully. Please check your email to confirm your account."
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
