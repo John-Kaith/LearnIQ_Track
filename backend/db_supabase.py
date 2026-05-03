@@ -94,6 +94,7 @@ def get_all_profiles() -> list[dict[str, Any]]:
 def update_user_approval_status(id_number: str, approval_status: str) -> bool:
     """Update a user's approval status."""
     try:
+        print(f"DEBUG: Database update - id_number: {id_number}, approval_status: {approval_status}")
         result = (
             _sb()
             .table("profiles")
@@ -101,6 +102,8 @@ def update_user_approval_status(id_number: str, approval_status: str) -> bool:
             .eq("id_number", id_number)
             .execute()
         )
+        print(f"DEBUG: Database update result data: {result.data}")
+        print(f"DEBUG: Database update result length: {len(result.data) if result.data else 0}")
         return len(result.data) > 0
     except Exception as e:
         print(f"Error updating user approval status: {e}")
@@ -118,6 +121,11 @@ def insert_lesson(
     storage_path: str | None,
     teacher_id_number: str | None = None,
 ) -> dict[str, Any]:
+    print(f"INSERT LESSON CALLED:")
+    print(f"  filename: {filename}")
+    print(f"  file_type: {file_type}")
+    print(f"  teacher_id_number: {teacher_id_number}")
+    
     # Support both new and older lessons table schemas.
     # Try full row first, then retry without columns older schemas may not have.
     attempts = [
@@ -150,11 +158,14 @@ def insert_lesson(
     ]
     last_error: Exception | None = None
     res = None
-    for lesson_row in attempts:
+    for i, lesson_row in enumerate(attempts):
         try:
+            print(f"  Attempt {i+1}: inserting row: {lesson_row}")
             res = _sb().table("lessons").insert(lesson_row).execute()
+            print(f"  Insert lesson response: {res.data}")
             break
         except Exception as e:
+            print(f"  Attempt {i+1} failed: {e}")
             last_error = e
     if res is None:
         if last_error is not None:
@@ -162,6 +173,7 @@ def insert_lesson(
         raise RuntimeError("Failed to insert lesson.")
     lesson = res.data[0]
     lid = lesson["id"]
+    print(f"  Lesson inserted with ID: {lid}")
     _sb().table("lesson_content").insert({"lesson_id": lid, "reviewer": None, "quiz": [], "activities": None}).execute()
     return lesson
 
@@ -181,6 +193,18 @@ def list_lessons_with_content() -> list[dict[str, Any]]:
         _sb()
         .table("lessons")
         .select("id, filename, is_published, created_at, lesson_content(reviewer, quiz, activities)")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+
+def list_teacher_lessons(teacher_id_number: str) -> list[dict[str, Any]]:
+    res = (
+        _sb()
+        .table("lessons")
+        .select("id, filename, file_type, is_published, created_at, teacher_id_number, lesson_content(reviewer, quiz, activities)")
+        .eq("teacher_id_number", teacher_id_number)
         .order("created_at", desc=True)
         .execute()
     )
@@ -217,6 +241,56 @@ def unpublish_all_lessons() -> None:
 def publish_lesson(lesson_id: str) -> None:
     unpublish_all_lessons()
     _sb().table("lessons").update({"is_published": True}).eq("id", lesson_id).execute()
+
+
+def list_published_lessons_with_content() -> list[dict[str, Any]]:
+    res = (
+        _sb()
+        .table("lessons")
+        .select("*, lesson_content(*)")
+        .eq("is_published", True)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    lessons = []
+    for row in res.data or []:
+        nested = row.get("lesson_content")
+        if isinstance(nested, list):
+            lc = nested[0] if nested else {}
+        else:
+            lc = nested or {}
+        
+        # Process reviewer
+        reviewer = lc.get("reviewer")
+        if isinstance(reviewer, str):
+            lines = [p.strip() for p in reviewer.replace("\r", "").split("\n") if p.strip()]
+            reviewer_list = lines if lines else [reviewer]
+        elif isinstance(reviewer, list):
+            reviewer_list = reviewer
+        else:
+            reviewer_list = []
+
+        # Process quiz and activities
+        quiz = lc.get("quiz") or []
+        if not isinstance(quiz, list):
+            quiz = []
+
+        activities = lc.get("activities") or []
+        if not isinstance(activities, list):
+            activities = []
+
+        clean = {k: v for k, v in row.items() if k != "lesson_content"}
+        lessons.append({
+            "file_id": clean["id"],
+            "filename": clean.get("filename") or "",
+            "file_type": clean.get("file_type") or "",
+            "created_at": clean.get("created_at"),
+            "reviewer": reviewer_list,
+            "quiz": quiz,
+            "activities": activities,
+        })
+    
+    return lessons
 
 
 def get_published_lesson_with_content() -> tuple[dict[str, Any], dict[str, Any]] | None:

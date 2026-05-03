@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -151,51 +151,95 @@ def home():
 
 @app.post("/login")
 async def login_user(body: dict):
+    print(f"DEBUG: Login attempt - body: {body}")
+    
     err = require_supabase()
     if err is not None:
+        print(f"DEBUG: Supabase connection error: {err}")
         return err
+    
     try:
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
         
+        print(f"DEBUG: Extracted email: '{email}', password: {'*' * len(password) if password else 'None'}")
+        
         if not email or not password:
+            print(f"DEBUG: Missing email or password")
             return JSONResponse({"error": "email and password are required."}, status_code=400)
         
         # Authenticate with Supabase
-        auth_response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
+        print(f"DEBUG: Attempting Supabase auth for email: {email}")
+        try:
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            print(f"DEBUG: Supabase auth response: {type(auth_response)}")
+            print(f"DEBUG: Auth user: {auth_response.user}")
+            print(f"DEBUG: Auth session: {auth_response.session}")
+        except Exception as auth_error:
+            print(f"DEBUG: Supabase auth exception: {auth_error}")
+            print(f"DEBUG: Auth exception type: {type(auth_error)}")
+            return JSONResponse({"error": "Invalid credentials."}, status_code=401)
         
         if not auth_response.user:
+            print(f"DEBUG: No user returned from auth")
             return JSONResponse({"error": "Invalid credentials."}, status_code=401)
         
         # Get user profile from our profiles table
-        user_profile = db_supabase.get_profile_by_email(email)
+        print(f"DEBUG: Looking up profile for email: {email}")
+        try:
+            user_profile = db_supabase.get_profile_by_email(email)
+            print(f"DEBUG: Profile lookup result: {user_profile}")
+        except Exception as profile_error:
+            print(f"DEBUG: Profile lookup exception: {profile_error}")
+            print(f"DEBUG: Profile exception type: {type(profile_error)}")
+            return JSONResponse({"error": "Database error during profile lookup."}, status_code=500)
+        
         if not user_profile:
+            print(f"DEBUG: No profile found for email: {email}")
             return JSONResponse({"error": "User profile not found."}, status_code=404)
         
         # Check approval status
         approval_status = user_profile.get("approval_status", "pending")
+        print(f"DEBUG: User approval status: {approval_status}")
+        
         if approval_status == "pending":
+            print(f"DEBUG: User account pending approval")
             return JSONResponse({"error": "Your account is still pending approval."}, status_code=403)
         elif approval_status == "rejected":
+            print(f"DEBUG: User account rejected")
             return JSONResponse({"error": "Your registration was not approved. Please contact the administrator."}, status_code=403)
         
         # Return safe user data with auth session
-        safe_user = {
-            "id": user_profile.get("id"),
-            "full_name": user_profile.get("full_name"),
-            "id_number": user_profile.get("id_number"),
-            "email": user_profile.get("email"),
-            "role": user_profile.get("role"),
-            "approval_status": user_profile.get("approval_status"),
-            "access_token": auth_response.session.access_token,
-            "refresh_token": auth_response.session.refresh_token
-        }
+        print(f"DEBUG: Preparing successful response")
+        try:
+            safe_user = {
+                "id": user_profile.get("id"),
+                "full_name": user_profile.get("full_name"),
+                "id_number": user_profile.get("id_number"),
+                "email": user_profile.get("email"),
+                "role": user_profile.get("role"),
+                "approval_status": user_profile.get("approval_status"),
+                "access_token": auth_response.session.access_token,
+                "refresh_token": auth_response.session.refresh_token
+            }
+            print(f"DEBUG: Safe user data prepared: {safe_user}")
+        except Exception as response_error:
+            print(f"DEBUG: Response preparation exception: {response_error}")
+            print(f"DEBUG: Response exception type: {type(response_error)}")
+            return JSONResponse({"error": "Error preparing user response."}, status_code=500)
         
+        print(f"DEBUG: Login successful for user: {email}")
         return {"user": safe_user, "message": "Login successful"}
+        
     except Exception as e:
+        print(f"DEBUG: Login endpoint exception: {e}")
+        print(f"DEBUG: Exception type: {type(e)}")
+        print(f"DEBUG: Exception args: {e.args}")
+        import traceback
+        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -340,13 +384,19 @@ def update_user_status(body: dict):
         id_number = body.get("id_number")
         approval_status = body.get("approval_status")
         
+        print(f"DEBUG: Received approval request - id_number: {id_number}, approval_status: {approval_status}")
+        
         if not id_number or not approval_status:
             return JSONResponse({"error": "id_number and approval_status are required."}, status_code=400)
         
         if approval_status not in ("pending", "approved", "rejected"):
+            print(f"DEBUG: Invalid approval_status value: {approval_status}")
             return JSONResponse({"error": "Invalid approval_status."}, status_code=400)
         
+        print(f"DEBUG: Calling database update for id_number: {id_number}")
         success = db_supabase.update_user_approval_status(id_number, approval_status)
+        print(f"DEBUG: Database update result: {success}")
+        
         if not success:
             return JSONResponse({"error": "User not found."}, status_code=404)
         
@@ -374,14 +424,17 @@ async def patch_profile_status(id_number: str, body: dict):
 
 
 @app.get("/teacher/lessons")
-def list_teacher_lessons():
+def list_teacher_lessons(teacher_id_number: str = Query(...)):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        rows = db_supabase.list_lessons_with_content()
+        rows = db_supabase.list_teacher_lessons(teacher_id_number)
         return {"lessons": [db_supabase.lesson_to_api_list_item(r) for r in rows]}
     except Exception as e:
+        import traceback
+        print("TEACHER LESSONS ERROR:", repr(e))
+        traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
@@ -415,6 +468,18 @@ async def unpublish_lesson(body: dict):
             return JSONResponse({"error": "Lesson not found."}, status_code=404)
         db_supabase.unpublish_all_lessons()
         return {"unpublished_file_id": lesson_id, "message": "Lesson is no longer visible to students."}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/lessons")
+def get_student_lessons():
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        lessons = db_supabase.list_published_lessons_with_content()
+        return {"lessons": lessons}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -505,7 +570,11 @@ async def upload_lesson_json(body: dict):
 
 
 @app.post("/upload-file")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), teacher_id_number: str = Form(...)):
+    print("UPLOAD CALLED")
+    print("Filename:", file.filename)
+    print("Teacher ID Number:", teacher_id_number)
+    
     err = require_supabase()
     if err is not None:
         return err
@@ -538,16 +607,21 @@ async def upload_file(file: UploadFile = File(...)):
             text = ""
 
     try:
+        print("CALLING INSERT LESSON...")
         lesson = db_supabase.insert_lesson(
             filename=file.filename,
             file_type=file_type,
             extracted_text=text,
             storage_path=temp_path,
-            teacher_id_number=None,
+            teacher_id_number=teacher_id_number,
         )
         lid = lesson["id"]
+        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}")
         return {"file_id": lid, "filename": file.filename}
     except Exception as e:
+        import traceback
+        print(f"UPLOAD FAILED: {e}")
+        traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=502)
 
 

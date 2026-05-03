@@ -19,23 +19,44 @@
           <span class="brand-mark">LQ</span>
           <span>
             <strong>LearnIQ Track</strong>
-            <small>Student registration with approval flow</small>
+            <small>Account registration with approval flow</small>
           </span>
         </a>
-        <h1>Create your student profile</h1>
-        <p>Register using your official ID number. Student accounts remain pending until the Admin/Principal approves the ID.</p>
+        <h1>Create your account</h1>
+        <p>Choose your account type and register using your official ID. All accounts require admin approval before access.</p>
+
+        <div class="role-selector">
+          <div class="role-card" data-role="student">
+            <div class="role-icon">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="role-content">
+              <h3>Student</h3>
+              <p>Access lessons, quizzes, activities, and immersion tracker</p>
+            </div>
+          </div>
+          <div class="role-card" data-role="teacher">
+            <div class="role-icon">
+              <i class="fa-solid fa-chalkboard-teacher"></i>
+            </div>
+            <div class="role-content">
+              <h3>Teacher</h3>
+              <p>Upload lessons, generate AI content, and monitor students</p>
+            </div>
+          </div>
+        </div>
 
         <div class="feature-stack">
           <div><i class="fa-solid fa-user-clock"></i><span>Pending approval after signup</span></div>
-          <div><i class="fa-solid fa-check-double"></i><span>Admin reviews student IDs</span></div>
-          <div><i class="fa-solid fa-graduation-cap"></i><span>Approved students access the full system</span></div>
+          <div><i class="fa-solid fa-check-double"></i><span>Admin reviews all registrations</span></div>
+          <div><i class="fa-solid fa-shield-halved"></i><span>Secure approval workflow</span></div>
         </div>
       </article>
 
       <article class="glass-card auth-form-card fade-up delay-1">
         <div class="section-heading left-align compact">
           <span class="pill"><i class="fa-solid fa-user-plus"></i> Sign Up</span>
-          <h2>Student registration</h2>
+          <h2 id="signup-heading">Student registration</h2>
         </div>
 
         <form id="signup-form" class="auth-form">
@@ -45,7 +66,7 @@
           </label>
 
           <label>
-            <span>ID Number</span>
+            <span id="id-label">Student ID Number</span>
             <input id="signup-id" type="text" placeholder="e.g. 2024-12345" required />
           </label>
 

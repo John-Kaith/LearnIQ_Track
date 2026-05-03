@@ -369,10 +369,45 @@ function setupForms() {
   });
 }
 
+function setupRoleSelection() {
+  const roleCards = document.querySelectorAll(".role-card");
+  const signupHeading = document.getElementById("signup-heading");
+  const idLabel = document.getElementById("id-label");
+  
+  // Default to student selection
+  if (roleCards.length > 0) {
+    roleCards[0].classList.add("selected");
+  }
+  
+  roleCards.forEach(card => {
+    card.addEventListener("click", () => {
+      // Remove selected class from all cards
+      roleCards.forEach(c => c.classList.remove("selected"));
+      
+      // Add selected class to clicked card
+      card.classList.add("selected");
+      
+      // Update UI based on selected role
+      const role = card.dataset.role;
+      
+      if (role === "teacher") {
+        if (signupHeading) signupHeading.textContent = "Teacher registration";
+        if (idLabel) idLabel.textContent = "Teacher ID / Employee ID";
+      } else {
+        if (signupHeading) signupHeading.textContent = "Student registration";
+        if (idLabel) idLabel.textContent = "Student ID Number";
+      }
+    });
+  });
+}
+
 function setupSignupPage() {
   const signupForm = document.querySelector("#signup-form");
   const signupMessage = document.querySelector("#signup-message");
   if (!signupForm) return;
+
+  // Setup role selection
+  setupRoleSelection();
 
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -383,6 +418,14 @@ function setupSignupPage() {
     const email = document.querySelector("#signup-email").value.trim().toLowerCase();
     const password = document.querySelector("#signup-password").value;
     const confirmPassword = document.querySelector("#signup-confirm").value;
+    
+    // Get selected role
+    const selectedRole = document.querySelector(".role-card.selected");
+    if (!selectedRole) {
+      showAuthMessage("Please select an account type.", signupMessage, "error");
+      return;
+    }
+    const role = selectedRole.dataset.role;
 
     if (!fullName || !idNumber || !email || !password || !confirmPassword) {
       showAuthMessage("All fields are required.", signupMessage, "error");
@@ -395,7 +438,7 @@ function setupSignupPage() {
     }
 
     try {
-      // Call backend register endpoint (now uses Supabase Auth)
+      // Call backend registration endpoint (now uses Supabase Auth)
       const response = await fetch(apiUrl("/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -404,7 +447,7 @@ function setupSignupPage() {
           id_number: idNumber,
           email: email,
           password: password,
-          role: "student"
+          role: role
         })
       });
 
@@ -476,7 +519,11 @@ function setupLoginPage() {
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         console.error("login error response:", error);
-        throw new Error(error.error || "Login failed");
+        console.error("login error status:", response.status);
+        
+        // Display the actual backend error message
+        const errorMessage = error.error || error.message || "Login failed";
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -503,8 +550,12 @@ function setupLoginPage() {
       setTimeout(() => {
         if (user.role === "admin") {
           window.location.href = "admin-approval.html";
-        } else {
+        } else if (user.role === "teacher") {
+          window.location.href = "teacher-learniq-dashboard.html";
+        } else if (user.role === "student") {
           window.location.href = "module-selection.html";
+        } else {
+          window.location.href = "login.html";
         }
       }, 1000);
     } catch (error) {
@@ -601,7 +652,7 @@ async function renderAdminTable(filter = "") {
         (user.id_number && user.id_number.toLowerCase().includes(filterValue))
       )
       .map((user) => {
-        const actions = user.role === "student" ?
+        const actions = (user.role === "student" || user.role === "teacher") && user.approval_status === "pending" ?
           `<div class="table-actions">
             <button class="btn btn-secondary" data-action="approve" data-id="${user.id_number}">Approve</button>
             <button class="btn btn-ghost" data-action="reject" data-id="${user.id_number}">Reject</button>
@@ -639,15 +690,292 @@ function logoutAdmin() {
   }, 350);
 }
 
+function setupAdminNavigation() {
+  // Handle hash-based navigation
+  const sections = {
+    '': 'dashboard',
+    'approvals': 'approvals',
+    'users': 'users', 
+    'ai-results': 'ai-results',
+    'files': 'files',
+    'leaderboard': 'leaderboard',
+    'attendance': 'attendance',
+    'journals': 'journals',
+    'reports': 'reports',
+    'settings': 'settings'
+  };
+
+  function showSection(sectionId) {
+    // Hide all sections
+    Object.keys(sections).forEach(hash => {
+      const section = document.getElementById(hash || 'dashboard');
+      if (section) section.style.display = 'none';
+    });
+
+    // Show selected section or default dashboard
+    const targetSection = document.getElementById(sectionId === 'dashboard' ? '' : sectionId) || 
+                         document.querySelector('.dashboard-grid') ||
+                         document.querySelector('section[class*="glass-card"]');
+    
+    if (targetSection) {
+      targetSection.style.display = 'block';
+    }
+
+    // Update active sidebar link
+    document.querySelectorAll('.side-links a').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    const activeLink = document.querySelector(`.side-links a[href*="${sectionId}"]`) ||
+                      document.querySelector('.side-links a[href="admin-approval.html"]');
+    if (activeLink) activeLink.classList.add('active');
+
+    // Load section-specific data
+    loadSectionData(sectionId);
+  }
+
+  function loadSectionData(sectionId) {
+    switch(sectionId) {
+      case 'approvals':
+        loadPendingApprovals();
+        break;
+      case 'users':
+        loadAllUsers();
+        break;
+      case 'ai-results':
+        loadAIResults();
+        break;
+      case 'files':
+        loadUploadedFiles();
+        break;
+      case 'leaderboard':
+        loadLeaderboard();
+        break;
+      case 'attendance':
+        loadAttendanceLogs();
+        break;
+      case 'journals':
+        loadJournals();
+        break;
+      case 'reports':
+        loadReports();
+        break;
+      case 'settings':
+        loadSettings();
+        break;
+    }
+  }
+
+  // Handle initial hash
+  const hash = window.location.hash.slice(1);
+  showSection(hash || 'dashboard');
+
+  // Handle hash changes
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.slice(1);
+    showSection(hash || 'dashboard');
+  });
+
+  // Handle sidebar clicks
+  document.querySelectorAll('.side-links a').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const href = link.getAttribute('href');
+      const hash = href.includes('#') ? href.split('#')[1] : '';
+      window.location.hash = hash;
+      showSection(hash || 'dashboard');
+    });
+  });
+}
+
+async function loadPendingApprovals() {
+  const tableBody = document.querySelector('#approval-table-body');
+  if (!tableBody) return;
+
+  try {
+    const response = await fetch(apiUrl("/users"));
+    if (!response.ok) {
+      tableBody.innerHTML = '<tr><td colspan="5">Failed to load pending users.</td></tr>';
+      return;
+    }
+
+    const users = await response.json();
+    const pendingUsers = users.filter(user => user.approval_status === 'pending' && (user.role === 'student' || user.role === 'teacher'));
+
+    const rows = pendingUsers.map(user => `
+      <tr>
+        <td>${user.full_name || 'N/A'}</td>
+        <td>${user.id_number || 'N/A'}</td>
+        <td>${user.email || 'N/A'}</td>
+        <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary" data-action="approve" data-id="${user.id_number}">Approve</button>
+            <button class="btn btn-ghost" data-action="reject" data-id="${user.id_number}">Reject</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    tableBody.innerHTML = rows || '<tr><td colspan="5">No pending student approvals.</td></tr>';
+  } catch (error) {
+    console.error('Failed to load pending approvals:', error);
+    tableBody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
+  }
+}
+
+async function loadAllUsers() {
+  const tableBody = document.querySelector('#users-table-body');
+  if (!tableBody) return;
+
+  try {
+    const response = await fetch(apiUrl("/users"));
+    if (!response.ok) {
+      tableBody.innerHTML = '<tr><td colspan="6">Failed to load users.</td></tr>';
+      return;
+    }
+
+    const users = await response.json();
+
+    const rows = users.map(user => `
+      <tr>
+        <td>${user.full_name || 'N/A'}</td>
+        <td>${user.id_number || 'N/A'}</td>
+        <td>${user.email || 'N/A'}</td>
+        <td>${user.role || 'N/A'}</td>
+        <td>${formatStatusBadge(user.approval_status || 'pending')}</td>
+        <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
+      </tr>
+    `).join('');
+
+    tableBody.innerHTML = rows || '<tr><td colspan="6">No users found.</td></tr>';
+  } catch (error) {
+    console.error('Failed to load all users:', error);
+    tableBody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
+  }
+}
+
+async function loadAIResults() {
+  const grid = document.querySelector('#ai-results-grid');
+  if (!grid) return;
+
+  // Placeholder for AI results - needs backend endpoint
+  grid.innerHTML = `
+    <div class="empty-state">
+      <i class="fa-solid fa-robot"></i>
+      <h3>No AI Content Yet</h3>
+      <p>Teachers need to generate content from uploaded files.</p>
+    </div>
+  `;
+}
+
+async function loadUploadedFiles() {
+  const tableBody = document.querySelector('#files-table-body');
+  if (!tableBody) return;
+
+  try {
+    const response = await fetch(apiUrl("/lessons"));
+    if (!response.ok) {
+      tableBody.innerHTML = '<tr><td colspan="6">Failed to load files.</td></tr>';
+      return;
+    }
+
+    const data = await response.json();
+    const lessons = data.lessons || [];
+
+    const rows = lessons.map(lesson => `
+      <tr>
+        <td>${lesson.filename || 'N/A'}</td>
+        <td>${lesson.teacher_id_number || 'N/A'}</td>
+        <td>${lesson.file_type || 'N/A'}</td>
+        <td>${lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : 'N/A'}</td>
+        <td>${lesson.is_published ? '<span class="status-badge online">Published</span>' : '<span class="status-badge warning">Draft</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-ghost" data-action="view" data-id="${lesson.file_id}">View</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    tableBody.innerHTML = rows || '<tr><td colspan="6">No uploaded files found.</td></tr>';
+  } catch (error) {
+    console.error('Failed to load uploaded files:', error);
+    tableBody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
+  }
+}
+
+async function loadLeaderboard() {
+  const list = document.querySelector('#leaderboard-list');
+  if (!list) return;
+
+  // Placeholder for leaderboard - needs backend endpoint
+  list.innerHTML = `
+    <div class="empty-state">
+      <i class="fa-solid fa-ranking-star"></i>
+      <h3>No Quiz Results Yet</h3>
+      <p>Students need to complete quizzes to appear on the leaderboard.</p>
+    </div>
+  `;
+}
+
+async function loadAttendanceLogs() {
+  const tableBody = document.querySelector('#attendance-table-body');
+  if (!tableBody) return;
+
+  // Placeholder for attendance logs - needs backend endpoint
+  tableBody.innerHTML = '<tr><td colspan="4">No attendance records found.</td></tr>';
+}
+
+async function loadJournals() {
+  const grid = document.querySelector('#journal-grid');
+  if (!grid) return;
+
+  // Placeholder for journals - needs backend endpoint
+  grid.innerHTML = `
+    <div class="empty-state">
+      <i class="fa-solid fa-book"></i>
+      <h3>No Journal Submissions Yet</h3>
+      <p>Students haven't submitted any journal entries.</p>
+    </div>
+  `;
+}
+
+async function loadReports() {
+  // Update report statistics
+  try {
+    const response = await fetch(apiUrl("/users"));
+    if (response.ok) {
+      const users = await response.json();
+      const totalUsers = users.length;
+      const pendingUsers = users.filter(u => u.approval_status === 'pending').length;
+      
+      document.getElementById('report-total-users').textContent = totalUsers;
+      document.getElementById('report-pending').textContent = pendingUsers;
+      document.getElementById('report-active-today').textContent = Math.floor(Math.random() * 20) + 5; // Placeholder
+    }
+  } catch (error) {
+    console.error('Failed to load report data:', error);
+  }
+}
+
+function loadSettings() {
+  // Settings are static for now - could be loaded from backend in future
+  console.log('Settings section loaded');
+}
+
 async function updateAdminUserStatus(idNumber, newStatus) {
   try {
+    const payload = {
+      id_number: idNumber,
+      approval_status: newStatus
+    };
+    console.log("Sending approval request:", payload);
+    
     const response = await fetch(apiUrl("/users"), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id_number: idNumber,
-        approval_status: newStatus
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
@@ -666,28 +994,27 @@ async function updateAdminUserStatus(idNumber, newStatus) {
 }
 
 function setupAdminPage() {
-  const searchInput = document.querySelector("#admin-search");
-  const resetButton = document.querySelector("#admin-reset");
-  const tableBody = document.querySelector("#admin-table-body");
-  if (!tableBody) return;
+  const adminTableBody = document.querySelector("#admin-table-body");
+  if (!adminTableBody) return;
 
   renderAdminTable();
   renderMetrics();
   renderRecentActivity();
   renderSystemStatus();
   setupDashboardActions();
+  setupAdminNavigation();
 
-  tableBody.addEventListener("click", (event) => {
+  adminTableBody.addEventListener("click", (event) => {
     const target = event.target;
     const action = target.dataset.action;
     const idNumber = target.dataset.id;
     if (!action || !idNumber) return;
 
     if (action === "approve") {
-      updateAdminUserStatus(idNumber, "Approved");
+      updateAdminUserStatus(idNumber, "approved");
     }
     if (action === "reject") {
-      updateAdminUserStatus(idNumber, "Rejected");
+      updateAdminUserStatus(idNumber, "rejected");
     }
   });
 
@@ -714,13 +1041,121 @@ const TEACHER_FILE_STORAGE_KEY = "learniq-teacher-file-id";
 
 async function fetchTeacherLessonsList() {
   try {
-    const res = await fetch(apiUrl("/teacher/lessons"));
+    const currentUser = getCurrentUserSession();
+    if (!currentUser || !currentUser.id_number) {
+      console.error("No logged-in teacher found");
+      return [];
+    }
+
+    const res = await fetch(apiUrl(`/teacher/lessons?teacher_id_number=${currentUser.id_number}`));
     if (!res.ok) return [];
     const data = await res.json();
     return data.lessons || [];
-  } catch {
+  } catch (error) {
+    console.error("Failed to fetch teacher lessons:", error);
     return [];
   }
+}
+
+async function loadTeacherDashboardLessons() {
+  try {
+    const lessons = await fetchTeacherLessonsList();
+    
+    // Recent Lessons - all lessons sorted by created_at desc
+    const recentLessonsList = document.getElementById('recent-lessons-list');
+    if (recentLessonsList) {
+      if (lessons.length === 0) {
+        recentLessonsList.innerHTML = '<p class="small-note">No uploaded lessons yet.</p>';
+      } else {
+        const sortedLessons = lessons.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        recentLessonsList.innerHTML = sortedLessons.map(lesson => `
+          <div class="lesson-item">
+            <div class="lesson-info">
+              <h4>${lesson.filename || 'Untitled Lesson'}</h4>
+              <span class="small-note">${lesson.file_type?.toUpperCase() || 'Unknown'} • Uploaded ${lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : 'Unknown date'}</span>
+            </div>
+            <div class="lesson-actions">
+              ${lesson.is_published ? 
+                `<button class="btn btn-sm btn-primary" onclick="unpublishLesson('${lesson.id}')">Unpublish</button>` :
+                `<button class="btn btn-sm btn-secondary" onclick="generateAIContent('${lesson.id}')">Generate AI</button>
+                 <button class="btn btn-sm btn-primary" onclick="publishLesson('${lesson.id}')">Publish</button>`
+              }
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+    
+    // Published Lessons - only lessons with is_published = true
+    const publishedLessonsList = document.getElementById('published-lessons-list');
+    if (publishedLessonsList) {
+      const publishedLessons = lessons.filter(lesson => lesson.is_published);
+      if (publishedLessons.length === 0) {
+        publishedLessonsList.innerHTML = '<p class="small-note">No published lessons yet.</p>';
+      } else {
+        publishedLessonsList.innerHTML = publishedLessons.map(lesson => `
+          <div class="published-lesson">
+            <div class="lesson-header">
+              <h4>${lesson.filename || 'Untitled Lesson'}</h4>
+              <span class="status-badge online">Published</span>
+            </div>
+            <div class="lesson-stats">
+              <span><i class="fa-solid fa-file"></i> ${lesson.file_type?.toUpperCase() || 'Unknown'}</span>
+              <span><i class="fa-solid fa-calendar"></i> Published ${lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : 'Unknown date'}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+    
+    // AI Generation Queue - lessons without AI content or not published
+    const aiQueueList = document.getElementById('ai-queue-list');
+    if (aiQueueList) {
+      const queuedLessons = lessons.filter(lesson => !lesson.is_published && (!lesson.lesson_content || !lesson.lesson_content.reviewer));
+      if (queuedLessons.length === 0) {
+        aiQueueList.innerHTML = '<p class="small-note">No lessons waiting for AI generation.</p>';
+      } else {
+        aiQueueList.innerHTML = queuedLessons.map(lesson => `
+          <div class="queue-item">
+            <div class="queue-info">
+              <h4>${lesson.filename || 'Untitled Lesson'}</h4>
+              <span class="small-note">Waiting for AI processing</span>
+            </div>
+            <div class="queue-status">
+              <span class="status-badge warning">Pending</span>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+    
+  } catch (error) {
+    console.error('Failed to load teacher dashboard lessons:', error);
+    
+    // Show error messages in all sections
+    document.getElementById('recent-lessons-list') && (document.getElementById('recent-lessons-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
+    document.getElementById('published-lessons-list') && (document.getElementById('published-lessons-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
+    document.getElementById('ai-queue-list') && (document.getElementById('ai-queue-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
+  }
+}
+
+function publishLesson(lessonId) {
+  // This would call the publish endpoint
+  console.log('Publish lesson:', lessonId);
+  loadTeacherDashboardLessons(); // Refresh after action
+}
+
+function unpublishLesson(lessonId) {
+  // This would call the unpublish endpoint
+  console.log('Unpublish lesson:', lessonId);
+  loadTeacherDashboardLessons(); // Refresh after action
+}
+
+function generateAIContent(lessonId) {
+  // This would navigate to AI generation page or call AI endpoint
+  console.log('Generate AI for lesson:', lessonId);
+  // Could redirect to ai-result.html with lesson ID
+  window.location.href = `ai-result.html?file_id=${lessonId}`;
 }
 
 function renderTeacherLessonsTable(lessons, selectedId) {
@@ -792,19 +1227,39 @@ async function selectTeacherLesson(fileId, filename) {
 }
 
 async function uploadFile(file) {
+  const currentUser = getCurrentUserSession();
+  if (!currentUser || !currentUser.id_number) {
+    throw new Error("Teacher not logged in. Please log in again.");
+  }
+
+  console.log("Uploading file:", file.name);
+  console.log("teacher_id_number:", currentUser.id_number);
+
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("teacher_id_number", currentUser.id_number);
+
+  console.log("FormData contents:");
+  for (let [key, value] of formData.entries()) {
+    console.log(`  ${key}:`, key === 'file' ? value.name : value);
+  }
 
   const response = await fetch(apiUrl("/upload-file"), {
     method: "POST",
     body: formData
   });
 
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || `Upload failed with status ${response.status}`);
+  }
+
   const result = await readApiJson(response);
   currentFileId = result.file_id;
   localStorage.setItem(TEACHER_FILE_STORAGE_KEY, result.file_id);
   showToast(`File uploaded: ${result.filename}`, "success");
   await refreshTeacherLessons();
+  await loadTeacherDashboardLessons(); // Refresh dashboard
   return result;
 }
 
@@ -934,23 +1389,32 @@ async function runTeacherAiPack(previewBody) {
 }
 
 function setupTeacherDashboard() {
-  const fileInput = document.querySelector("#lesson-file");
+  const fileInput = document.querySelector("#file-input");
   const fileMeta = document.querySelector("#file-meta");
   const previewBody = document.querySelector("#ai-preview-body");
   const tbody = document.getElementById("teacher-lessons-tbody");
-  const uploadBtn = document.getElementById("upload-lesson-btn");
+  const uploadBtn = document.getElementById("upload-btn");
+
+  // Load dashboard lessons on page load
+  loadTeacherDashboardLessons();
 
   uploadBtn?.addEventListener("click", () => {
+    console.log("Upload button clicked");
     fileInput?.click();
   });
 
-  if (fileInput && fileMeta) {
-    fileInput.addEventListener("change", async () => {
-      const selectedFile = fileInput.files?.[0];
+  const uploadForm = document.querySelector("#upload-form");
+  if (uploadForm) {
+    uploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      console.log("Form submitted");
+      
+      const selectedFile = fileInput?.files?.[0];
       if (!selectedFile) {
         fileMeta.textContent = "No file selected yet";
         return;
       }
+      
       fileMeta.textContent = `Uploading ${selectedFile.name}…`;
       currentFileId = null;
       currentQuiz = [];
@@ -1091,14 +1555,68 @@ function setupStudentDashboard() {
 
   if (!emptyEl || !quizBody) return;
 
-  let lessonData = null;
+  let studentLessons = []; // All published lessons
+  let selectedLesson = null; // Currently selected lesson
+  let lessonData = null; // Legacy - for backward compatibility
   let quizIndex = 0;
   let quizScore = 0;
   let quizAnswered = false;
   let studentAnswers = []; // Track all student answers
 
-  function showEmpty(message) {
+  function renderLessonSelection() {
+  const selectionEl = document.getElementById("student-lesson-selection");
+  const lessonListEl = document.getElementById("student-lesson-list");
+  
+  if (!selectionEl || !lessonListEl) return;
+  
+  if (studentLessons.length === 0) {
+    selectionEl.hidden = true;
+    return;
+  }
+  
+  selectionEl.hidden = false;
+  
+  lessonListEl.innerHTML = studentLessons.map(lesson => `
+    <div class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}" 
+         data-lesson-id="${lesson.file_id}"
+         onclick="selectLessonById('${lesson.file_id}')">
+      <div class="lesson-info">
+        <h4>${lesson.filename || 'Untitled Lesson'}</h4>
+        <span class="small-note">${lesson.file_type?.toUpperCase() || 'Unknown'} • ${lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : 'Unknown date'}</span>
+      </div>
+      <div class="lesson-status">
+        ${selectedLesson?.file_id === lesson.file_id ? 
+          '<span class="status-badge online">Selected</span>' : 
+          '<span class="status-badge offline">Available</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectLessonById(lessonId) {
+  const lesson = studentLessons.find(l => l.file_id === lessonId);
+  if (lesson) {
+    selectLesson(lesson);
+  }
+}
+
+function selectLesson(lesson) {
+  selectedLesson = lesson;
+  lessonData = lesson; // Update legacy for compatibility
+  
+  // Update UI
+  renderLessonSelection();
+  showLesson(lesson);
+  
+  // Update modal meta
+  if (actionModalMeta) {
+    actionModalMeta.textContent = `Selected lesson: ${lesson.filename || "Your class lesson"}`;
+  }
+}
+
+function showEmpty(message) {
     lessonData = null;
+    selectedLesson = null;
     if (emptyEl) emptyEl.hidden = false;
     if (emptyText) emptyText.textContent = message;
     if (metaCard) metaCard.hidden = true;
@@ -1364,6 +1882,27 @@ function setupStudentDashboard() {
     });
   }
 
+  async function loadStudentLessons() {
+    try {
+      const res = await fetch(apiUrl("/student/lessons"));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showEmpty(err.error || "No published lessons yet. Ask your teacher to publish one.");
+        return;
+      }
+      const data = await res.json();
+      studentLessons = data.lessons || [];
+      renderLessonSelection();
+      
+      // Auto-select first lesson if none selected
+      if (studentLessons.length > 0 && !selectedLesson) {
+        selectLesson(studentLessons[0]);
+      }
+    } catch {
+      showEmpty("Cannot reach the server. Is the LearnIQ Track backend running?");
+    }
+  }
+
   async function loadStudentLesson() {
     try {
       const res = await fetch(apiUrl("/student/lesson"));
@@ -1379,7 +1918,7 @@ function setupStudentDashboard() {
     }
   }
 
-  refreshBtn?.addEventListener("click", () => void loadStudentLesson());
+  refreshBtn?.addEventListener("click", () => void loadStudentLessons());
   openActionsBtn?.addEventListener("click", openActionModal);
   actionModalClose?.addEventListener("click", closeActionModal);
   actionModal?.addEventListener("click", (event) => {
@@ -1418,8 +1957,8 @@ function setupStudentDashboard() {
       const generationOptions = document.querySelector(".generation-options");
       const action = generationOptions.dataset.currentAction;
       
-      if (!action || !lessonData?.file_id) {
-        showToast("No lesson file available. Please refresh and try again.", "error");
+      if (!action || !selectedLesson?.file_id) {
+        showToast("Please select a lesson first.", "error");
         return;
       }
 
@@ -1429,7 +1968,7 @@ function setupStudentDashboard() {
       generateBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
       
       try {
-        const fileId = lessonData.file_id;
+        const fileId = selectedLesson.file_id;
         let requestBody = { file_id: fileId };
         
         // Add parameters based on action type
