@@ -1017,6 +1017,182 @@ textarea {
   justify-content: flex-start;
 }
 
+.my-lesson-page .container {
+  width: min(1400px, calc(100% - 2rem));
+}
+
+.lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.15rem;
+  margin-top: 0.75rem;
+}
+
+.lesson-card {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.85rem 0.95rem;
+  padding: 1.2rem 1.2rem 1.05rem;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.lesson-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.lesson-card.selected {
+  border-color: rgba(96, 165, 250, 0.6);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35) inset;
+}
+
+.lesson-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #bfdbfe;
+  background: rgba(96, 165, 250, 0.16);
+}
+
+.lesson-card .lesson-info {
+  min-width: 0;
+}
+
+.lesson-card .lesson-info h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lesson-card .lesson-info .small-note {
+  display: block;
+  margin-top: 0.25rem;
+  line-height: 1.25;
+}
+
+.lesson-card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.lesson-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.25);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.lesson-card-tagline {
+  margin: 0.55rem 0 0;
+  color: rgba(226, 232, 240, 0.92);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.lesson-card-features {
+  margin: 0.15rem 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lesson-card .lesson-actions {
+  grid-column: 1 / -1;
+}
+
+.lesson-card .lesson-actions .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
+
+.workspace-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.workspace-layout {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 1.3fr 0.85fr;
+  gap: 1rem;
+}
+
+.workspace-preview,
+.workspace-meta,
+.workspace-right {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.workspace-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.7rem;
+}
+
+.workspace-actions .btn {
+  justify-content: flex-start;
+}
+
+.workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.workspace-tab {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  background: rgba(15, 23, 42, 0.45);
+  color: #dbeafe;
+  cursor: pointer;
+}
+
+.workspace-tab.is-active {
+  border-color: rgba(96, 165, 250, 0.65);
+  background: rgba(96, 165, 250, 0.2);
+}
+
+.workspace-tab-panel {
+  margin-top: 1rem;
+}
+
+.compact-card {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
 .table-actions {
   display: flex;
   gap: 0.6rem;
@@ -1228,6 +1404,14 @@ textarea {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+
+  .lesson-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .auth-info h1,
@@ -1417,6 +1601,10 @@ textarea {
   .data-table {
     display: block;
     overflow-x: auto;
+  }
+
+  .lesson-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1773,3 +1961,4 @@ textarea {
   line-height: 1.6;
   color: var(--text);
 }
+

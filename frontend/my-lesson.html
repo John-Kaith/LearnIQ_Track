@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Lesson | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body class="my-lesson-page">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>LearnIQ Module</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a class="active" href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div>
+            <strong id="student-display-name">Student</strong>
+            <div class="small-note" id="student-display-track">STEM - 12 A</div>
+          </div>
+        </div>
+        <span class="status-badge online">Active learner</span>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>My Lesson</h1>
+          <p>Open published lessons, review content, answer quizzes, and continue activities.</p>
+        </div>
+        <button type="button" class="btn btn-secondary" id="student-refresh-lesson-btn">
+          <i class="fa-solid fa-rotate"></i> Refresh lessons
+        </button>
+      </section>
+
+      <section id="student-learning-block" class="dashboard-grid">
+        <div class="content-stack lesson-workspace-main">
+          <article id="student-lesson-empty" class="glass-card content-card">
+            <h3>Your lesson</h3>
+            <p class="content-subtitle" id="student-lesson-empty-text">
+              No published lesson yet. When your teacher uploads and publishes a lesson, it will appear here.
+            </p>
+          </article>
+
+          <article id="student-lesson-selection" class="glass-card content-card" hidden>
+            <h3>Published lessons</h3>
+            <p class="content-subtitle">Choose a lesson to open your AI-powered workspace.</p>
+            <div id="student-lesson-list" class="lesson-grid"></div>
+          </article>
+
+          <article id="student-workspace" class="glass-card content-card" hidden>
+            <div class="workspace-head">
+              <div>
+                <h3 id="student-lesson-title">Lesson Workspace</h3>
+                <p class="content-subtitle" id="student-lesson-filename">Select a lesson card to begin.</p>
+              </div>
+              <span class="status-badge online">AI Ready</span>
+            </div>
+
+            <div class="workspace-layout">
+              <div class="workspace-left">
+                <div id="student-lesson-meta" class="workspace-meta">
+                  <p id="student-lesson-meta-line" class="small-note"></p>
+                </div>
+                <article id="student-workspace-lesson-panel" class="workspace-preview">
+                  <h4>Lesson Preview</h4>
+                  <p id="student-lesson-preview-text" class="small-note">
+                    Lesson details and preview appear here after selecting a card.
+                  </p>
+                </article>
+              </div>
+
+              <aside class="workspace-right">
+                <h4>AI Actions</h4>
+                <div class="workspace-actions">
+                  <button id="student-generate-reviewer-btn" type="button" class="btn btn-secondary">
+                    <i class="fa-solid fa-file-lines"></i> Generate Reviewer
+                  </button>
+                  <button id="student-generate-quiz-btn" type="button" class="btn btn-secondary">
+                    <i class="fa-solid fa-list-check"></i> Generate Quiz
+                  </button>
+                  <button id="student-generate-activity-btn" type="button" class="btn btn-secondary">
+                    <i class="fa-solid fa-gamepad"></i> Generate Activity
+                  </button>
+                </div>
+                <p id="student-ai-status" class="small-note">Choose an action to generate content on demand.</p>
+              </aside>
+            </div>
+
+            <div class="workspace-tabs" role="tablist" aria-label="Lesson workspace tabs">
+              <button type="button" class="workspace-tab is-active" data-lesson-tab="lesson">Lesson</button>
+              <button type="button" class="workspace-tab" data-lesson-tab="reviewer">Reviewer</button>
+              <button type="button" class="workspace-tab" data-lesson-tab="quiz">Quiz</button>
+              <button type="button" class="workspace-tab" data-lesson-tab="activity">Activities</button>
+            </div>
+
+            <div id="student-tab-lesson" class="workspace-tab-panel">
+              <p class="small-note">Use the AI actions to generate reviewer, quiz, and activity content for this lesson.</p>
+            </div>
+            <div id="student-tab-reviewer" class="workspace-tab-panel" hidden>
+              <article id="student-reviewer-card" class="content-card compact-card">
+                <h4>Reviewer</h4>
+                <ul id="student-reviewer-list" class="bullet-list"></ul>
+              </article>
+            </div>
+            <div id="student-tab-quiz" class="workspace-tab-panel" hidden>
+              <article id="student-quiz-card" class="content-card compact-card">
+                <h4>Quiz</h4>
+                <p class="small-note" id="student-quiz-progress"></p>
+                <div id="student-quiz-body"></div>
+                <p class="metric-note" id="student-quiz-score" style="margin-top: 1rem;"></p>
+              </article>
+            </div>
+            <div id="student-tab-activity" class="workspace-tab-panel" hidden>
+              <article id="student-activities-card" class="content-card compact-card">
+                <h4>Activities</h4>
+                <div id="student-activities-list" class="activity-list"></div>
+              </article>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

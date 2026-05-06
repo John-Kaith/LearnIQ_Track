@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; font-family: monospace; white-space: pre-wrap; }
+        button { padding: 10px 20px; margin: 5px; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>Login Debug Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Login API Directly</h2>
+        <input type="email" id="test-email" placeholder="Email">
+        <input type="password" id="test-password" placeholder="Password">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="api-result" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Redirect Logic</h2>
+        <button onclick="testRedirect('admin')">Test Admin Redirect</button>
+        <button onclick="testRedirect('teacher')">Test Teacher Redirect</button>
+        <button onclick="testRedirect('student')">Test Student Redirect</button>
+        <button onclick="testRedirect('unknown')">Test Unknown Role</button>
+        <div id="redirect-result" class="log"></div>
+    </div>
+
+    <script>
+        async function testLogin() {
+            const email = document.getElementById('test-email').value;
+            const password = document.getElementById('test-password').value;
+            const resultDiv = document.getElementById('api-result');
+            
+            resultDiv.textContent = 'Testing login...\n';
+            
+            try {
+                const response = await fetch('http://localhost:8000/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                resultDiv.textContent += `Response status: ${response.status}\n`;
+                resultDiv.textContent += `Response ok: ${response.ok}\n`;
+                
+                const result = await response.json();
+                resultDiv.textContent += `Full response: ${JSON.stringify(result, null, 2)}\n`;
+                
+                if (result.user) {
+                    resultDiv.textContent += `User object: ${JSON.stringify(result.user, null, 2)}\n`;
+                    resultDiv.textContent += `User role: "${result.user.role}"\n`;
+                    resultDiv.textContent += `Role type: ${typeof result.user.role}\n`;
+                    
+                    // Test redirect logic
+                    testRedirect(result.user.role);
+                } else {
+                    resultDiv.textContent += 'ERROR: No user object in response\n';
+                }
+                
+            } catch (error) {
+                resultDiv.textContent += `ERROR: ${error.message}\n`;
+                resultDiv.textContent += `Stack: ${error.stack}\n`;
+            }
+        }
+        
+        function testRedirect(role) {
+            const resultDiv = document.getElementById('redirect-result');
+            resultDiv.textContent = `Testing redirect for role: "${role}" (type: ${typeof role})\n`;
+            
+            if (role === "admin") {
+                resultDiv.textContent += '✓ Would redirect to: admin-approval.html\n';
+            } else if (role === "teacher") {
+                resultDiv.textContent += '✓ Would redirect to: teacher-learniq-dashboard.html\n';
+            } else if (role === "student") {
+                resultDiv.textContent += '✓ Would redirect to: module-selection.html\n';
+            } else {
+                resultDiv.textContent += `✗ Unknown role: "${role}" (type: ${typeof role})\n`;
+                resultDiv.textContent += 'Would redirect to: login.html\n';
+            }
+        }
+    </script>
+</body>
+</html>

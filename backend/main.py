@@ -151,6 +151,7 @@ def home():
 
 @app.post("/login")
 async def login_user(body: dict):
+    print("LOGIN ENDPOINT HIT")
     print(f"DEBUG: Login attempt - body: {body}")
     
     err = require_supabase()
@@ -161,6 +162,7 @@ async def login_user(body: dict):
     try:
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
+        print(f"LOGIN EMAIL: {email}")
         
         print(f"DEBUG: Extracted email: '{email}', password: {'*' * len(password) if password else 'None'}")
         
@@ -178,6 +180,7 @@ async def login_user(body: dict):
             print(f"DEBUG: Supabase auth response: {type(auth_response)}")
             print(f"DEBUG: Auth user: {auth_response.user}")
             print(f"DEBUG: Auth session: {auth_response.session}")
+            print(f"LOGIN PASSWORD VALIDATION RESULT: {bool(auth_response.user)}")
         except Exception as auth_error:
             print(f"DEBUG: Supabase auth exception: {auth_error}")
             print(f"DEBUG: Auth exception type: {type(auth_error)}")
@@ -192,6 +195,7 @@ async def login_user(body: dict):
         try:
             user_profile = db_supabase.get_profile_by_email(email)
             print(f"DEBUG: Profile lookup result: {user_profile}")
+            print(f"LOGIN DATABASE RESULT: {user_profile}")
         except Exception as profile_error:
             print(f"DEBUG: Profile lookup exception: {profile_error}")
             print(f"DEBUG: Profile exception type: {type(profile_error)}")
@@ -214,24 +218,39 @@ async def login_user(body: dict):
         
         # Return safe user data with auth session
         print(f"DEBUG: Preparing successful response")
+        print(f"DEBUG: Raw user_profile from DB: {user_profile}")
+        print(f"DEBUG: user_profile keys: {list(user_profile.keys()) if user_profile else 'None'}")
+        print(f"DEBUG: user_profile.get('role'): {user_profile.get('role') if user_profile else 'None'}")
+        print(f"DEBUG: Type of role: {type(user_profile.get('role')) if user_profile else 'None'}")
+        
         try:
+            role_value = user_profile.get("role")
+            print(f"DEBUG: Role value before processing: '{role_value}'")
+            print(f"DEBUG: Role value trimmed: '{role_value.strip() if role_value else None}'")
+            print(f"DEBUG: Role value lowercased: '{role_value.strip().lower() if role_value else None}'")
+            
             safe_user = {
                 "id": user_profile.get("id"),
                 "full_name": user_profile.get("full_name"),
                 "id_number": user_profile.get("id_number"),
                 "email": user_profile.get("email"),
-                "role": user_profile.get("role"),
+                "role": role_value.strip().lower() if role_value else "student",
                 "approval_status": user_profile.get("approval_status"),
                 "access_token": auth_response.session.access_token,
                 "refresh_token": auth_response.session.refresh_token
             }
             print(f"DEBUG: Safe user data prepared: {safe_user}")
+            print(f"DEBUG: Final role in safe_user: '{safe_user['role']}'")
+            print(f"DEBUG: Final role type: {type(safe_user['role'])}")
         except Exception as response_error:
             print(f"DEBUG: Response preparation exception: {response_error}")
             print(f"DEBUG: Response exception type: {type(response_error)}")
             return JSONResponse({"error": "Error preparing user response."}, status_code=500)
         
         print(f"DEBUG: Login successful for user: {email}")
+        print(f"FINAL LOGIN RESPONSE: {safe_user}")
+        print(f"FINAL RESPONSE STRUCTURE: {{'user': {safe_user}, 'message': 'Login successful'}}")
+        print(f"LOGIN RESPONSE PAYLOAD: {{'user': {safe_user}, 'message': 'Login successful'}}")
         return {"user": safe_user, "message": "Login successful"}
         
     except Exception as e:
@@ -425,7 +444,7 @@ async def patch_profile_status(id_number: str, body: dict):
 
 @app.get("/teacher/lessons")
 def list_teacher_lessons(teacher_id_number: str = Query(...)):
-    err = require_supabase()
+    err = require_supabase()    
     if err is not None:
         return err
     try:
@@ -479,8 +498,12 @@ def get_student_lessons():
         return err
     try:
         lessons = db_supabase.list_published_lessons_with_content()
+        print("STUDENT LESSONS DEBUG: Found", len(lessons), "published lessons")
+        for i, lesson in enumerate(lessons):
+            print(f"  Lesson {i+1}: {lesson.get('filename', 'No filename')} (id: {lesson.get('file_id', 'No id')})")
         return {"lessons": lessons}
     except Exception as e:
+        print("STUDENT LESSONS ERROR:", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
@@ -627,11 +650,15 @@ async def upload_file(file: UploadFile = File(...), teacher_id_number: str = For
 
 @app.post("/generate-reviewer")
 async def generate_reviewer(body: dict):
+    print("AI GENERATION REQUEST RECEIVED: /generate-reviewer")
+    print("REQUEST PAYLOAD:", body)
     key_err = require_gemini_key()
     if key_err is not None:
+        print("AI GENERATION ERROR (gemini key):", key_err.body if hasattr(key_err, "body") else key_err)
         return key_err
     db_err = require_supabase()
     if db_err is not None:
+        print("AI GENERATION ERROR (supabase):", db_err.body if hasattr(db_err, "body") else db_err)
         return db_err
 
     file_id = body.get("file_id")
@@ -641,6 +668,7 @@ async def generate_reviewer(body: dict):
 
     text = lesson.get("extracted_text") or ""
     if not str(text).strip():
+        print("AI GENERATION ERROR: empty extracted_text")
         return JSONResponse(
             {"error": "No text extracted from this file. Use a PDF with selectable text, or another file."},
             status_code=400,
@@ -650,8 +678,14 @@ async def generate_reviewer(body: dict):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    print("SENDING TO AI API (reviewer)")
     response = requests.post(url, json=payload, timeout=120)
     result = response.json()
+    print("AI RAW RESPONSE STATUS (reviewer):", response.status_code)
+    try:
+        print("AI RAW RESPONSE BODY (reviewer):", result)
+    except Exception as e:
+        print("AI RAW RESPONSE PRINT ERROR (reviewer):", str(e))
 
     if response.status_code != 200:
         return JSONResponse({"error": result}, status_code=502)
@@ -663,6 +697,7 @@ async def generate_reviewer(body: dict):
     try:
         db_supabase.set_reviewer(str(file_id), reviewer_text)
     except Exception as e:
+        print("AI GENERATION ERROR (db write reviewer):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
     return {"reviewer": reviewer_text}
@@ -670,11 +705,15 @@ async def generate_reviewer(body: dict):
 
 @app.post("/generate-question")
 async def generate_question(body: dict):
+    print("AI GENERATION REQUEST RECEIVED: /generate-question")
+    print("REQUEST PAYLOAD:", body)
     key_err = require_gemini_key()
     if key_err is not None:
+        print("AI GENERATION ERROR (gemini key):", key_err.body if hasattr(key_err, "body") else key_err)
         return key_err
     db_err = require_supabase()
     if db_err is not None:
+        print("AI GENERATION ERROR (supabase):", db_err.body if hasattr(db_err, "body") else db_err)
         return db_err
 
     file_id = body.get("file_id")
@@ -684,6 +723,7 @@ async def generate_question(body: dict):
 
     text = lesson.get("extracted_text") or ""
     if not str(text).strip():
+        print("AI GENERATION ERROR: empty extracted_text")
         return JSONResponse(
             {"error": "No text extracted from this file. Use a PDF with selectable text."},
             status_code=400,
@@ -700,8 +740,14 @@ async def generate_question(body: dict):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    print("SENDING TO AI API (quiz)")
     response = requests.post(url, json=payload, timeout=120)
     result = response.json()
+    print("AI RAW RESPONSE STATUS (quiz):", response.status_code)
+    try:
+        print("AI RAW RESPONSE BODY (quiz):", result)
+    except Exception as e:
+        print("AI RAW RESPONSE PRINT ERROR (quiz):", str(e))
 
     if response.status_code != 200:
         return JSONResponse({"error": result}, status_code=502)
@@ -715,6 +761,7 @@ async def generate_question(body: dict):
         if not isinstance(questions_data, list):
             questions_data = [questions_data]
     except (json.JSONDecodeError, ValueError):
+        print("AI GENERATION ERROR: failed to parse questions JSON")
         return JSONResponse(
             {"error": "Failed to parse questions from AI.", "raw": raw_output},
             status_code=502,
@@ -726,6 +773,7 @@ async def generate_question(body: dict):
         for question in questions_data:
             db_supabase.append_quiz_question(str(file_id), question)
     except Exception as e:
+        print("AI GENERATION ERROR (db write quiz):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
     return {"questions": questions_data, "count": len(questions_data)}

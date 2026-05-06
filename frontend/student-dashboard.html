@@ -3,33 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Student Dashboard | LearnIQ Track</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
-  <script src="script.js" defer></script>
+  <title>Redirecting to LearnIQ Dashboard | LearnIQ Track</title>
+  <script>
+    // Redirect to the correct student dashboard
+    window.location.replace("learniq-dashboard.html");
+  </script>
+  <meta http-equiv="refresh" content="0; url=learniq-dashboard.html">
 </head>
 <body>
-  <div class="dashboard-shell container">
-    <aside class="sidebar glass-card">
-      <div class="sidebar-header">
-        <a class="brand" href="index.html">
-          <span class="brand-mark">LQ</span>
-          <span>
-            <strong>LearnIQ Track</strong>
-            <small>Student portal</small>
-          </span>
-        </a>
-      </div>
-
-      <nav class="side-links">
-        <a class="active" href="student-dashboard.html"><i class="fa-solid fa-house"></i> Dashboard</a>
-        <a href="#student-learning-block"><i class="fa-solid fa-book-open"></i> My lesson</a>
-        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
-        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
-      </nav>
+  <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Inter, sans-serif; color: #333;">
+    <div style="text-align: center;">
+      <h1>Redirecting to LearnIQ Dashboard...</h1>
+      <p>If you are not redirected automatically, <a href="learniq-dashboard.html">click here</a>.</p>
+    </div>
+  </div>
+</body>
+</html>
 
       <div class="sidebar-footer">
         <div class="user-chip">

@@ -120,6 +120,9 @@ function getUserInitials(fullName) {
 }
 
 function setCurrentUserSession(user) {
+  console.log("Saving user session:", user);
+  console.log("User role:", user.role);
+  
   const safeUser = {
     id: user.id,
     id_number: user.id_number,
@@ -130,7 +133,10 @@ function setCurrentUserSession(user) {
     access_token: user.access_token,
     refresh_token: user.refresh_token
   };
+  
+  console.log("Session stored:", safeUser);
   sessionStorage.setItem(authSessionKey, JSON.stringify(safeUser));
+  console.log("SessionStorage check:", sessionStorage.getItem(authSessionKey));
 }
 
 function getCurrentUserSession() {
@@ -468,13 +474,13 @@ function setupSignupPage() {
 }
 
 function setupLoginPage() {
-  console.log("setupLoginPage running");
-  
+  console.log("SETUP LOGIN PAGE RUNNING");
+  console.log("CURRENT PATHNAME:", window.location.pathname);
+  console.log("SCRIPT LOADED, SETUP LOGIN PAGE INVOKED");
+  const form = document.getElementById("login-form");
+  console.log("LOGIN FORM:", form);
   const loginForm = document.querySelector("#login-form");
   const loginMessage = document.querySelector("#login-message");
-  
-  console.log("login form found:", loginForm);
-  console.log("login message found:", loginMessage);
   
   if (!loginForm) {
     console.error("Login form not found!");
@@ -482,17 +488,24 @@ function setupLoginPage() {
   }
 
   loginForm.addEventListener("submit", async (event) => {
-    console.log("login submit fired");
+    console.log("LOGIN SUBMIT DETECTED");
     event.preventDefault();
+    console.log("event.preventDefault() executed");
 
     const email = document.querySelector("#login-email").value.trim().toLowerCase();
     const password = document.querySelector("#login-password").value;
-
-    console.log("login attempt with email:", email);
+    const endpointUrl = apiUrl("/login");
+    const payload = {
+      email: email,
+      password: password
+    };
+    console.log("STARTING LOGIN FETCH");
+    console.log("LOGIN EMAIL:", email);
+    console.log("LOGIN PAYLOAD:", payload);
+    console.log("LOGIN ENDPOINT URL:", endpointUrl);
 
     if (!email || !password) {
       const errorMsg = "Email and password are required.";
-      console.error(errorMsg);
       if (loginMessage) {
         showAuthMessage(errorMsg, loginMessage, "error");
       } else {
@@ -502,38 +515,27 @@ function setupLoginPage() {
     }
 
     try {
-      console.log("sending login request to:", apiUrl("/login"));
-      
       // Call backend login endpoint (now uses Supabase Auth)
-      const response = await fetch(apiUrl("/login"), {
+      const response = await fetch(endpointUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
+        body: JSON.stringify(payload)
       });
-
-      console.log("login response status:", response.status);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error("login error response:", error);
-        console.error("login error status:", response.status);
-        
-        // Display the actual backend error message
         const errorMessage = error.error || error.message || "Login failed";
         throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log("login success result:", result);
-      
+      console.log("LOGIN RESPONSE:", result);
       const user = result.user;
+      
       if (!user) {
         throw new Error("Invalid response format: missing user data");
       }
-
+      
       const successMessage =
         user.role === "admin"
           ? "Welcome Admin. Redirecting to approval dashboard..."
@@ -541,13 +543,15 @@ function setupLoginPage() {
           ? "Welcome Teacher. Redirecting to teacher dashboard..."
           : "Login successful. Redirecting to student dashboard...";
       
-      console.log("login successful, redirecting...");
+      console.log("SAVING SESSION:", user);
+      setCurrentUserSession(user);
+      console.log("SESSION CHECK AFTER SAVE:", sessionStorage.getItem(authSessionKey));
       showAuthMessage(successMessage, loginMessage, "success");
       showToast(successMessage, "success");
-
-      setCurrentUserSession(user);
-
+      
       setTimeout(() => {
+        console.log("REDIRECT BLOCK REACHED");
+        console.log("USER ROLE:", user.role);
         if (user.role === "admin") {
           window.location.href = "admin-approval.html";
         } else if (user.role === "teacher") {
@@ -559,7 +563,6 @@ function setupLoginPage() {
         }
       }, 1000);
     } catch (error) {
-      console.error("login error:", error);
       const errorMsg = error.message || "Login failed. Please try again.";
       if (loginMessage) {
         showAuthMessage(errorMsg, loginMessage, "error");
@@ -1434,7 +1437,7 @@ function setupTeacherDashboard() {
   }
 
   document.getElementById("teacher-generate-ai-pack-btn")?.addEventListener("click", () => {
-    void runTeacherAiPack(previewBody);
+    runTeacherAiPack(previewBody);
   });
 
   document.getElementById("publish-lesson-btn")?.addEventListener("click", async () => {
@@ -1496,12 +1499,12 @@ function setupTeacherDashboard() {
       const id = decodeURIComponent(raw);
       const fnameCell = row.querySelector("td");
       const fname = fnameCell ? fnameCell.textContent.trim() : "";
-      void selectTeacherLesson(id, fname);
+      selectTeacherLesson(id, fname);
     });
   }
 
-  void refreshTeacherLessons();
-  void updateTeacherApiStatus();
+  refreshTeacherLessons();
+  updateTeacherApiStatus();
 }
 
 function answersMatch(studentPick, correctAnswer) {
@@ -1514,83 +1517,102 @@ function answersMatch(studentPick, correctAnswer) {
 }
 
 function setupStudentDashboard() {
-  const currentUser = getCurrentUserSession();
-  const displayName = document.getElementById("student-display-name");
-  const displayTrack = document.getElementById("student-display-track");
-  const displayAvatar = document.getElementById("student-avatar-initials");
-  const leaderboardName = document.getElementById("student-leaderboard-name");
+  console.log("PAGE INIT RUNNING: setupStudentDashboard() called");
 
-  if (displayName) {
-    displayName.textContent = currentUser?.fullName || "Student";
-  }
-  if (displayAvatar) {
-    displayAvatar.textContent = getUserInitials(currentUser?.fullName || "Student");
-  }
-  if (displayTrack && !displayTrack.textContent.trim()) {
-    displayTrack.textContent = "STEM - 12 A";
-  }
-  if (leaderboardName) {
-    leaderboardName.textContent = `2. ${currentUser?.fullName || "Student"}`;
-  }
+const emptyEl = document.getElementById("student-lesson-empty");
+const emptyText = document.getElementById("student-lesson-empty-text");
+const metaCard = document.getElementById("student-lesson-meta");
+const reviewerCard = document.getElementById("student-reviewer-card");
+const quizCard = document.getElementById("student-quiz-card");
+const activitiesCard = document.getElementById("student-activities-card");
+const titleEl = document.getElementById("student-lesson-title");
+const filenameEl = document.getElementById("student-lesson-filename");
+const reviewerList = document.getElementById("student-reviewer-list");
+const activitiesList = document.getElementById("student-activities-list");
+const quizProgress = document.getElementById("student-quiz-progress");
+const quizBody = document.getElementById("student-quiz-body");
+const quizScoreEl = document.getElementById("student-quiz-score");
+const workspaceEl = document.getElementById("student-workspace");
+const lessonMetaLine = document.getElementById("student-lesson-meta-line");
+const lessonPreviewText = document.getElementById("student-lesson-preview-text");
+const aiStatusEl = document.getElementById("student-ai-status");
+const lessonTabButtons = Array.from(document.querySelectorAll(".workspace-tab"));
+const tabLesson = document.getElementById("student-tab-lesson");
+const tabReviewer = document.getElementById("student-tab-reviewer");
+const tabQuiz = document.getElementById("student-tab-quiz");
+const tabActivity = document.getElementById("student-tab-activity");
 
-  const emptyEl = document.getElementById("student-lesson-empty");
-  const emptyText = document.getElementById("student-lesson-empty-text");
-  const metaCard = document.getElementById("student-lesson-meta");
-  const titleEl = document.getElementById("student-lesson-title");
-  const filenameEl = document.getElementById("student-lesson-filename");
-  const reviewerCard = document.getElementById("student-reviewer-card");
-  const reviewerList = document.getElementById("student-reviewer-list");
-  const quizCard = document.getElementById("student-quiz-card");
-  const quizBody = document.getElementById("student-quiz-body");
-  const quizProgress = document.getElementById("student-quiz-progress");
-  const quizScoreEl = document.getElementById("student-quiz-score");
-  const activitiesCard = document.getElementById("student-activities-card");
-  const activitiesList = document.getElementById("student-activities-list");
-  const refreshBtn = document.getElementById("student-refresh-lesson-btn");
-  const openActionsBtn = document.getElementById("student-open-actions-btn");
-  const actionModal = document.getElementById("student-lesson-action-modal");
-  const actionModalClose = document.getElementById("student-lesson-action-modal-close");
-  const actionModalMeta = document.getElementById("student-lesson-action-modal-meta");
-  const actionButtons = actionModal ? Array.from(actionModal.querySelectorAll("[data-student-lesson-action]")) : [];
 
-  if (!emptyEl || !quizBody) return;
-
-  let studentLessons = []; // All published lessons
-  let selectedLesson = null; // Currently selected lesson
-  let lessonData = null; // Legacy - for backward compatibility
-  let quizIndex = 0;
-  let quizScore = 0;
+let studentLessons = []; // All published lessons
+let selectedLesson = null; // Currently selected lesson
+let activeContentType = null; // Controls which section is displayed: "reviewer", "quiz", "activity", or null
+let lessonData = null; // Legacy - for backward compatibility
+let quizIndex = 0;
+let quizScore = 0;
   let quizAnswered = false;
   let studentAnswers = []; // Track all student answers
 
   function renderLessonSelection() {
+  console.log("DEBUG: renderLessonSelection called");
+  console.log("DEBUG: studentLessons length:", studentLessons.length);
+  
   const selectionEl = document.getElementById("student-lesson-selection");
   const lessonListEl = document.getElementById("student-lesson-list");
   
-  if (!selectionEl || !lessonListEl) return;
+  console.log("selectionEl:", selectionEl);
+  console.log("lessonListEl:", lessonListEl);
+  console.log("DEBUG: selectionEl found:", !!selectionEl);
+  console.log("DEBUG: lessonListEl found:", !!lessonListEl);
+  
+  if (!selectionEl || !lessonListEl) {
+    console.log("DEBUG: Missing DOM elements - aborting render");
+    return;
+  }
   
   if (studentLessons.length === 0) {
+    console.log("DEBUG: No lessons to render - hiding selection");
     selectionEl.hidden = true;
     return;
   }
   
+  console.log("DEBUG: About to show lesson selection");
+  console.log("DEBUG: selectionEl.hidden before:", selectionEl.hidden);
   selectionEl.hidden = false;
+  console.log("DEBUG: selectionEl.hidden after:", selectionEl.hidden);
   
-  lessonListEl.innerHTML = studentLessons.map(lesson => `
-    <div class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}" 
-         data-lesson-id="${lesson.file_id}"
-         onclick="selectLessonById('${lesson.file_id}')">
+  console.log("DEBUG: About to generate HTML for", studentLessons.length, "lessons");
+  
+  let html = "";
+  studentLessons.forEach((lesson, index) => {
+    console.log(`DEBUG: Processing lesson ${index + 1}:`, lesson.filename);
+    const teacherName = lesson.teacher_name || lesson.teacher_id_number || "Teacher";
+    const createdLabel = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "Unknown date";
+    html += `
+    <article class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}" 
+         data-lesson-id="${lesson.file_id}">
+      <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
       <div class="lesson-info">
         <h4>${lesson.filename || 'Untitled Lesson'}</h4>
-        <span class="small-note">${lesson.file_type?.toUpperCase() || 'Unknown'} • ${lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : 'Unknown date'}</span>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ${lesson.file_type?.toUpperCase() || 'Unknown'}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ${createdLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-user"></i> ${escapeHtml(teacherName)}</span>
+        </div>
+        <p class="lesson-card-tagline">AI Learning Workspace</p>
+        <p class="lesson-card-features small-note">Review • Quiz • Activities</p>
       </div>
-      <div class="lesson-status">
-        ${selectedLesson?.file_id === lesson.file_id ? 
-          '<span class="status-badge online">Selected</span>' : 
-          '<span class="status-badge offline">Available</span>'}
+      <div class="lesson-actions">
+        <button class="btn btn-primary btn-small" onclick="selectLessonById('${lesson.file_id}')">Open Workspace</button>
       </div>
-    </div>
-  `).join('');
+    </article>
+  `;
+  });
+  
+  console.log("DEBUG: Generated HTML length:", html.length);
+  console.log("DEBUG: Generated HTML preview:", html.substring(0, 200) + "...");
+  console.log("DEBUG: lessonListEl.innerHTML before:", lessonListEl.innerHTML);
+  lessonListEl.innerHTML = html;
+  console.log("DEBUG: lessonListEl.innerHTML after:", lessonListEl.innerHTML);
 }
 
 function selectLessonById(lessonId) {
@@ -1600,80 +1622,71 @@ function selectLessonById(lessonId) {
   }
 }
 
-function selectLesson(lesson) {
+async function selectLesson(lesson) {
   selectedLesson = lesson;
   lessonData = lesson; // Update legacy for compatibility
+  activeContentType = "lesson";
+  
+  console.log("Selected lesson:", selectedLesson); // Debug: Log selected lesson
   
   // Update UI
   renderLessonSelection();
-  showLesson(lesson);
+  showLessonSelection(lesson);
   
-  // Update modal meta
-  if (actionModalMeta) {
-    actionModalMeta.textContent = `Selected lesson: ${lesson.filename || "Your class lesson"}`;
+  if (workspaceEl) workspaceEl.hidden = false;
+  if (lessonMetaLine) {
+    const createdLabel = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "Unknown date";
+    lessonMetaLine.textContent = `${lesson.file_type?.toUpperCase() || "UNKNOWN"} • Uploaded ${createdLabel}`;
   }
+  if (lessonPreviewText) {
+    lessonPreviewText.textContent = (lesson.extracted_text || "").trim().slice(0, 420) || "Lesson preview is not available yet for this file.";
+  }
+  showContentSection("lesson");
+  await refreshSelectedLessonContent();
+  
+  // Show success message
+  showToast(`Selected: ${lesson.filename || "Lesson"}`, "success");
+}
+
+// Make functions globally accessible for inline onclick handlers
+window.selectLessonById = selectLessonById;
+window.selectLesson = selectLesson;
+
+function renderDashboardOverview() {
+  const selectionEl = document.getElementById("student-lesson-selection");
+  
+  // Hide all lesson-related content on dashboard
+  if (emptyEl) emptyEl.hidden = true;
+  if (selectionEl) selectionEl.hidden = true;
+  if (metaCard) metaCard.hidden = true;
+  if (workspaceEl) workspaceEl.hidden = true;
+  if (reviewerCard) reviewerCard.hidden = true;
+  if (quizCard) quizCard.hidden = true;
+  if (activitiesCard) activitiesCard.hidden = true;
+}
+
+function showLessonSelection(lesson) {
+  if (emptyEl) emptyEl.hidden = true;
+  if (metaCard) metaCard.hidden = false;
+  if (workspaceEl) workspaceEl.hidden = false;
+  if (titleEl) titleEl.textContent = "AI Lesson Workspace";
+  if (filenameEl) filenameEl.textContent = lesson.filename || "Selected lesson";
 }
 
 function showEmpty(message) {
     lessonData = null;
     selectedLesson = null;
+    activeContentType = null;
     if (emptyEl) emptyEl.hidden = false;
     if (emptyText) emptyText.textContent = message;
     if (metaCard) metaCard.hidden = true;
+    if (workspaceEl) workspaceEl.hidden = true;
     if (reviewerCard) reviewerCard.hidden = true;
     if (quizCard) quizCard.hidden = true;
     if (activitiesCard) activitiesCard.hidden = true;
-    closeActionModal();
   }
 
-  function closeActionModal() {
-    if (!actionModal) return;
-    actionModal.setAttribute("hidden", "");
-    
-    // Reset generation options
-    const generationOptions = document.querySelector(".generation-options");
-    const actionButtons = document.querySelector(".action-modal-actions");
-    const quizOptions = document.querySelector(".quiz-options");
-    const activityOptions = document.querySelector(".activity-options");
-    
-    if (generationOptions) generationOptions.hidden = true;
-    if (actionButtons) actionButtons.hidden = false;
-    if (quizOptions) quizOptions.hidden = true;
-    if (activityOptions) activityOptions.hidden = true;
-  }
-
-  function setStudentActionButtonsDisabled(disabled) {
-    actionButtons.forEach((button) => {
-      button.disabled = disabled;
-    });
-  }
-
-  function openActionModal() {
-    if (!actionModal) return;
-    if (actionModalMeta) {
-      actionModalMeta.textContent = lessonData
-        ? `Selected lesson: ${lessonData.filename || "Your class lesson"}`
-        : "No lesson loaded yet. Click 'Check again' first.";
-    }
-    setStudentActionButtonsDisabled(!lessonData);
-    actionModal.removeAttribute("hidden");
-  }
-
-  // Global fallback so inline click can always open modal.
-  window.openStudentLessonActions = () => {
-    const modal = document.getElementById("student-lesson-action-modal");
-    const meta = document.getElementById("student-lesson-action-modal-meta");
-    const filename = (document.getElementById("student-lesson-filename")?.textContent || "").trim();
-    const buttons = Array.from(document.querySelectorAll("[data-student-lesson-action]"));
-    if (!modal) return;
-    if (meta) {
-      meta.textContent = filename ? `Selected lesson: ${filename}` : "No lesson loaded yet. Click 'Check again' first.";
-    }
-    buttons.forEach((btn) => {
-      btn.disabled = !filename;
-    });
-    modal.removeAttribute("hidden");
-  };
+  function closeActionModal() {}
 
   function showLesson(data) {
     console.log("[DEBUG] showLesson called with data:", data);
@@ -1742,10 +1755,9 @@ function showEmpty(message) {
 
   function focusStudentSection(action) {
     const target =
-      action === "reviewer" ? reviewerCard : action === "quiz" ? quizCard : action === "activity" ? activitiesCard : null;
+      action === "reviewer" ? tabReviewer : action === "quiz" ? tabQuiz : action === "activity" ? tabActivity : tabLesson;
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "start" });
-    closeActionModal();
   }
 
   function updateReviewerDisplay(reviewerData) {
@@ -1883,20 +1895,52 @@ function showEmpty(message) {
   }
 
   async function loadStudentLessons() {
+    console.log("DEBUG: loadStudentLessons called");
+    console.log("DEBUG: Current page:", window.location.pathname);
+    const currentPath = window.location.pathname;
+    const isMyLessonPage = currentPath.includes('my-lesson.html');
+    if (!isMyLessonPage) {
+      renderDashboardOverview();
+      return;
+    }
+    
     try {
-      const res = await fetch(apiUrl("/student/lessons"));
+      console.log("Calling /student/lessons...");
+      const apiUrlValue = apiUrl("/student/lessons");
+      console.log("DEBUG: Full API URL:", apiUrlValue);
+      
+      const res = await fetch(apiUrlValue);
+      console.log("DEBUG: Fetch executed");
+      console.log("DEBUG: API response status:", res.status);
+      console.log("DEBUG: API response ok:", res.ok);
+      
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        console.log("DEBUG: API error:", err);
         showEmpty(err.error || "No published lessons yet. Ask your teacher to publish one.");
         return;
       }
-      const data = await res.json();
-      studentLessons = data.lessons || [];
-      renderLessonSelection();
       
-      // Auto-select first lesson if none selected
-      if (studentLessons.length > 0 && !selectedLesson) {
-        selectLesson(studentLessons[0]);
+      const data = await res.json();
+      console.log("DEBUG: JSON parsed successfully");
+      console.log("Lessons received:", data.lessons);
+      console.log("Lessons count:", data.lessons?.length);
+      
+      studentLessons = data.lessons || [];
+      console.log("DEBUG: studentLessons assigned:", studentLessons);
+      console.log("studentLessons API:", data.lessons); // Debug: Log API response
+      console.log("studentLessons array:", studentLessons); // Debug: Log array
+      
+      console.log("DEBUG: On My Lesson page - calling renderLessonSelection()");
+      if (selectedLesson?.file_id) {
+        const matched = studentLessons.find((lesson) => lesson.file_id === selectedLesson.file_id);
+        if (matched) {
+          selectedLesson = { ...selectedLesson, ...matched };
+        }
+      }
+      renderLessonSelection();
+      if (studentLessons.length > 0) {
+        if (emptyEl) emptyEl.hidden = true;
       }
     } catch {
       showEmpty("Cannot reach the server. Is the LearnIQ Track backend running?");
@@ -1918,35 +1962,165 @@ function showEmpty(message) {
     }
   }
 
-  refreshBtn?.addEventListener("click", () => void loadStudentLessons());
-  openActionsBtn?.addEventListener("click", openActionModal);
-  actionModalClose?.addEventListener("click", closeActionModal);
-  actionModal?.addEventListener("click", (event) => {
-    if (event.target === actionModal) closeActionModal();
-  });
-  actionButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const action = button.dataset.studentLessonAction;
-      if (!action) return;
-      
-      // Show generation options based on action
-      const generationOptions = document.querySelector(".generation-options");
-      const quizOptions = document.querySelector(".quiz-options");
-      const activityOptions = document.querySelector(".activity-options");
-      const actionButtons = document.querySelector(".action-modal-actions");
-      
-      // Hide action buttons and show generation options
-      actionButtons.hidden = true;
-      generationOptions.hidden = false;
-      
-      // Show appropriate options based on action
-      quizOptions.hidden = action !== "quiz";
-      activityOptions.hidden = action !== "activity";
-      
-      // Store current action for generation
-      generationOptions.dataset.currentAction = action;
+  
+  function showContentSection(contentType) {
+    activeContentType = contentType;
+    const panelMap = {
+      lesson: tabLesson,
+      reviewer: tabReviewer,
+      quiz: tabQuiz,
+      activity: tabActivity
+    };
+    Object.entries(panelMap).forEach(([key, panel]) => {
+      if (!panel) return;
+      panel.hidden = key !== contentType;
     });
-  });
+    lessonTabButtons.forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-lesson-tab") === contentType);
+    });
+
+    switch (contentType) {
+      case "lesson":
+        if (tabLesson) {
+          tabLesson.innerHTML = '<p class="small-note">Use the AI actions to generate reviewer, quiz, and activities for this lesson.</p>';
+        }
+        break;
+      case "reviewer":
+        if (selectedLesson && selectedLesson.reviewer) {
+          updateReviewerDisplay(selectedLesson.reviewer);
+        } else {
+          if (reviewerList) reviewerList.innerHTML = '<li class="small-note">No reviewer content yet. Click "Generate Reviewer".</li>';
+        }
+        break;
+      case "quiz":
+        if (selectedLesson && selectedLesson.quiz && selectedLesson.quiz.length > 0) {
+          lessonData = selectedLesson;
+          renderStudentQuiz();
+        } else {
+          if (quizBody) quizBody.innerHTML = '<p class="small-note">No quiz questions yet. Click "Generate Quiz".</p>';
+          if (quizProgress) quizProgress.textContent = "";
+          if (quizScoreEl) quizScoreEl.textContent = "";
+        }
+        break;
+      case "activity":
+        if (selectedLesson && selectedLesson.activities && selectedLesson.activities.length > 0) {
+          updateActivitiesDisplay(selectedLesson.activities);
+        } else {
+          if (activitiesList) activitiesList.innerHTML = '<p class="small-note">No activities yet. Click "Generate Activity".</p>';
+        }
+        break;
+    }
+  }
+
+  async function refreshSelectedLessonContent() {
+    if (!selectedLesson?.file_id) return;
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(selectedLesson.file_id)}`));
+    if (!res.ok) return;
+    const payload = await res.json();
+    selectedLesson = {
+      ...selectedLesson,
+      reviewer: payload.reviewer || [],
+      quiz: payload.quiz || [],
+      activities: payload.activities || []
+    };
+    lessonData = selectedLesson;
+  }
+
+  async function runStudentAiAction(actionType) {
+    if (!selectedLesson?.file_id) {
+      showToast("Please open a lesson workspace first.", "error");
+      return;
+    }
+
+    const endpointUrl =
+      actionType === "reviewer"
+        ? apiUrl("/generate-reviewer")
+        : actionType === "quiz"
+        ? apiUrl("/generate-question")
+        : apiUrl("/generate-activities");
+
+    const requestPayload = { file_id: selectedLesson.file_id };
+
+    console.log("STARTING AI GENERATION");
+    console.log("AI actionType:", actionType);
+    console.log("AI endpoint URL:", endpointUrl);
+    console.log("AI payload:", requestPayload);
+    console.log("Selected lesson:", selectedLesson);
+
+    const actionMap = {
+      reviewer: {
+        button: document.getElementById("student-generate-reviewer-btn"),
+        endpoint: "/generate-reviewer",
+        loading: "Generating reviewer with AI...",
+        done: "Reviewer generated."
+      },
+      quiz: {
+        button: document.getElementById("student-generate-quiz-btn"),
+        endpoint: "/generate-question",
+        loading: "Creating quiz questions...",
+        done: "Quiz generated."
+      },
+      activity: {
+        button: document.getElementById("student-generate-activity-btn"),
+        endpoint: "/generate-activities",
+        loading: "Preparing activities...",
+        done: "Activities generated."
+      }
+    };
+
+    const config = actionMap[actionType];
+    if (!config) return;
+    const btn = config.button;
+    const originalText = btn ? btn.innerHTML : "";
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loader"></span> Working...';
+    }
+    if (aiStatusEl) aiStatusEl.textContent = config.loading;
+
+    try {
+      const res = await fetch(endpointUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload)
+      });
+
+      console.log("AI RESPONSE STATUS:", res.status);
+
+      const payload = await res.json().catch(() => ({}));
+      console.log("AI RESPONSE DATA:", payload);
+
+      if (!res.ok) {
+        const errValue = payload?.error ?? payload?.message ?? payload;
+        const errMsg =
+          typeof errValue === "string"
+            ? errValue
+            : errValue && typeof errValue === "object"
+            ? JSON.stringify(errValue)
+            : `Request failed (HTTP ${res.status})`;
+        throw new Error(errMsg);
+      }
+
+      await refreshSelectedLessonContent();
+      showContentSection(actionType);
+      if (aiStatusEl) aiStatusEl.textContent = config.done;
+      showToast(config.done, "success");
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      const msg =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message || "Unknown error")
+          : String(error || "Unknown error");
+      if (aiStatusEl) aiStatusEl.textContent = `Generation failed: ${msg}`;
+      showToast(`Failed to generate ${actionType}: ${msg}`, "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+  }
 
   // Handle generation button click
   const generateBtn = document.getElementById("generate-btn");
@@ -2017,8 +2191,8 @@ function showEmpty(message) {
         
         // Reload lesson data from database to ensure consistency
         console.log("[DEBUG] Reloading lesson data...");
-        await loadStudentLesson();
-        console.log(`[DEBUG] Lesson data reloaded. ${action}:`, lessonData?.[action === 'quiz' ? 'quiz' : 'activities']);
+        await loadStudentLessons(); // Reload all lessons to maintain selection state
+        console.log(`[DEBUG] Lesson data reloaded. ${action}:`, selectedLesson?.[action === 'quiz' ? 'quiz' : 'activities']);
         
         // Close modal and focus section
         closeActionModal();
@@ -2051,8 +2225,26 @@ function showEmpty(message) {
       closeActionModal();
     });
   }
-  void loadStudentLesson();
-}
+  document.getElementById("student-refresh-lesson-btn")?.addEventListener("click", () => {
+    loadStudentLessons();
+  });
+  lessonTabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const tab = button.getAttribute("data-lesson-tab");
+      if (!tab) return;
+      showContentSection(tab);
+    });
+  });
+  document.getElementById("student-generate-reviewer-btn")?.addEventListener("click", () => {
+    runStudentAiAction("reviewer");
+  });
+  document.getElementById("student-generate-quiz-btn")?.addEventListener("click", () => {
+    runStudentAiAction("quiz");
+  });
+  document.getElementById("student-generate-activity-btn")?.addEventListener("click", () => {
+    runStudentAiAction("activity");
+  });
+  loadStudentLessons();
 
 async function renderAiResultPage() {
   const reviewerList = document.querySelector("#reviewer-result");
@@ -2112,14 +2304,32 @@ async function renderAiResultPage() {
   activitiesList.innerHTML =
     acts.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No activities yet.</li>";
 }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("DOMContentLoaded fired:", window.location.pathname);
   animateProgressBars();
   setupForms();
   setupSignupPage();
-  setupLoginPage();
-  setupAdminPage();
-  setupTeacherDashboard();
-  setupStudentDashboard();
-  void renderAiResultPage();
+  
+  // Only run page-specific setup if we're on the correct page
+  if (window.location.pathname.includes('login.html') || window.location.pathname.endsWith('/login')) {
+    setupLoginPage();
+  }
+  if (window.location.pathname.includes('signup.html') || window.location.pathname.endsWith('/signup')) {
+    // signupPage is already handled by setupSignupPage()
+  }
+  if (window.location.pathname.includes('admin-approval.html') || window.location.pathname.includes('admin-dashboard.html')) {
+    setupAdminPage();
+  }
+  if (window.location.pathname.includes('teacher-learniq-dashboard.html') || window.location.pathname.includes('teacher-dashboard.html')) {
+    setupTeacherDashboard();
+  }
+  if (window.location.pathname.includes('module-selection.html') || window.location.pathname.includes('immersion-dashboard.html')) {
+    setupStudentDashboard();
+  }
+  if (window.location.pathname.includes('learniq-dashboard.html') || window.location.pathname.includes('my-lesson.html')) {
+    setupStudentDashboard();
+  }
+  renderAiResultPage();
 });

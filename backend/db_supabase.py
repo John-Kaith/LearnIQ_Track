@@ -239,7 +239,6 @@ def unpublish_all_lessons() -> None:
 
 
 def publish_lesson(lesson_id: str) -> None:
-    unpublish_all_lessons()
     _sb().table("lessons").update({"is_published": True}).eq("id", lesson_id).execute()
 
 
