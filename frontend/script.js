@@ -1552,6 +1552,30 @@ let quizScore = 0;
   let quizAnswered = false;
   let studentAnswers = []; // Track all student answers
 
+  const quizSettingsModal = document.getElementById("student-quiz-settings-modal");
+  const quizSettingsClose = document.getElementById("student-quiz-settings-close");
+  const quizSettingsCancel = document.getElementById("student-quiz-generate-cancel");
+  const quizSettingsConfirm = document.getElementById("student-quiz-generate-confirm");
+  const quizCountSelect = document.getElementById("student-quiz-count");
+  const quizDifficultySelect = document.getElementById("student-quiz-difficulty");
+
+  const activitySettingsModal = document.getElementById("student-activity-settings-modal");
+  const activitySettingsClose = document.getElementById("student-activity-settings-close");
+  const activitySettingsCancel = document.getElementById("student-activity-generate-cancel");
+  const activitySettingsConfirm = document.getElementById("student-activity-generate-confirm");
+  const activityTypeSelect = document.getElementById("student-activity-type");
+  const activityCountSelect = document.getElementById("student-activity-count");
+
+  function openModal(el) {
+    if (!el) return;
+    el.removeAttribute("hidden");
+  }
+
+  function closeModal(el) {
+    if (!el) return;
+    el.setAttribute("hidden", "");
+  }
+
   function renderLessonSelection() {
   console.log("DEBUG: renderLessonSelection called");
   console.log("DEBUG: studentLessons length:", studentLessons.length);
@@ -1724,6 +1748,38 @@ function showEmpty(message) {
                   <p>${escapeHtml(item)}</p>
                 </div>`;
             } else if (typeof item === 'object' && item !== null) {
+              if (item.activity_type === "matching" && Array.isArray(item.pairs)) {
+                const pairs = item.pairs
+                  .slice(0, 10)
+                  .map((p) => `<li><strong>${escapeHtml(p.left || "")}</strong> — ${escapeHtml(p.right || "")}</li>`)
+                  .join("");
+                return `
+                  <div class="activity-item">
+                    <strong>Matching Type</strong>
+                    <span class="small-note">Match the pairs below</span>
+                    <ul class="small-note" style="margin:0.6rem 0 0; padding-left:1.2rem;">
+                      ${pairs || "<li>—</li>"}
+                    </ul>
+                  </div>`;
+              }
+
+              if (Object.prototype.hasOwnProperty.call(item, "question") && Object.prototype.hasOwnProperty.call(item, "answer")) {
+                const ans =
+                  typeof item.answer === "boolean"
+                    ? item.answer
+                      ? "True"
+                      : "False"
+                    : item.answer == null
+                    ? "—"
+                    : String(item.answer);
+                return `
+                  <div class="activity-item">
+                    <strong>${escapeHtml((item.activity_type || "activity").replace("_", " "))} ${i + 1}</strong>
+                    <p>${escapeHtml(item.question || "")}</p>
+                    <small>Answer: ${escapeHtml(ans)}</small>
+                  </div>`;
+              }
+
               return `
                 <div class="activity-item">
                   <strong>${escapeHtml(item.title || `Activity ${i + 1}`)}</strong>
@@ -1795,7 +1851,7 @@ function showEmpty(message) {
     }
 
     if (quizProgress) quizProgress.textContent = `Question ${quizIndex + 1} of ${questions.length}`;
-    if (quizScoreEl) quizScoreEl.textContent = `Score: ${quizScore} / ${questions.length}`;
+    if (quizScoreEl) quizScoreEl.textContent = "";
 
     const q = questions[quizIndex];
     if (!q || !q.question) {
@@ -1804,92 +1860,96 @@ function showEmpty(message) {
     }
 
     const choices = Array.isArray(q.choices) ? q.choices : [];
+    const letters = ["A", "B", "C", "D"];
     const radios = choices
       .map(
         (c, i) => `
       <label class="small-note" style="display:block;margin:0.35rem 0;">
-        <input type="radio" name="student-quiz-opt" value="${i}" ${quizAnswered ? "disabled" : ""} />
+        <input type="radio" name="student-quiz-opt" value="${letters[i] || i}" />
         ${escapeHtml(c)}
       </label>`
       )
       .join("");
 
-    const feedbackId = "student-quiz-feedback";
+    const saved = studentAnswers[quizIndex];
+    const checkedAttr = (val) => (saved === val ? "checked" : "");
+
     quizBody.innerHTML = `
       <p><strong>${escapeHtml(q.question)}</strong></p>
-      ${radios}
-      <div id="${feedbackId}" class="small-note" style="margin-top:0.75rem;"></div>
+      ${choices
+        .map(
+          (c, i) => `
+        <label class="small-note" style="display:block;margin:0.35rem 0;">
+          <input type="radio" name="student-quiz-opt" value="${letters[i] || i}" ${checkedAttr(letters[i])} />
+          ${escapeHtml(c)}
+        </label>`
+        )
+        .join("")}
       <div class="button-group" style="margin-top:0.75rem;">
-        <button type="button" class="btn btn-primary" id="student-quiz-check-btn" ${quizAnswered ? "disabled" : ""}>Check answer</button>
-        <button type="button" class="btn btn-secondary" id="student-quiz-next-btn">Next</button>
+        <button type="button" class="btn btn-secondary" id="student-quiz-prev-btn" ${quizIndex === 0 ? "disabled" : ""}>Previous</button>
+        <button type="button" class="btn btn-primary" id="student-quiz-next-btn">${
+          quizIndex + 1 >= questions.length ? "Submit Quiz" : "Next"
+        }</button>
       </div>
     `;
 
-    document.getElementById("student-quiz-check-btn")?.addEventListener("click", () => {
-      if (quizAnswered) return;
+    function saveCurrentAnswer() {
       const picked = document.querySelector('input[name="student-quiz-opt"]:checked');
-      const fb = document.getElementById(feedbackId);
-      if (!picked) {
-        if (fb) fb.textContent = "Pick an answer first.";
-        return;
-      }
-      quizAnswered = true;
-      const idx = Number(picked.value);
-      const choiceText = choices[idx] != null ? choices[idx] : "";
-      const ok = answersMatch(choiceText, q.answer);
-      if (ok) quizScore += 1;
-      if (fb) {
-        fb.textContent = ok ? "Correct!" : "Not quite. Correct answer: " + String(q.answer);
-        fb.style.color = ok ? "var(--success, #22c55e)" : "var(--warning, #f59e0b)";
-      }
-      document.querySelectorAll('input[name="student-quiz-opt"]').forEach((el) => {
-        el.disabled = true;
-      });
-      document.getElementById("student-quiz-check-btn").disabled = true;
-      document.getElementById("student-quiz-next-btn").disabled = false;
-      if (quizScoreEl) quizScoreEl.textContent = `Score: ${quizScore} / ${questions.length}`;
+      studentAnswers[quizIndex] = picked ? String(picked.value) : null;
+    }
+
+    function renderResults() {
+      // Evaluate all answers on submit
+      let correct = 0;
+      const rows = questions
+        .map((question, idx) => {
+          const your = studentAnswers[idx];
+          const correctAns = String(question.answer || "").trim().toUpperCase();
+          const ok = your && correctAns && String(your).toUpperCase() === correctAns;
+          if (ok) correct += 1;
+          const yourLabel = your ? String(your).toUpperCase() : "—";
+          const mark = ok ? "✅" : "❌";
+          return `
+            <div class="activity-item" style="margin-top:0.75rem;">
+              <strong>Q${idx + 1}. ${escapeHtml(question.question || "")}</strong>
+              <p class="small-note" style="margin:0.35rem 0 0;">Your Answer: ${escapeHtml(yourLabel)} ${mark}</p>
+              <p class="small-note" style="margin:0.15rem 0 0;">Correct Answer: ${escapeHtml(correctAns || "—")} ✅</p>
+            </div>
+          `;
+        })
+        .join("");
+
+      const total = questions.length;
+      const pct = Math.round((correct / Math.max(1, total)) * 100);
+      if (quizProgress) quizProgress.textContent = "Results";
+      if (quizScoreEl) quizScoreEl.textContent = `Score: ${correct} / ${total} (${pct}%)`;
+      quizBody.innerHTML = `
+        <div class="glass-card" style="padding:1rem;border:1px solid rgba(148,163,184,0.18);border-radius:16px;background:rgba(15,23,42,0.35);">
+          <h4 style="margin:0 0 0.35rem;">Quiz Results</h4>
+          <p class="content-subtitle" style="margin:0;">Score: <strong>${correct} / ${total}</strong></p>
+          <p class="content-subtitle" style="margin:0.25rem 0 0;"><strong>${pct}%</strong></p>
+        </div>
+        <div style="margin-top:1rem;">
+          <h4 style="margin:0;">Answer Review</h4>
+          <p class="small-note" style="margin:0.25rem 0 0;">Review your answers below.</p>
+          ${rows || '<p class="small-note">No questions to review.</p>'}
+        </div>
+      `;
+    }
+
+    document.getElementById("student-quiz-prev-btn")?.addEventListener("click", () => {
+      saveCurrentAnswer();
+      if (quizIndex > 0) quizIndex -= 1;
+      renderStudentQuiz();
     });
 
     document.getElementById("student-quiz-next-btn")?.addEventListener("click", () => {
-      // Save current answer (or unanswered)
-      const picked = document.querySelector('input[name="student-quiz-opt"]:checked');
-      if (picked) {
-        // Answer was selected and possibly checked
-        const idx = Number(picked.value);
-        const choiceText = choices[idx] != null ? choices[idx] : "";
-        studentAnswers[quizIndex] = choiceText;
-        
-        // Calculate score if answer was checked
-        if (quizAnswered) {
-          const ok = answersMatch(choiceText, q.answer);
-          if (ok) quizScore += 1;
-        }
-      } else {
-        // Question was skipped
-        studentAnswers[quizIndex] = null; // Mark as unanswered
-      }
-      
+      saveCurrentAnswer();
       if (quizIndex + 1 >= questions.length) {
-        // Calculate final score
-        let finalScore = 0;
-        studentAnswers.forEach((answer, index) => {
-          if (answer !== null && answer !== undefined) {
-            const question = questions[index];
-            if (question && answersMatch(answer, question.answer)) {
-              finalScore += 1;
-            }
-          }
-          // Unanswered (null) counts as incorrect (0 points)
-        });
-        
-        quizBody.innerHTML = `<p class="content-subtitle">Quiz complete. Final score: ${finalScore} / ${questions.length}</p>`;
-        if (quizProgress) quizProgress.textContent = "Finished";
-        if (quizScoreEl) quizScoreEl.textContent = `Score: ${finalScore} / ${questions.length}`;
+        renderResults();
         return;
       }
-      
       quizIndex += 1;
-      quizAnswered = false;
       renderStudentQuiz();
     });
   }
@@ -2040,6 +2100,15 @@ function showEmpty(message) {
         : apiUrl("/generate-activities");
 
     const requestPayload = { file_id: selectedLesson.file_id };
+    if (actionType === "quiz") {
+      requestPayload.quiz_count = Number(quizCountSelect?.value || 10);
+      const diff = (quizDifficultySelect?.value || "").trim();
+      if (diff) requestPayload.difficulty = diff;
+    }
+    if (actionType === "activity") {
+      requestPayload.activity_type = (activityTypeSelect?.value || "short_answer").trim();
+      requestPayload.count = Number(activityCountSelect?.value || 5);
+    }
 
     console.log("STARTING AI GENERATION");
     console.log("AI actionType:", actionType);
@@ -2103,6 +2172,13 @@ function showEmpty(message) {
       }
 
       await refreshSelectedLessonContent();
+      if (actionType === "quiz") {
+        quizIndex = 0;
+        quizScore = 0;
+        quizAnswered = false;
+        studentAnswers = [];
+        lessonData = selectedLesson;
+      }
       showContentSection(actionType);
       if (aiStatusEl) aiStatusEl.textContent = config.done;
       showToast(config.done, "success");
@@ -2239,10 +2315,24 @@ function showEmpty(message) {
     runStudentAiAction("reviewer");
   });
   document.getElementById("student-generate-quiz-btn")?.addEventListener("click", () => {
-    runStudentAiAction("quiz");
+    openModal(quizSettingsModal);
   });
   document.getElementById("student-generate-activity-btn")?.addEventListener("click", () => {
-    runStudentAiAction("activity");
+    openModal(activitySettingsModal);
+  });
+
+  quizSettingsClose?.addEventListener("click", () => closeModal(quizSettingsModal));
+  quizSettingsCancel?.addEventListener("click", () => closeModal(quizSettingsModal));
+  quizSettingsConfirm?.addEventListener("click", async () => {
+    closeModal(quizSettingsModal);
+    await runStudentAiAction("quiz");
+  });
+
+  activitySettingsClose?.addEventListener("click", () => closeModal(activitySettingsModal));
+  activitySettingsCancel?.addEventListener("click", () => closeModal(activitySettingsModal));
+  activitySettingsConfirm?.addEventListener("click", async () => {
+    closeModal(activitySettingsModal);
+    await runStudentAiAction("activity");
   });
   loadStudentLessons();
 

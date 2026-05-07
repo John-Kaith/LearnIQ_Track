@@ -71,6 +71,83 @@ def parse_model_json(raw: str):
     return json.loads(text)
 
 
+def friendly_ai_error(result: dict | str | None) -> str:
+    """
+    Convert provider errors into a user-friendly message (no raw payload in UI).
+    """
+    try:
+        if isinstance(result, dict):
+            msg = (
+                result.get("error", {}).get("message")
+                if isinstance(result.get("error"), dict)
+                else result.get("message")
+            )
+            msg = str(msg or "").lower()
+            if "high demand" in msg or "overloaded" in msg or "unavailable" in msg:
+                return "AI servers are currently busy. Please try again."
+            if "quota" in msg or "rate limit" in msg or "resource" in msg:
+                return "AI quota is currently exceeded. Please try again later."
+            if "api key" in msg or "permission" in msg or "denied" in msg:
+                return "AI access is currently unavailable. Please contact the administrator."
+        return "Failed to generate content. Please retry."
+    except Exception:
+        return "Failed to generate content. Please retry."
+
+
+def normalize_quiz_questions(obj, desired_count: int):
+    """
+    Accept either {"questions":[...]} or a raw list, then validate/normalize.
+    Enforces: question(str), choices(list of 4 strings), answer(letter A-D).
+    """
+    if isinstance(obj, dict) and isinstance(obj.get("questions"), list):
+        questions = obj["questions"]
+    elif isinstance(obj, list):
+        questions = obj
+    else:
+        raise ValueError("Invalid quiz JSON format")
+
+    out = []
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        question = str(q.get("question") or "").strip()
+        choices = q.get("choices") or []
+        answer = q.get("answer")
+        if not question:
+            continue
+        if not isinstance(choices, list):
+            continue
+        choices = [str(c) for c in choices if str(c).strip()]
+        if len(choices) != 4:
+            continue
+
+        # Normalize answer to a letter (A-D).
+        ans = str(answer or "").strip()
+        if len(ans) == 1 and ans.upper() in ("A", "B", "C", "D"):
+            ans_letter = ans.upper()
+        else:
+            # If model returns full choice text, try matching by prefix or exact.
+            ans_letter = ""
+            for idx, c in enumerate(choices):
+                if ans.strip().lower() == c.strip().lower():
+                    ans_letter = ("A", "B", "C", "D")[idx]
+                    break
+            if not ans_letter:
+                first = ans[:1].upper()
+                if first in ("A", "B", "C", "D"):
+                    ans_letter = first
+        if not ans_letter:
+            continue
+
+        out.append({"question": question, "choices": choices, "answer": ans_letter})
+        if desired_count and len(out) >= desired_count:
+            break
+
+    if not out:
+        raise ValueError("No valid quiz questions parsed")
+    return out
+
+
 def require_gemini_key():
     if not API_KEY or not str(API_KEY).strip():
         return JSONResponse(
@@ -732,10 +809,21 @@ async def generate_question(body: dict):
     quiz_count = body.get("quiz_count", 1)
     if not isinstance(quiz_count, int) or quiz_count < 1:
         quiz_count = 1
+    difficulty = (body.get("difficulty") or "").strip().lower()
+    if difficulty not in ("easy", "medium", "hard", ""):
+        difficulty = ""
     
+    diff_line = f"Difficulty: {difficulty}.\n" if difficulty else ""
     prompt = (
-        f"Based on this lesson, create {quiz_count} multiple choice questions with 4 choices (A-D) and the correct answer for each:\n\n{text}\n\n"
-        f'Return ONLY valid JSON array: [{{"question": "...", "choices": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "correct choice"}}, ...]'
+        "You are an educational content generator.\n"
+        f"{diff_line}"
+        f"Create exactly {quiz_count} multiple-choice questions based ONLY on the lesson text.\n"
+        "Each question must have exactly 4 choices (A-D).\n"
+        "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences) with this schema:\n"
+        '{ "questions": [ { "question": "...", "choices": ["A. ...","B. ...","C. ...","D. ..."], "answer": "B" } ] }\n'
+        "The answer MUST be a single letter A, B, C, or D.\n\n"
+        "LESSON TEXT:\n"
+        f"{text}"
     )
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -750,20 +838,19 @@ async def generate_question(body: dict):
         print("AI RAW RESPONSE PRINT ERROR (quiz):", str(e))
 
     if response.status_code != 200:
-        return JSONResponse({"error": result}, status_code=502)
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
 
     raw_output = gemini_text_from_result(result)
     if not raw_output:
         return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
 
     try:
-        questions_data = parse_model_json(raw_output)
-        if not isinstance(questions_data, list):
-            questions_data = [questions_data]
-    except (json.JSONDecodeError, ValueError):
+        parsed = parse_model_json(raw_output)
+        questions_data = normalize_quiz_questions(parsed, desired_count=quiz_count)
+    except (json.JSONDecodeError, ValueError) as e:
         print("AI GENERATION ERROR: failed to parse questions JSON")
         return JSONResponse(
-            {"error": "Failed to parse questions from AI.", "raw": raw_output},
+            {"error": "Failed to parse quiz questions. Please retry."},
             status_code=502,
         )
 
@@ -809,20 +896,34 @@ async def generate_activities(body: dict):
             status_code=400,
         )
 
-    activity_type = body.get("activity_type", "essay")
-    if activity_type not in ["essay", "short_answer", "identification"]:
-        activity_type = "essay"
-    
-    # Generate activity type instructions
-    type_instructions = {
-        "essay": "an essay-type activity with a writing prompt",
-        "short_answer": "a short answer activity with questions requiring brief responses",
-        "identification": "an identification activity with items to identify or label"
+    activity_type = (body.get("activity_type") or "short_answer").strip().lower()
+    count = body.get("count", 5)
+    try:
+        count = int(count)
+    except Exception:
+        count = 5
+    if count not in (5, 10, 15):
+        count = 5
+
+    allowed = {"identification", "true_false", "matching", "fill_blank", "short_answer"}
+    if activity_type not in allowed:
+        activity_type = "short_answer"
+
+    schema_by_type = {
+        "identification": '{ "activities": [ { "question": "...", "answer": "..." } ] }',
+        "true_false": '{ "activities": [ { "question": "...", "answer": true } ] }',
+        "fill_blank": '{ "activities": [ { "question": "Fill in the blank: ... ____ ...", "answer": "..." } ] }',
+        "short_answer": '{ "activities": [ { "question": "...", "answer": "..." } ] }',
+        "matching": '{ "pairs": [ { "left": "...", "right": "..." } ] }',
     }
-    
+
     prompt = (
-        f"Create ONE {type_instructions[activity_type]} based on this lesson:\n\n{text}\n\n"
-        'Return ONLY valid JSON: {"activity_type": "' + activity_type + '", "title": "...", "instructions": "...", "question_or_task": "..."}'
+        "You are an educational content generator.\n"
+        f"Create exactly {count} items for activity type: {activity_type}.\n"
+        "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences).\n"
+        f"Schema:\n{schema_by_type[activity_type]}\n\n"
+        "LESSON TEXT:\n"
+        f"{text}"
     )
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -833,7 +934,7 @@ async def generate_activities(body: dict):
 
     if response.status_code != 200:
         print(f"[DEBUG] Gemini API error: {result}")
-        return JSONResponse({"error": result}, status_code=502)
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
 
     raw_output = gemini_text_from_result(result)
     print(f"[DEBUG] Raw output from Gemini: {raw_output}")
@@ -843,39 +944,44 @@ async def generate_activities(body: dict):
 
     try:
         activity_data = parse_model_json(raw_output)
-        print(f"[DEBUG] Parsed activity: {activity_data}")
-        print(f"[DEBUG] Type of activity: {type(activity_data)}")
         if not isinstance(activity_data, dict):
-            print(f"[DEBUG] Converting to activity object")
-            activity_data = {"activity_type": activity_type, "title": "Activity", "instructions": "Complete this activity", "question_or_task": str(activity_data)}
+            raise ValueError("Invalid activities JSON format")
     except (json.JSONDecodeError, ValueError) as e:
         print(f"[DEBUG] JSON parsing error: {e}")
-        return JSONResponse(
-            {"error": "Failed to parse activity from AI.", "raw": raw_output},
-            status_code=502,
-        )
+        return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)
+
+    # Normalize to DB storage format: list of dicts, or a single matching object with pairs.
+    normalized_activities = []
+    if activity_type == "matching":
+        pairs = activity_data.get("pairs") if isinstance(activity_data.get("pairs"), list) else []
+        pairs = [p for p in pairs if isinstance(p, dict) and p.get("left") and p.get("right")]
+        if not pairs:
+            return JSONResponse({"error": "Failed to generate matching activity. Please retry."}, status_code=502)
+        normalized_activities = [{"activity_type": "matching", "pairs": pairs}]
+    else:
+        acts = activity_data.get("activities") if isinstance(activity_data.get("activities"), list) else []
+        for a in acts:
+            if not isinstance(a, dict):
+                continue
+            q = str(a.get("question") or "").strip()
+            ans = a.get("answer")
+            if not q:
+                continue
+            normalized_activities.append({"activity_type": activity_type, "question": q, "answer": ans})
+        if not normalized_activities:
+            return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)
 
     try:
-        print(f"[DEBUG] Getting existing activities for file_id: {file_id}")
-        existing_lesson = db_supabase.get_content_row(str(file_id))
-        existing_activities = []
-        if existing_lesson and existing_lesson.get("activities"):
-            existing_activities = existing_lesson["activities"]
-            if not isinstance(existing_activities, list):
-                existing_activities = [existing_activities]
-        
-        # Append new activity to existing ones
-        existing_activities.append(activity_data)
-        
+        # Replace activities cleanly (stable regeneration)
         print(f"[DEBUG] Saving activities to database for file_id: {file_id}")
-        db_supabase.set_activities(str(file_id), existing_activities)
+        db_supabase.set_activities(str(file_id), normalized_activities)
         print(f"[DEBUG] Activities saved successfully")
     except Exception as e:
         print(f"[DEBUG] Database save error: {e}")
         return JSONResponse({"error": str(e)}, status_code=502)
 
-    print(f"[DEBUG] Returning activity: {activity_data}")
-    return {"activity": activity_data, "total_activities": len(existing_activities)}
+    print(f"[DEBUG] Returning activities (normalized): {normalized_activities}")
+    return {"activities": normalized_activities, "total_activities": len(normalized_activities)}
 
 
 @app.post("/save-ai-content")

@@ -144,5 +144,87 @@
       </section>
     </main>
   </div>
+
+  <!-- Quiz settings modal -->
+  <div id="student-quiz-settings-modal" class="action-modal-backdrop" hidden>
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="student-quiz-settings-title">
+      <div class="action-modal-head">
+        <h3 id="student-quiz-settings-title">Generate Quiz</h3>
+        <button id="student-quiz-settings-close" class="btn btn-ghost" type="button" aria-label="Close quiz settings">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p class="small-note">Choose how many questions to generate. You can regenerate anytime.</p>
+
+      <div class="two-field-grid" style="margin-top: 0.75rem;">
+        <label>
+          <span class="small-note">Question count</span>
+          <select id="student-quiz-count" class="form-select">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </label>
+        <label>
+          <span class="small-note">Difficulty (optional)</span>
+          <select id="student-quiz-difficulty" class="form-select">
+            <option value="">Medium (default)</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="student-quiz-generate-confirm" type="button" class="btn btn-primary">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Quiz
+        </button>
+        <button id="student-quiz-generate-cancel" type="button" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity settings modal -->
+  <div id="student-activity-settings-modal" class="action-modal-backdrop" hidden>
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="student-activity-settings-title">
+      <div class="action-modal-head">
+        <h3 id="student-activity-settings-title">Generate Activities</h3>
+        <button id="student-activity-settings-close" class="btn btn-ghost" type="button" aria-label="Close activity settings">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p class="small-note">Pick an activity type and how many items to generate.</p>
+
+      <div class="two-field-grid" style="margin-top: 0.75rem;">
+        <label>
+          <span class="small-note">Activity type</span>
+          <select id="student-activity-type" class="form-select">
+            <option value="identification">Identification</option>
+            <option value="true_false">True or False</option>
+            <option value="matching">Matching Type</option>
+            <option value="fill_blank">Fill in the Blank</option>
+            <option value="short_answer" selected>Short Answer</option>
+          </select>
+        </label>
+        <label>
+          <span class="small-note">Question count</span>
+          <select id="student-activity-count" class="form-select">
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="student-activity-generate-confirm" type="button" class="btn btn-primary">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Activities
+        </button>
+        <button id="student-activity-generate-cancel" type="button" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
