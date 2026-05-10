@@ -9,9 +9,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body>
+<body class="teacher-learniq-page">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -29,30 +30,28 @@
         <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-chip">
-          <div class="avatar">TR</div>
-          <div>
-            <strong>Prof. Reyes</strong>
-            <div class="small-note">Teacher account</div>
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
           </div>
-        </div>
-        <span class="status-badge online">AI tools enabled</span>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
       </div>
     </aside>
 
     <main class="main-panel">
-      <section class="glass-card panel-header">
+      <section id="teacher-learniq-panel-head" class="glass-card panel-header">
         <div class="panel-title">
           <h1>Teacher LearnIQ Dashboard</h1>
           <p>Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
-        </div>
-        <div class="panel-actions">
-          <a class="btn btn-primary" href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full Lesson Review</a>
-          <button class="btn btn-secondary" id="unpublish-lesson-btn"><i class="fa-solid fa-eye-slash"></i> Unpublish Lesson</button>
         </div>
       </section>
 
@@ -62,8 +61,12 @@
           <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. Extracted text is used for AI generation.</p>
         </div>
         <form id="upload-form" class="upload-form">
+          <p class="file-meta small-note" id="file-meta"></p>
           <div class="file-input-wrapper">
             <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file">
+            <button type="button" class="file-clear-btn" id="file-clear-btn" aria-label="Remove selected file" title="Remove file" hidden>
+              <i class="fa-solid fa-xmark"></i>
+            </button>
             <label for="file-input" class="file-input-label">
               <i class="fa-solid fa-cloud-arrow-up"></i>
               <span id="file-input-text">Choose file or drag here</span>
@@ -72,7 +75,6 @@
           <button type="submit" class="btn btn-primary" id="upload-btn">
             <i class="fa-solid fa-upload"></i> Upload File
           </button>
-          <p class="file-meta small-note" id="file-meta"></p>
         </form>
       </article>
 
@@ -80,25 +82,25 @@
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
           <div>
-            <span class="small-note">Lessons Uploaded</span>
-            <strong class="metric-value">12</strong>
-            <span class="metric-note">+3 this month</span>
+            <span class="small-note">Lessons uploaded</span>
+            <strong class="metric-value" id="teacher-stat-lessons">—</strong>
+            <span class="metric-note" id="teacher-stat-lessons-note">Loading…</span>
           </div>
         </article>
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
           <div>
-            <span class="small-note">Active Students</span>
-            <strong class="metric-value">28</strong>
-            <span class="metric-note">All enrolled</span>
+            <span class="small-note">Active students</span>
+            <strong class="metric-value" id="teacher-stat-students">—</strong>
+            <span class="metric-note" id="teacher-stat-students-note">Quiz activity on your lessons</span>
           </div>
         </article>
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-chart-line"></i></div>
           <div>
-            <span class="small-note">Avg Quiz Score</span>
-            <strong class="metric-value">85%</strong>
-            <span class="metric-note">+5% improvement</span>
+            <span class="small-note">Avg quiz score</span>
+            <strong class="metric-value" id="teacher-stat-avg">—</strong>
+            <span class="metric-note" id="teacher-stat-avg-note">Loading…</span>
           </div>
         </article>
       </section>
@@ -106,15 +108,15 @@
       <section class="dashboard-grid">
         <div class="content-stack">
           <article class="glass-card content-card">
-            <h3>Recent Lessons</h3>
-            <div class="lesson-list" id="recent-lessons-list">
+            <h3 class="teacher-card-heading">Recent Lessons</h3>
+            <div class="lesson-list teacher-lesson-grid" id="recent-lessons-list">
               <!-- Lessons will be loaded dynamically -->
             </div>
           </article>
 
           <article class="glass-card content-card">
-            <h3>Published Lessons</h3>
-            <div class="published-lessons" id="published-lessons-list">
+            <h3 class="teacher-card-heading">Published Lessons</h3>
+            <div class="published-lessons teacher-lesson-grid" id="published-lessons-list">
               <!-- Published lessons will be loaded dynamically -->
             </div>
           </article>
@@ -122,29 +124,30 @@
 
         <div class="content-stack">
           <article class="glass-card content-card">
-            <h3>AI Generation Queue</h3>
-            <div class="ai-queue" id="ai-queue-list">
+            <h3 class="teacher-card-heading">AI Generation Queue</h3>
+            <div class="ai-queue teacher-lesson-grid" id="ai-queue-list">
               <!-- AI queue items will be loaded dynamically -->
             </div>
           </article>
 
-          <article class="glass-card content-card">
-            <h3>Student Performance</h3>
-            <div class="performance-stats">
-              <div class="perf-stat">
-                <span class="small-note">Top Performer</span>
-                <strong>Andrea R.</strong>
-                <span class="small-note">95% average</span>
+          <article class="glass-card content-card teacher-performance-section">
+            <h3 class="teacher-card-heading">Student Performance</h3>
+            <p class="small-note teacher-performance-hint" id="teacher-performance-hint" hidden></p>
+            <div class="teacher-performance-stack" id="teacher-performance-stack">
+              <div class="teacher-performance-tile">
+                <span class="small-note teacher-performance-label" id="teacher-perf-top-label">Top performer</span>
+                <p class="teacher-performance-value" id="teacher-perf-top-value">—</p>
+                <span class="small-note teacher-performance-sub" id="teacher-perf-top-detail">Loading…</span>
               </div>
-              <div class="perf-stat">
-                <span class="small-note">Needs Attention</span>
-                <strong>3 students</strong>
-                <span class="small-note">Below 70%</span>
+              <div class="teacher-performance-tile">
+                <span class="small-note teacher-performance-label" id="teacher-perf-attention-label">Needs attention</span>
+                <p class="teacher-performance-value"><strong id="teacher-perf-attention-count">—</strong></p>
+                <span class="small-note teacher-performance-sub" id="teacher-perf-attention-detail">Below 70% avg</span>
               </div>
-              <div class="perf-stat">
-                <span class="small-note">Completion Rate</span>
-                <strong>89%</strong>
-                <span class="small-note">This month</span>
+              <div class="teacher-performance-tile">
+                <span class="small-note teacher-performance-label" id="teacher-perf-completion-label">Participation</span>
+                <p class="teacher-performance-value"><strong id="teacher-perf-completion-pct">—</strong></p>
+                <span class="small-note teacher-performance-sub" id="teacher-perf-completion-detail">This month</span>
               </div>
             </div>
           </article>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Immersion Monitoring | Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="js/core/utils.js"></script>
+  <script defer src="js/core/api.js"></script>
+  <script defer src="js/core/toast.js"></script>
+  <script defer src="js/core/session.js"></script>
+  <script defer src="js/shared/mobile.js"></script>
+  <script defer src="js/shared/topnav.js"></script>
+  <script defer src="js/teacher/teacher-immersion.js"></script>
+  <script defer src="js/pages/teacher-immersion.entry.js"></script>
+</head>
+<body class="app-shell dashboard-page dashboard-page--topnav role-teacher">
+  <div class="app-header" role="banner">
+    <div class="app-header-inner">
+      <div id="app-topnav-slot" class="app-topnav-slot"></div>
+    </div>
+  </div>
+
+  <main class="app-main">
+    <div class="app-main-inner container">
+      <div class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Immersion monitoring</h1>
+          <p>Read-only view of student immersion clock sessions, rendered hours, and journals (from attendance_logs).</p>
+        </div>
+      </section>
+
+      <article class="glass-card content-card">
+        <h3>Select student</h3>
+        <p class="small-note">Approved students appear from the roster. Requires a logged-in teacher or admin token.</p>
+        <div class="button-group" style="flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
+          <label style="flex: 1 1 240px;">
+            <span class="small-note">Student</span>
+            <select id="teacher-immersion-student-select" class="form-select" style="width: 100%; margin-top: 0.25rem;"></select>
+          </label>
+          <button type="button" class="btn btn-primary" id="teacher-immersion-load-btn"><i class="fa-solid fa-rotate"></i> Load overview</button>
+        </div>
+        <div id="teacher-immersion-metrics" style="margin-top: 1rem;" class="small-note"></div>
+      </article>
+
+      <section class="dashboard-grid">
+        <article class="glass-card content-card full-width">
+          <h3>Clock sessions</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time In</th>
+                  <th>Time Out</th>
+                  <th>Hours</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-immersion-attendance-body">
+                <tr><td colspan="5" class="small-note">Pick a student and load.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article class="glass-card content-card">
+          <h3>Journals</h3>
+          <div id="teacher-immersion-journals"><p class="small-note">—</p></div>
+        </article>
+      </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

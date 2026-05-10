@@ -9,91 +9,94 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
-  <div class="page-shell">
-    <header class="topbar container">
-      <a class="brand" href="index.html">
-        <span class="brand-mark">LQ</span>
-        <span>
-          <strong>LearnIQ Track</strong>
-          <small>Leaderboard</small>
-        </span>
-      </a>
-      <div class="topbar-actions">
-        <a class="btn btn-ghost" href="learniq-dashboard.html">Student Dashboard</a>
-        <a class="btn btn-primary" href="teacher-dashboard.html">Teacher Dashboard</a>
-      </div>
-    </header>
-
-    <main class="container section-block">
-      <article class="glass-card content-card upload-box dashboard-upload-panel upload-readonly section-block" data-upload-role="leaderboard" aria-label="Lesson upload information" style="margin-bottom: 0;">
-        <div>
-          <h3>Upload File</h3>
-          <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials.</p>
-        </div>
-        <div class="upload-hint upload-readonly-hint">
-          <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-          <strong>Lesson materials</strong>
-          <span class="small-note">Rankings are separate from lesson uploads. Teachers add class files from the Teacher Dashboard.</span>
-        </div>
-        <button type="button" class="btn btn-primary" disabled aria-disabled="true"><i class="fa-solid fa-upload"></i> Upload File</button>
-        <p class="file-meta small-note">This page is for scores and ranks only.</p>
-      </article>
-
-      <div class="section-heading left-align">
-        <span class="pill"><i class="fa-solid fa-trophy"></i> Rankings</span>
-        <h2>Leaderboard Page</h2>
-        <p>Top performers are highlighted to motivate friendly competition and engagement.</p>
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>LearnIQ Module</small>
+          </span>
+        </a>
       </div>
 
-      <section class="top-rank-grid">
-        <article class="glass-card top-rank-card second">
-          <div class="rank-badge">#2</div>
-          <h3>Juan Miguel</h3>
-          <p>1,280 points</p>
-          <small>Excellent immersion journal consistency</small>
-        </article>
-        <article class="glass-card top-rank-card first">
-          <div class="rank-badge">#1</div>
-          <h3>Andrea Reyes</h3>
-          <p>1,360 points</p>
-          <small>Highest quiz mastery this month</small>
-        </article>
-        <article class="glass-card top-rank-card third">
-          <div class="rank-badge">#3</div>
-          <h3>Kevin Lopez</h3>
-          <p>1,210 points</p>
-          <small>Strong task completion streak</small>
-        </article>
-      </section>
+      <nav class="side-links">
+        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a class="active" href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
 
-      <section class="glass-card table-card section-block">
-        <div class="ranking-head">
-          <div>
-            <h3>Full Ranking Table</h3>
-            <p class="table-note">Sample data for your capstone UI presentation</p>
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Student</span>
+            <div class="small-note" id="student-display-track"></div>
           </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Leaderboard</h1>
+          <p>Rankings are built from submitted quiz scores. Results update automatically while you use the app.</p>
+          <p class="leaderboard-live-meta" id="leaderboard-live-line">Loading rankings…</p>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Student</th>
-              <th>Score</th>
-              <th>Progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>#1</td><td>Andrea Reyes</td><td>1,360</td><td>92%</td></tr>
-            <tr><td>#2</td><td>Juan Miguel</td><td>1,280</td><td>78%</td></tr>
-            <tr><td>#3</td><td>Kevin Lopez</td><td>1,210</td><td>75%</td></tr>
-            <tr><td>#4</td><td>Sofia Cruz</td><td>1,150</td><td>71%</td></tr>
-            <tr><td>#5</td><td>Mark Villanueva</td><td>1,090</td><td>68%</td></tr>
-          </tbody>
-        </table>
+        <button type="button" class="btn btn-secondary" id="leaderboard-refresh-btn" title="Refresh now">
+          <i class="fa-solid fa-rotate"></i> Refresh
+        </button>
       </section>
+
+      <section id="leaderboard-empty" class="glass-card leaderboard-empty-state" hidden>
+        <div class="leaderboard-empty-icon" aria-hidden="true"><i class="fa-solid fa-ranking-star"></i></div>
+        <h2 id="leaderboard-empty-title">No rankings yet</h2>
+        <p class="leaderboard-empty-body" id="leaderboard-empty-body">
+          When students complete quizzes in <strong>My lesson</strong>, scores appear here. Be the first on the board.
+        </p>
+        <button type="button" class="btn btn-primary" id="leaderboard-empty-cta">
+          <i class="fa-solid fa-book-open"></i> Go to My lesson
+        </button>
+        <button type="button" class="btn btn-ghost" id="leaderboard-retry-btn" hidden>Try again</button>
+      </section>
+
+      <div id="leaderboard-populated" hidden>
+        <section class="top-rank-grid" id="leaderboard-podium" aria-label="Top three"></section>
+
+        <section class="glass-card table-card">
+          <div class="ranking-head">
+            <div>
+              <h3>Full rankings</h3>
+              <p class="table-note" id="leaderboard-table-note">Sorted by total quiz points, then accuracy.</p>
+            </div>
+          </div>
+          <div class="leaderboard-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Student</th>
+                  <th>Total points</th>
+                  <th>Quizzes</th>
+                  <th>Accuracy</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboard-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
 </body>

@@ -9,37 +9,69 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <script src="js/shared/reviewer-markdown.js" defer></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body>
-  <div class="page-shell">
-    <header class="topbar container">
-      <a class="brand" href="index.html">
-        <span class="brand-mark">LQ</span>
-        <span>
-          <strong>LearnIQ Track</strong>
-          <small>AI results</small>
-        </span>
-      </a>
-      <div class="topbar-actions">
-        <a class="btn btn-ghost" href="teacher-dashboard.html">Back to Teacher Dashboard</a>
-        <a class="btn btn-primary" href="learniq-dashboard.html">How students see the published lesson</a>
+<body class="teacher-learniq-page">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
       </div>
-    </header>
 
-    <main class="container section-block">
-      <div class="section-heading left-align">
-        <span class="pill"><i class="fa-solid fa-sparkles"></i> Generated content</span>
-        <h2>Teacher: full lesson review</h2>
-        <p>Reviewer, quiz, and activities for the lesson you selected on the Teacher Dashboard (same data students see after you publish).</p>
+      <nav class="side-links">
+        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> LearnIQ Dashboard</a>
+        <a class="active" href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
       </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Teacher: full lesson review</h1>
+          <p>Reviewer, quiz, and activities for the lesson you selected on the Teacher Dashboard (same data students see after you publish).</p>
+        </div>
+        <div class="panel-actions">
+          <a class="btn btn-ghost" href="teacher-learniq-dashboard.html"><i class="fa-solid fa-arrow-left"></i> Back to Teacher Dashboard</a>
+          <a class="btn btn-primary" href="learniq-dashboard.html"><i class="fa-solid fa-eye"></i> Student view</a>
+        </div>
+      </section>
 
       <section class="result-grid">
         <article class="glass-card result-card">
-          <h3><i class="fa-solid fa-file-lines"></i> Reviewer</h3>
-          <ul id="reviewer-result" class="result-list">
-            <li>Sample reviewer content will appear here.</li>
-          </ul>
+          <div class="result-card-head">
+            <h3><i class="fa-solid fa-file-lines"></i> Reviewer</h3>
+            <button type="button" class="btn btn-secondary btn-small" id="ai-result-download-reviewer-pdf" hidden>
+              <i class="fa-solid fa-file-pdf"></i> Download PDF
+            </button>
+          </div>
+          <div id="reviewer-result" class="reviewer-markdown-body reviewer-mount" role="article"></div>
         </article>
 
         <article class="glass-card result-card">

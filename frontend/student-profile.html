@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="profile-page">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small id="profile-brand-subtitle">Profile</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links" id="profile-side-links">
+        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Your profile" aria-current="page">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">User</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1 id="profile-title">Profile</h1>
+          <p class="small-note" id="profile-subtitle">Your account information from this session.</p>
+        </div>
+      </section>
+
+      <article class="glass-card content-card">
+        <h3>Account details</h3>
+        <div class="profile-kv-grid" id="profile-kv-grid">
+          <div class="profile-kv">
+            <span class="small-note">Full name</span>
+            <strong id="profile-full-name">—</strong>
+          </div>
+          <div class="profile-kv">
+            <span class="small-note">Role</span>
+            <strong id="profile-role">—</strong>
+          </div>
+          <div class="profile-kv">
+            <span class="small-note">ID number</span>
+            <strong id="profile-id-number">—</strong>
+          </div>
+          <div class="profile-kv">
+            <span class="small-note">Email</span>
+            <strong id="profile-email">—</strong>
+          </div>
+        </div>
+
+        <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
+      </article>
+    </main>
+  </div>
+</body>
+</html>
+

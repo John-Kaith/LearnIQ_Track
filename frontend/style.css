@@ -15,7 +15,7 @@
   --shadow: 0 24px 60px rgba(3, 7, 18, 0.45);
   --radius: 22px;
   --radius-sm: 14px;
-  --container: 1180px;
+  --container: 1600px;
 }
 
 * {
@@ -452,6 +452,10 @@ img {
   gap: 1rem;
 }
 
+.auth-layout {
+  width: 100%;
+}
+
 .bullet-list li {
   position: relative;
   padding-left: 1.3rem;
@@ -494,8 +498,19 @@ img {
 .auth-page {
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  place-items: start stretch;
+  align-content: start;
   padding: 2rem 0;
+}
+
+.login-page .auth-page {
+  place-items: center;
+  align-content: unset;
+}
+
+.login-page .auth-layout {
+  width: auto;
+  max-width: 100%;
 }
 
 /* Role Selector */
@@ -635,6 +650,14 @@ textarea:focus {
   padding: 1rem;
 }
 
+/* Main column should stay content-height. Otherwise the sidebar (tall nav)
+   stretches this column; inner .main-panel rows then grow (align-content
+   default) and the first "header" card absorbs the extra height — looks like
+   huge padding even when title copy is short. */
+.dashboard-shell > .main-panel {
+  align-self: start;
+}
+
 .sidebar {
   position: sticky;
   top: 1rem;
@@ -669,19 +692,34 @@ textarea:focus {
 .sidebar-footer {
   margin-top: 1rem;
   padding-top: 1rem;
+  padding-bottom: 0.35rem;
   border-top: 1px solid var(--border);
 }
 
 #sidebar-logout,
-#logout-button {
+#logout-button,
+.sidebar-logout-btn {
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.3);
   color: #fca5a5;
   transition: all 0.3s ease;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar-footer .sidebar-logout-btn {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 #sidebar-logout:hover,
-#logout-button:hover {
+#logout-button:hover,
+.sidebar-logout-btn:hover {
   background: rgba(239, 68, 68, 0.22);
   border-color: rgba(239, 68, 68, 0.5);
   color: #fecaca;
@@ -708,6 +746,298 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.sidebar-footer .user-chip.user-chip-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sidebar-footer .user-chip.user-chip-profile-link:hover {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12);
+}
+
+.sidebar-footer .user-chip-text {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-footer .user-chip-profile-link #student-display-name {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+/* LearnIQ dashboard: center title + subtitle (same padding/size as other panel-header cards) */
+.learniq-dashboard-page .main-panel > section.panel-header:first-child {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 1.1rem 1.25rem;
+}
+
+.learniq-dashboard-page .main-panel > section.panel-header:first-child .panel-title {
+  flex: none;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.learniq-dashboard-page .main-panel > section.panel-header:first-child .panel-title h1,
+.learniq-dashboard-page .main-panel > section.panel-header:first-child .panel-title p {
+  text-align: center;
+}
+
+.teacher-learniq-page .main-panel > section.panel-header:first-child {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 1.1rem 1.25rem;
+}
+
+.teacher-learniq-page .main-panel > section.panel-header:first-child .panel-title {
+  flex: none;
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.teacher-learniq-page .main-panel > section.panel-header:first-child .panel-title h1,
+.teacher-learniq-page .main-panel > section.panel-header:first-child .panel-title p {
+  text-align: center;
+}
+
+/* Stronger centering (overrides generic .panel-header flex + narrow breakpoint stretch) */
+#teacher-learniq-panel-head.panel-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+#teacher-learniq-panel-head .panel-title {
+  flex: none !important;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+#teacher-learniq-panel-head .panel-title h1,
+#teacher-learniq-panel-head .panel-title p {
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Teacher LearnIQ: lesson / queue cards grid */
+.teacher-learniq-page .teacher-card-heading {
+  text-align: center;
+  width: 100%;
+}
+
+.teacher-learniq-page .teacher-lesson-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+/* Recent lessons + AI queue: always 2 tiles per row inside the card */
+body.teacher-learniq-page #recent-lessons-list,
+body.teacher-learniq-page #ai-queue-list {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 1rem !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Published lessons: flexible columns */
+body.teacher-learniq-page #published-lessons-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+}
+
+/* Lets nested grids use full column width inside dashboard-grid */
+.teacher-learniq-page .dashboard-grid > .content-stack {
+  min-width: 0;
+}
+
+.teacher-learniq-page .dashboard-grid > .content-stack > .glass-card.content-card {
+  min-width: 0;
+}
+
+.teacher-learniq-page .teacher-lesson-grid > p.small-note:only-child {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .lesson-item,
+.teacher-learniq-page .teacher-lesson-grid .published-lesson,
+.teacher-learniq-page .teacher-lesson-grid .queue-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.85rem;
+  padding: 1.1rem 1rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  min-width: 0;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .lesson-info,
+.teacher-learniq-page .teacher-lesson-grid .queue-info {
+  width: 100%;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .lesson-info h4,
+.teacher-learniq-page .teacher-lesson-grid .queue-info h4,
+.teacher-learniq-page .teacher-lesson-grid .published-lesson h4 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .lesson-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  width: 100%;
+  margin-top: auto;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .published-lesson .lesson-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.teacher-learniq-page .teacher-lesson-grid .published-lesson .lesson-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  justify-content: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.teacher-learniq-page .teacher-lesson-grid .queue-status {
+  margin-top: auto;
+}
+
+@media (max-width: 720px) {
+  body.teacher-learniq-page #recent-lessons-list,
+  body.teacher-learniq-page #ai-queue-list {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Teacher LearnIQ — Student Performance: one column, three centered tiles */
+.teacher-learniq-page .teacher-performance-hint {
+  text-align: center;
+  margin: 0.2rem 0 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.teacher-learniq-page .teacher-performance-hint[hidden] {
+  display: none !important;
+}
+
+.teacher-learniq-page .teacher-performance-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+  width: 100%;
+}
+
+.teacher-learniq-page .teacher-performance-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 0.15rem;
+  min-height: 0;
+  padding: 0.55rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-sizing: border-box;
+}
+
+.teacher-learniq-page .teacher-performance-label {
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.teacher-learniq-page .teacher-performance-value {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.teacher-learniq-page .teacher-performance-value strong {
+  font-weight: 800;
+}
+
+.teacher-learniq-page .teacher-performance-sub {
+  margin: 0;
+  max-width: 18rem;
+}
+
+.teacher-learniq-page .teacher-performance-value .teacher-performance-name-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 800;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.teacher-learniq-page .teacher-performance-value .teacher-performance-name-link:hover {
+  color: var(--primary);
+  border-bottom-color: rgba(96, 165, 250, 0.45);
+}
+
+/* LearnIQ dashboard only: keep activity row in three columns (same cards as rest of app) */
+.learniq-dashboard-page #student-learning-block .progress-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.learniq-dashboard-page #student-learning-block .progress-stat {
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .learniq-dashboard-page #student-learning-block .progress-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 .avatar {
   width: 42px;
   height: 42px;
@@ -721,10 +1051,41 @@ textarea:focus {
 .main-panel {
   display: grid;
   gap: 1rem;
+  align-content: start;
 }
 
 .panel-header {
   padding: 1.1rem 1.25rem;
+  flex-wrap: wrap;
+  row-gap: 0.85rem;
+}
+
+/* Student / Teacher approvals: default .panel-header uses align-items: center,
+   so the Refresh control sits mid-column when the subtitle wraps; flex-start
+   keeps the row height driven by text + padding only (not font-size changes). */
+.glass-card.panel-header.approvals-panel-head {
+  align-items: flex-start;
+  padding: 0.65rem 1.1rem;
+  row-gap: 0.35rem;
+}
+
+.panel-header .panel-title {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.panel-actions {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.panel-actions .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .topbar-search {
@@ -887,6 +1248,60 @@ textarea {
   gap: 1rem;
 }
 
+/* Teacher LearnIQ: align only the Upload File button to the right */
+.teacher-learniq-page article.upload-box form.upload-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.teacher-learniq-page article.upload-box form.upload-form #upload-btn {
+  align-self: flex-end;
+}
+
+.teacher-learniq-page article.upload-box .file-input-wrapper {
+  position: relative;
+  display: grid;
+  gap: 0.45rem;
+}
+
+/* Nudge "Choose file or drag here" lower */
+.teacher-learniq-page article.upload-box .file-input-label {
+  margin-top: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.teacher-learniq-page article.upload-box .file-clear-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.5);
+  color: rgba(226, 232, 240, 0.9);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.teacher-learniq-page article.upload-box .file-clear-btn:hover {
+  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.teacher-learniq-page article.upload-box .file-clear-btn:active {
+  transform: translateY(1px);
+}
+
+.teacher-learniq-page article.upload-box .file-clear-btn[hidden] {
+  display: none;
+}
+
 .upload-hint {
   display: grid;
   place-items: center;
@@ -1017,13 +1432,105 @@ textarea {
   justify-content: flex-start;
 }
 
-.my-lesson-page .container {
-  width: min(1400px, calc(100% - 2rem));
+.teacher-profile-modal[hidden] {
+  display: none;
+}
+
+.teacher-profile-modal:not([hidden]) {
+  display: grid;
+}
+
+.teacher-profile-modal-panel {
+  max-height: min(85vh, 640px);
+  overflow: auto;
+}
+
+.teacher-profile-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  color: rgba(147, 197, 253, 0.98);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(96, 165, 250, 0.55);
+  text-underline-offset: 0.12em;
+  text-align: left;
+}
+
+.teacher-profile-name-btn:hover {
+  color: rgba(191, 219, 254, 1);
+}
+
+.teacher-profile-modal-body {
+  margin-top: 0.85rem;
+}
+
+.teacher-profile-modal-dl {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: 0.45rem 1rem;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.teacher-profile-modal-dl dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.teacher-profile-modal-dl dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.learniq-confirm-panel {
+  width: min(420px, 100%);
+  border-radius: var(--radius-sm);
+}
+
+.learniq-confirm-message {
+  margin: 0.75rem 0 0;
+  line-height: 1.55;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.learniq-confirm-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.learniq-confirm-actions .btn {
+  flex: 1 1 auto;
+  min-width: min(140px, 100%);
+  justify-content: center;
+}
+
+.btn-danger {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  box-shadow: 0 14px 28px rgba(239, 68, 68, 0.22);
+}
+
+.btn-danger:hover {
+  box-shadow: 0 18px 36px rgba(239, 68, 68, 0.28);
+}
+
+/* My Lesson: dashboard-grid expects 2 columns elsewhere; this page only has one child — use full main width */
+.my-lesson-page .dashboard-grid {
+  grid-template-columns: 1fr;
 }
 
 .lesson-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
   gap: 1.15rem;
   margin-top: 0.75rem;
 }
@@ -1406,7 +1913,7 @@ textarea {
   }
 
   .lesson-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   }
 
   .workspace-layout {
@@ -1480,6 +1987,108 @@ textarea {
 .top-rank-card p,
 .top-rank-card small {
   color: var(--muted);
+}
+
+.leaderboard-live-meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.top-rank-card.is-leaderboard-placeholder {
+  opacity: 0.62;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.top-rank-card.is-leaderboard-placeholder h3 {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.top-rank-card.is-leaderboard-placeholder .rank-badge {
+  background: rgba(148, 163, 184, 0.22) !important;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.leaderboard-empty-state {
+  text-align: center;
+  padding: 2.75rem 1.75rem;
+  border-radius: 22px;
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.72), rgba(30, 41, 59, 0.5));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.leaderboard-empty-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1.25rem;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 1.75rem;
+  color: #c7d2fe;
+  background: linear-gradient(145deg, rgba(96, 165, 250, 0.2), rgba(139, 92, 246, 0.18));
+  border: 1px solid rgba(129, 140, 248, 0.25);
+}
+
+.leaderboard-empty-state h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.leaderboard-empty-body {
+  margin: 0 0 1.35rem;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 38ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.leaderboard-empty-state .btn {
+  margin: 0.35rem;
+}
+
+.leaderboard-table-wrap {
+  overflow-x: auto;
+}
+
+.profile-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.profile-kv {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
+}
+
+.profile-kv strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .profile-kv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.data-table tbody tr.leaderboard-row-you {
+  background: rgba(96, 165, 250, 0.1);
+  outline: 1px solid rgba(96, 165, 250, 0.28);
 }
 
 .toast-container {
@@ -1605,6 +2214,107 @@ textarea {
 
   .lesson-grid {
     grid-template-columns: 1fr;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #teacher-learniq-panel-head.panel-header {
+    align-items: center;
+  }
+
+  .panel-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* LearnIQ dashboard: "Welcome" two-column overview tiles */
+.learniq-dashboard-page .overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.learniq-dashboard-page .overview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.1rem 1.1rem 1.05rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
+}
+
+.learniq-dashboard-page .overview-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.9), rgba(139, 92, 246, 0.9));
+}
+
+.learniq-dashboard-page .overview-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.learniq-dashboard-page .overview-content h4 {
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.learniq-dashboard-page .overview-content p {
+  margin: 0.35rem 0 0.85rem;
+}
+
+.learniq-dashboard-page .overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.learniq-dashboard-page .overview-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.9rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.learniq-dashboard-page .overview-list li {
+  padding-left: 1.2rem;
+  position: relative;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.learniq-dashboard-page .overview-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: rgba(96, 165, 250, 0.95);
+}
+
+.learniq-dashboard-page .overview-list li strong {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+@media (max-width: 760px) {
+  .learniq-dashboard-page .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .learniq-dashboard-page .overview-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1960,5 +2670,89 @@ textarea {
   margin: 0;
   line-height: 1.6;
   color: var(--text);
+}
+
+/* —— LearnIQ reviewer (Markdown on dark UI) —— */
+.result-card-head,
+.reviewer-card-head,
+.reviewer-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+
+.result-card-head h3,
+.reviewer-card-head h4,
+.reviewer-preview-toolbar h4 {
+  margin: 0;
+}
+
+.reviewer-markdown-body {
+  line-height: 1.65;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.reviewer-mount {
+  min-height: 2.5rem;
+}
+
+.reviewer-markdown-body h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0.75rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.reviewer-markdown-body h2 {
+  font-size: 1.08rem;
+  font-weight: 600;
+  margin: 1.35rem 0 0.55rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+}
+
+.reviewer-markdown-body h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+  color: var(--muted);
+}
+
+.reviewer-markdown-body p {
+  margin: 0.55rem 0;
+  color: var(--text);
+}
+
+.reviewer-markdown-body ul {
+  margin: 0.4rem 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+.reviewer-markdown-body li {
+  margin: 0.28rem 0;
+}
+
+.reviewer-markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25rem 0;
+}
+
+.reviewer-markdown-body strong {
+  color: var(--text);
+}
+
+.reviewer-markdown-fallback {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  margin: 0;
+  color: var(--muted);
 }
 

@@ -9,6 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <script src="js/shared/reviewer-markdown.js" defer></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -28,18 +33,20 @@
         <a class="active" href="teacher-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Dashboard</a>
         <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
-        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-chip">
-          <div class="avatar">TR</div>
-          <div>
-            <strong>Prof. Reyes</strong>
-            <div class="small-note">Teacher account</div>
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TR</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Prof. Reyes</span>
+            <div class="small-note" id="student-display-track">Teacher account</div>
           </div>
-        </div>
-        <span class="status-badge online">AI tools enabled</span>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
       </div>
     </aside>
 
@@ -73,6 +80,7 @@
             <div id="file-meta" class="file-meta">No file selected yet</div>
             <div class="button-group" style="margin-top: 0.75rem;">
               <button class="btn btn-secondary" type="button" id="teacher-generate-ai-pack-btn"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI content (reviewer, activities &amp; quiz)</button>
+              <button class="btn btn-ghost" type="button" id="teacher-cancel-ai-pack-btn" hidden><i class="fa-solid fa-xmark"></i> Cancel</button>
             </div>
             <div class="button-group" style="margin-top: 0.75rem;">
               <button class="btn btn-primary" type="button" id="publish-lesson-btn"><i class="fa-solid fa-share-from-square"></i> Publish lesson for students</button>

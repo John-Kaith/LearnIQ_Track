@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -28,49 +29,31 @@
 
         <nav class="side-links">
           <a href="admin-approval.html" class="active"><i class="fa-solid fa-gauge"></i> Dashboard</a>
-          <a href="admin-approval.html#approvals"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
-          <a href="admin-approval.html#users"><i class="fa-solid fa-users"></i> Users</a>
+          <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
+          <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
+          <a href="admin-users.html"><i class="fa-solid fa-users"></i> Users</a>
           <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
-          <a href="admin-approval.html#files"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
-          <a href="admin-approval.html#leaderboard"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
-          <a href="admin-approval.html#attendance"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
-          <a href="admin-approval.html#journals"><i class="fa-solid fa-book"></i> Journals</a>
-          <a href="admin-approval.html#reports"><i class="fa-solid fa-file-lines"></i> Reports</a>
-          <a href="admin-approval.html#settings"><i class="fa-solid fa-gear"></i> Settings</a>
+          <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
+          <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
+          <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
+          <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
+          <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
+          <a href="admin-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-chip">
-            <span class="avatar">PC</span>
-            <div>
-              <strong>Principal Cruz</strong>
-              <small>Admin / Principal</small>
+          <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
+            <span class="avatar" id="admin-sidebar-avatar">PC</span>
+            <div class="user-chip-text">
+              <strong id="admin-sidebar-name">Principal Cruz</strong>
+              <small id="admin-sidebar-role">Admin / Principal</small>
             </div>
-          </div>
+          </a>
           <button id="sidebar-logout" type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()" title="End your admin session"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
-          <div class="pill">Live system view</div>
         </div>
       </aside>
 
       <section class="main-panel">
-        <section class="topbar glass-card fade-up delay-1">
-          <div class="topbar-title">
-            <div>
-              <p class="small-note">Admin Dashboard</p>
-              <h2>LearnIQ Track</h2>
-            </div>
-          </div>
-          <div class="topbar-search">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input id="topbar-search" type="search" placeholder="Search approvals, users, or files" />
-          </div>
-          <div class="topbar-actions">
-            <button class="btn btn-ghost" aria-label="Notifications"><i class="fa-solid fa-bell"></i></button>
-            <button class="btn btn-ghost profile-btn" type="button"><i class="fa-solid fa-user-circle"></i> Admin</button>
-            <button id="logout-button" type="button" class="btn btn-secondary" onclick="logoutAdmin()" title="End your admin session"><i class="fa-solid fa-sign-out-alt"></i> Logout</button>
-          </div>
-        </section>
-
         <section class="glass-card panel-header fade-up delay-1">
           <div class="panel-title">
             <h1>Welcome back, Admin</h1>
@@ -114,6 +97,13 @@
               <strong id="metric-total-teachers" class="metric-value">0</strong>
             </div>
             <i class="fa-solid fa-chalkboard-user"></i>
+          </article>
+          <article class="stat-card glass-card">
+            <div>
+              <span class="widget-label">Uploaded Files</span>
+              <strong id="metric-uploaded-files" class="metric-value">0</strong>
+            </div>
+            <i class="fa-solid fa-cloud-arrow-up"></i>
           </article>
           <article class="stat-card glass-card">
             <div>
@@ -264,64 +254,8 @@
           </div>
         </section>
 
-        <!-- Student Approvals Section -->
-        <section id="approvals" class="glass-card fade-up delay-2" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h2>Student Approvals</h2>
-              <p class="small-note">Review and approve pending student registrations.</p>
-            </div>
-            <button id="refresh-approvals" class="btn btn-secondary">Refresh</button>
-          </div>
-          <div class="search-box">
-            <input id="approval-search" type="search" placeholder="Search pending students..." />
-            <button id="approval-reset" class="btn btn-secondary">Reset</button>
-          </div>
-          <div class="table-overflow">
-            <table class="data-table" id="approval-table">
-              <thead>
-                <tr>
-                  <th>Full Name</th>
-                  <th>ID Number</th>
-                  <th>Email</th>
-                  <th>Created</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="approval-table-body"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Users Section -->
-        <section id="users" class="glass-card fade-up delay-2" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h2>All Users</h2>
-              <p class="small-note">View and manage all registered users.</p>
-            </div>
-            <button id="refresh-users" class="btn btn-secondary">Refresh</button>
-          </div>
-          <div class="search-box">
-            <input id="users-search" type="search" placeholder="Search by name, ID, or role..." />
-            <button id="users-reset" class="btn btn-secondary">Reset</button>
-          </div>
-          <div class="table-overflow">
-            <table class="data-table" id="users-table">
-              <thead>
-                <tr>
-                  <th>Full Name</th>
-                  <th>ID Number</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody id="users-table-body"></tbody>
-            </table>
-          </div>
-        </section>
+        <!-- Phase 1 migration: Approvals/Users/Files moved to dedicated pages.
+             Remaining sections stay on this legacy hash-switched dashboard for now. -->
 
         <!-- AI Results Section -->
         <section id="ai-results" class="glass-card fade-up delay-2" style="display:none;">
@@ -342,32 +276,6 @@
               <h3>No AI Content Yet</h3>
               <p>Teachers need to generate content from uploaded files.</p>
             </div>
-          </div>
-        </section>
-
-        <!-- Uploaded Files Section -->
-        <section id="files" class="glass-card fade-up delay-2" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h2>Uploaded Files</h2>
-              <p class="small-note">Manage all uploaded lesson files and documents.</p>
-            </div>
-            <button id="refresh-files" class="btn btn-secondary">Refresh</button>
-          </div>
-          <div class="table-overflow">
-            <table class="data-table" id="files-table">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Teacher</th>
-                  <th>Type</th>
-                  <th>Uploaded</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="files-table-body"></tbody>
-            </table>
           </div>
         </section>
 

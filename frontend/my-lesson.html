@@ -9,6 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <script src="js/shared/reviewer-markdown.js" defer></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body class="my-lesson-page">
@@ -29,18 +34,20 @@
         <a class="active" href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-chip">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
           <div class="avatar" id="student-avatar-initials">ST</div>
-          <div>
-            <strong id="student-display-name">Student</strong>
+          <div class="user-chip-text">
+            <span id="student-display-name">Student</span>
             <div class="small-note" id="student-display-track">STEM - 12 A</div>
           </div>
-        </div>
-        <span class="status-badge online">Active learner</span>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
       </div>
     </aside>
 
@@ -104,6 +111,9 @@
                   <button id="student-generate-activity-btn" type="button" class="btn btn-secondary">
                     <i class="fa-solid fa-gamepad"></i> Generate Activity
                   </button>
+                  <button id="student-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
+                    <i class="fa-solid fa-xmark"></i> Cancel generation
+                  </button>
                 </div>
                 <p id="student-ai-status" class="small-note">Choose an action to generate content on demand.</p>
               </aside>
@@ -121,8 +131,13 @@
             </div>
             <div id="student-tab-reviewer" class="workspace-tab-panel" hidden>
               <article id="student-reviewer-card" class="content-card compact-card">
-                <h4>Reviewer</h4>
-                <ul id="student-reviewer-list" class="bullet-list"></ul>
+                <div class="reviewer-card-head">
+                  <h4>Reviewer</h4>
+                  <button type="button" class="btn btn-secondary btn-small" id="student-download-reviewer-pdf-btn" hidden>
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF
+                  </button>
+                </div>
+                <div id="student-reviewer-list" class="reviewer-markdown-body reviewer-mount"></div>
               </article>
             </div>
             <div id="student-tab-quiz" class="workspace-tab-panel" hidden>

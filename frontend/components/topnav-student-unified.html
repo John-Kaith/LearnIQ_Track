@@ -1,0 +1,54 @@
+<header class="lms-topnav glass-card" role="navigation" aria-label="Student hub" data-lms-module="student-unified">
+  <div class="lms-topnav-head">
+    <a class="lms-brand brand" href="learniq-dashboard.html">
+      <span class="brand-mark">LQ</span>
+      <span>
+        <strong>LearnIQ Track</strong>
+        <small>Student hub</small>
+      </span>
+    </a>
+    <button
+      type="button"
+      class="lms-topnav-menu-toggle btn btn-ghost"
+      aria-expanded="false"
+      aria-controls="lms-topnav-student-body"
+      aria-label="Open menu"
+    >
+      <i class="fa-solid fa-bars" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="lms-topnav-body" id="lms-topnav-student-body">
+    <nav class="lms-topnav-links" aria-label="Student">
+      <a href="learniq-dashboard.html" data-nav-id="home">
+        <i class="fa-solid fa-house" aria-hidden="true"></i> Home
+      </a>
+      <a href="my-lesson.html" data-nav-id="lessons">
+        <i class="fa-solid fa-book-open" aria-hidden="true"></i> My Lessons
+      </a>
+      <a href="leaderboard.html" data-nav-id="leaderboard">
+        <i class="fa-solid fa-trophy" aria-hidden="true"></i> Leaderboard
+      </a>
+      <a href="immersion-dashboard.html" data-nav-id="immersion">
+        <i class="fa-solid fa-clock" aria-hidden="true"></i> Immersion
+      </a>
+      <a href="student-settings.html" data-nav-id="settings">
+        <i class="fa-solid fa-gear" aria-hidden="true"></i> Settings
+      </a>
+    </nav>
+
+    <div class="lms-topnav-user">
+      <div class="user-chip">
+        <div class="avatar" id="student-avatar-initials">ST</div>
+        <div>
+          <strong id="student-display-name">Student</strong>
+          <div class="small-note" id="student-display-track">LearnIQ Track</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary lms-topnav-logout-btn" id="student-topnav-logout" title="Log out">
+        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+        Logout
+      </button>
+    </div>
+  </div>
+</header>

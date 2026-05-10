@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="teacher-learniq-page">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> LearnIQ Dashboard</a>
+        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="teacher-settings.html" class="active"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section id="teacher-learniq-panel-head" class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Settings</h1>
+          <p>Teacher workspace preferences will appear here as they are added.</p>
+        </div>
+      </section>
+      <section class="glass-card content-card fade-up delay-1">
+        <p class="small-note" style="margin:0;">You are signed in as a teacher. Use the sidebar to return to uploads or AI tools.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

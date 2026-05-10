@@ -71,6 +71,7 @@ alter table if exists public.attendance_logs
   add column if not exists time_out timestamptz,
   add column if not exists total_hours numeric(6,2),
   add column if not exists status text default 'active',
+  add column if not exists date date default (current_date),
   alter column event_type drop not null;
 
 alter table if exists public.journals

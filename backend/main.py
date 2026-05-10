@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
+from fastapi import Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,10 @@ from supabase import create_client, Client
 import db_supabase
 from supabase_client import is_configured
 
-load_dotenv()
+# Always load `backend/.env` (same folder as this file), not only when cwd is `backend/`.
+# `override=True` so values here win over a stale Windows `API_KEY` user env var.
+_backend_env = Path(__file__).resolve().parent / ".env"
+load_dotenv(_backend_env, override=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -49,6 +52,49 @@ def require_supabase():
     return None
 
 
+def student_id_number_from_authorization(authorization: str | None) -> str | None:
+    """Resolve school id_number from Supabase access token (Authorization: Bearer …)."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        ures = supabase.auth.get_user(jwt=token)
+        if not ures:
+            return None
+        user = getattr(ures, "user", None)
+        email = getattr(user, "email", None) if user is not None else None
+        if not email:
+            return None
+        prof = db_supabase.get_profile_by_email(email)
+        if not prof:
+            return None
+        sid = prof.get("id_number")
+        return str(sid).strip() if sid else None
+    except Exception as e:
+        print("student_id_number_from_authorization:", e)
+        return None
+
+
+def resolve_student_id_number_or_403(body: dict, authorization: str | None):
+    """Returns (id_number, None) or (None, JSONResponse)."""
+    token_sid = student_id_number_from_authorization(authorization)
+    body_sid = (body.get("student_id_number") or body.get("student_id") or "").strip()
+    if token_sid and body_sid and body_sid != token_sid:
+        return None, JSONResponse(
+            {"error": "student_id_number does not match signed-in user."},
+            status_code=403,
+        )
+    sid = token_sid or body_sid
+    if not sid:
+        return None, JSONResponse(
+            {"error": "Sign in required, or pass student_id_number in the request body."},
+            status_code=401,
+        )
+    return sid, None
+
+
 def gemini_text_from_result(result: dict) -> str:
     try:
         parts = result["candidates"][0]["content"]["parts"]
@@ -57,6 +103,45 @@ def gemini_text_from_result(result: dict) -> str:
         return parts[0].get("text") or ""
     except (KeyError, IndexError, TypeError):
         return ""
+
+
+def strip_outer_markdown_code_fence(text: str) -> str:
+    """Remove accidental ```markdown … ``` wrapper from model output."""
+    t = (text or "").strip()
+    if not t.startswith("```"):
+        return t
+    lines = t.split("\n")
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    while lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+REVIEWER_SOURCE_MAX_CHARS = 120_000
+
+REVIEWER_PROMPT_TEMPLATE = (
+    "You are an experienced teacher writing a study reviewer for senior high school students.\n\n"
+    "TASK: Using ONLY the lesson text below, produce a clear reviewer students can use to study.\n\n"
+    "OUTPUT FORMAT (GitHub-flavored Markdown only; no HTML tags):\n"
+    "1) Start with exactly one level-1 heading on its own line: # <short topic title>\n"
+    "2) One short opening paragraph (3–5 sentences) that explains the big idea in plain language.\n"
+    "3) ## Key Points — then 4–7 bullets. Each bullet must be its own line starting with \"• \" "
+    "(bullet character + space).\n"
+    "4) ## Important Definitions — one term per line using this pattern: Term — short definition "
+    "(use an em dash between term and definition).\n"
+    "5) ## Summary — one short closing paragraph (2–4 sentences) that ties ideas together.\n\n"
+    "STYLE RULES:\n"
+    "- Balance short paragraphs with lists; avoid one giant paragraph or one endless bullet list.\n"
+    "- Sound clear and educational; avoid hype, filler, or stock AI phrases "
+    '(e.g. avoid "delve", "leverage", "In conclusion", "It is important to note").\n'
+    "- Simplify complex ideas; do not repeat the same point in multiple sections.\n"
+    "- Keep vocabulary accessible; define jargon briefly when it appears.\n"
+    "- Write in the same language as the lesson when the lesson is not English; otherwise use English.\n"
+    "- Do not wrap the entire answer in markdown code fences (no ```).\n"
+    "- Do not add links, images, URLs, or quiz questions.\n\n"
+    "LESSON TEXT:\n{source}\n"
+)
 
 
 def parse_model_json(raw: str):
@@ -471,6 +556,70 @@ def get_users():
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.get("/admin/stats")
+def get_admin_dashboard_stats():
+    """Aggregated metrics for the admin dashboard (Supabase)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        return db_supabase.get_admin_dashboard_stats()
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/admin/attendance-logs")
+def admin_list_attendance_logs(limit: int = Query(default=200, ge=1, le=500)):
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        return {"logs": db_supabase.list_all_attendance_logs(limit)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/admin/journals-feed")
+def admin_list_journals_feed(limit: int = Query(default=200, ge=1, le=500)):
+    """All journal submissions (admin)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        return {"journals": db_supabase.list_all_journals_admin(limit)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/admin/profile/{id_number}")
+def admin_get_profile_by_id_number(id_number: str):
+    """Single profile row from Supabase (admin UI / modals). Password omitted."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        prof = db_supabase.get_profile_by_id_number(id_number)
+        if not prof:
+            return JSONResponse({"error": "Profile not found."}, status_code=404)
+        out = dict(prof)
+        out.pop("password", None)
+        return out
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/admin/recent-activity")
+def admin_recent_activity(limit: int = Query(default=12, ge=1, le=50)):
+    """Recent registrations, uploads, and quiz attempts for the admin dashboard."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        return {"items": db_supabase.get_admin_recent_activity(limit)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.patch("/users")
 def update_user_status(body: dict):
     err = require_supabase()
@@ -531,6 +680,74 @@ def list_teacher_lessons(teacher_id_number: str = Query(...)):
         import traceback
         print("TEACHER LESSONS ERROR:", repr(e))
         traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/dashboard-stats")
+def get_teacher_dashboard_stats(authorization: str | None = Header(default=None)):
+    """Teacher LearnIQ dashboard: upload counts, students with activity, avg quiz score (Bearer token)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    idn = student_id_number_from_authorization(authorization)
+    if not idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        prof = db_supabase.get_profile_by_id_number(idn)
+        role = str((prof or {}).get("role") or "").strip().lower()
+        if role != "teacher":
+            return JSONResponse({"error": "Teacher access only."}, status_code=403)
+        return db_supabase.get_teacher_learniq_dashboard_stats(idn)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+@app.get("/me")
+def get_me(authorization: str | None = Header(default=None)):
+    """Return signed-in user's profile row (Bearer token)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = student_id_number_from_authorization(authorization)
+    if not sid:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        prof = db_supabase.get_profile_by_id_number(sid)
+        if not prof:
+            return JSONResponse({"error": "Profile not found."}, status_code=404)
+        return {
+            "id": prof.get("id"),
+            "full_name": prof.get("full_name"),
+            "id_number": prof.get("id_number"),
+            "email": prof.get("email"),
+            "role": prof.get("role"),
+            "approval_status": prof.get("approval_status"),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/lessons")
+def list_all_lessons_admin():
+    """All uploaded lesson files (admin Uploaded Files section + dashboard stat)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        rows = db_supabase.list_all_lessons()
+        lessons_out = []
+        for r in rows:
+            base = db_supabase.lesson_to_api_list_item(r)
+            lessons_out.append(
+                {
+                    **base,
+                    "file_type": r.get("file_type") or "",
+                    "created_at": r.get("created_at"),
+                    "teacher_id_number": r.get("teacher_id_number") or "",
+                    "is_published": bool(r.get("is_published")),
+                }
+            )
+        return {"lessons": lessons_out, "count": len(lessons_out)}
+    except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
@@ -599,13 +816,12 @@ def get_student_lesson():
         meta, gen = bundle
         lesson_id = meta["id"]
         reviewer = gen.get("reviewer")
-        if isinstance(reviewer, str):
-            lines = [p.strip() for p in reviewer.replace("\r", "").split("\n") if p.strip()]
-            reviewer_list = lines if lines else [reviewer]
-        elif isinstance(reviewer, list):
-            reviewer_list = reviewer
+        if isinstance(reviewer, list):
+            reviewer_str = "\n\n".join(str(x).strip() for x in reviewer if str(x).strip())
+        elif isinstance(reviewer, str):
+            reviewer_str = reviewer
         else:
-            reviewer_list = []
+            reviewer_str = ""
 
         quiz = gen.get("quiz") or []
         if not isinstance(quiz, list):
@@ -632,12 +848,39 @@ def get_student_lesson():
         result = {
             "file_id": lesson_id,
             "filename": meta.get("filename", ""),
-            "reviewer": reviewer_list,
+            "reviewer": reviewer_str,
             "quiz": quiz,
             "activities": activities,
         }
         print(f"[DEBUG] /student/lesson returning activities: {activities}")
         return result
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/leaderboard")
+def get_student_leaderboard(limit: int = Query(50, ge=1, le=200)):
+    """Live rankings from quiz_attempts (students only)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        return db_supabase.get_learniq_leaderboard(limit=limit)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/dashboard-stats")
+def get_student_dashboard_stats(authorization: str | None = Header(default=None)):
+    """LearnIQ dashboard: quiz totals, rank, preview (Bearer token)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = student_id_number_from_authorization(authorization)
+    if not sid:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        return db_supabase.get_student_learniq_dashboard_stats(sid)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -751,7 +994,10 @@ async def generate_reviewer(body: dict):
             status_code=400,
         )
 
-    prompt = f"Create a short reviewer summary based on this lesson:\n\n{text}"
+    source = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    if len(source) > REVIEWER_SOURCE_MAX_CHARS:
+        source = source[:REVIEWER_SOURCE_MAX_CHARS] + "\n\n[…excerpt truncated for length…]"
+    prompt = REVIEWER_PROMPT_TEMPLATE.format(source=source)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -767,7 +1013,7 @@ async def generate_reviewer(body: dict):
     if response.status_code != 200:
         return JSONResponse({"error": result}, status_code=502)
 
-    reviewer_text = gemini_text_from_result(result)
+    reviewer_text = strip_outer_markdown_code_fence(gemini_text_from_result(result))
     if not reviewer_text:
         return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
 
@@ -1065,14 +1311,18 @@ async def quiz_attempt(body: dict):
 
 
 @app.post("/time-in")
-async def time_in(body: dict):
+async def time_in(
+    body: dict | None = Body(default=None),
+    authorization: str | None = Header(default=None),
+):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        student_id = (body.get("student_id") or body.get("student_id_number") or "").strip()
-        if not student_id:
-            return JSONResponse({"error": "student_id is required."}, status_code=400)
+        payload = body if isinstance(body, dict) else {}
+        student_id, bad = resolve_student_id_number_or_403(payload, authorization)
+        if bad is not None:
+            return bad
 
         existing = db_supabase.get_active_attendance(student_id)
         if existing:
@@ -1089,14 +1339,18 @@ async def time_in(body: dict):
 
 
 @app.post("/time-out")
-async def time_out(body: dict):
+async def time_out(
+    body: dict | None = Body(default=None),
+    authorization: str | None = Header(default=None),
+):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        student_id = (body.get("student_id") or body.get("student_id_number") or "").strip()
-        if not student_id:
-            return JSONResponse({"error": "student_id is required."}, status_code=400)
+        payload = body if isinstance(body, dict) else {}
+        student_id, bad = resolve_student_id_number_or_403(payload, authorization)
+        if bad is not None:
+            return bad
 
         active = db_supabase.get_active_attendance(student_id)
         if not active:
@@ -1109,18 +1363,56 @@ async def time_out(body: dict):
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
-@app.post("/submit-journal")
-async def submit_journal(body: dict):
+@app.get("/attendance-history")
+def attendance_history(
+    limit: int = Query(60, ge=1, le=200),
+    authorization: str | None = Header(default=None),
+):
+    """Immersion dashboard: active clock-in + recent rows + sum of completed hours."""
     err = require_supabase()
     if err is not None:
         return err
     try:
-        student_id = (body.get("student_id") or body.get("student_id_number") or "").strip()
-        journal_body = (body.get("body") or "").strip()
-        if not student_id or not journal_body:
-            return JSONResponse({"error": "student_id and body are required."}, status_code=400)
+        student_id, bad = resolve_student_id_number_or_403({}, authorization)
+        if bad is not None:
+            return bad
+        rows = db_supabase.list_attendance_by_student(student_id)[:limit]
+        active = db_supabase.get_active_attendance(student_id)
+        total = 0.0
+        for r in rows:
+            th = r.get("total_hours")
+            if th is not None:
+                try:
+                    total += float(th)
+                except (TypeError, ValueError):
+                    pass
+        return {
+            "active": active,
+            "history": rows,
+            "total_hours_rendered": round(total, 2),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
 
-        attendance_id = body.get("attendance_id")
+
+@app.post("/submit-journal")
+async def submit_journal(
+    body: dict | None = Body(default=None),
+    authorization: str | None = Header(default=None),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        payload = body if isinstance(body, dict) else {}
+        student_id, bad = resolve_student_id_number_or_403(payload, authorization)
+        if bad is not None:
+            return bad
+        journal_body = (payload.get("body") or "").strip()
+        if not journal_body:
+            return JSONResponse({"error": "body is required."}, status_code=400)
+
+        attendance_id = payload.get("attendance_id") or payload.get("immersion_log_id")
         if attendance_id is not None:
             attendance_id = str(attendance_id)
         else:
@@ -1187,27 +1479,38 @@ def attendance_list(student_id_number: str):
 
 
 @app.post("/journals")
-async def journals_create(body: dict):
+async def journals_create(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        sid = (body.get("student_id_number") or "").strip()
-        text_body = (body.get("body") or "").strip()
-        if not sid or not text_body:
-            return JSONResponse({"error": "student_id_number and body are required."}, status_code=400)
+        sid, bad = resolve_student_id_number_or_403(body, authorization)
+        if bad is not None:
+            return bad
+        text_body = (body.get("body") or body.get("journal_text") or "").strip()
+        if not text_body:
+            return JSONResponse({"error": "body (or journal_text) is required."}, status_code=400)
         return db_supabase.insert_journal(sid, text_body, entry_date=body.get("entry_date"))
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
 @app.get("/journals")
-def journals_list(student_id_number: str):
+def journals_list(
+    student_id_number: str | None = None,
+    authorization: str | None = Header(default=None),
+):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        return db_supabase.list_journals_for_student(student_id_number)
+        sid, bad = resolve_student_id_number_or_403(
+            {"student_id_number": student_id_number} if student_id_number else {},
+            authorization,
+        )
+        if bad is not None:
+            return bad
+        return db_supabase.list_journals_for_student(sid)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 

@@ -9,9 +9,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body>
+<body class="learniq-dashboard-page">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -29,18 +30,20 @@
         <a href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="login.html"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-chip">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
           <div class="avatar" id="student-avatar-initials">ST</div>
-          <div>
-            <strong id="student-display-name">Student</strong>
-            <div class="small-note" id="student-display-track">STEM - 12 A</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Student</span>
+            <div class="small-note" id="student-display-track"></div>
           </div>
-        </div>
-        <span class="status-badge online">Active learner</span>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
       </div>
     </aside>
 
@@ -48,36 +51,33 @@
       <section class="glass-card panel-header">
         <div class="panel-title">
           <h1>LearnIQ Dashboard</h1>
-          <p>Track your overall performance, progress, and leaderboard standing.</p>
+          <p>Your stats update from quiz scores. Open My lesson to continue.</p>
         </div>
-        <a class="btn btn-primary" href="leaderboard.html"><i class="fa-solid fa-ranking-star"></i> View Rankings</a>
       </section>
-
-      <!-- Upload section removed - students do not upload lesson files -->
 
       <section class="stats-grid">
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-star"></i></div>
           <div>
-            <span class="small-note">Score</span>
-            <strong class="metric-value">1,280</strong>
-            <span class="metric-note">+120 this week</span>
+            <span class="small-note">Total quiz points</span>
+            <strong class="metric-value" id="dashboard-stat-points">0</strong>
+            <span class="metric-note" id="dashboard-stat-week">Loading…</span>
           </div>
         </article>
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-trophy"></i></div>
           <div>
-            <span class="small-note">Leaderboard Rank</span>
-            <strong class="metric-value">#2</strong>
-            <span class="metric-note">Top 10% of students</span>
+            <span class="small-note">Leaderboard rank</span>
+            <strong class="metric-value" id="dashboard-stat-rank">—</strong>
+            <span class="metric-note" id="dashboard-stat-rank-note">Among students with quiz scores</span>
           </div>
         </article>
         <article class="glass-card stat-card">
           <div class="metric-icon"><i class="fa-solid fa-chart-simple"></i></div>
           <div>
-            <span class="small-note">Progress</span>
-            <strong class="metric-value">78%</strong>
-            <div class="progress-bar"><span data-progress="78%"></span></div>
+            <span class="small-note">Quiz accuracy</span>
+            <strong class="metric-value" id="dashboard-stat-progress-pct">0%</strong>
+            <div class="progress-bar"><span id="dashboard-progress-span" data-progress="0%"></span></div>
           </div>
         </article>
       </section>
@@ -86,16 +86,38 @@
         <div class="content-stack">
           <article id="student-overview" class="glass-card content-card">
             <h3>Welcome to LearnIQ</h3>
-            <p class="content-subtitle">Track your learning progress and access your lessons.</p>
+            <p class="content-subtitle">Open published lessons and use reviewer, quiz, and activities in My lesson.</p>
             <div class="overview-grid">
               <div class="overview-item">
                 <div class="overview-icon">
-                  <i class="fa-solid fa-chart-line"></i>
+                  <i class="fa-solid fa-book-open"></i>
                 </div>
                 <div class="overview-content">
-                  <h4>Progress Tracking</h4>
-                  <p>Monitor your quiz scores and learning achievements.</p>
-                  <a href="leaderboard.html" class="btn btn-secondary">View Leaderboard</a>
+                  <h4>Continue learning</h4>
+                  <p>Pick a lesson and work through content at your pace.</p>
+                  <div class="overview-actions">
+                    <a href="my-lesson.html" class="btn btn-primary">Open My lesson</a>
+                    <a href="leaderboard.html" class="btn btn-secondary">View leaderboard</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="overview-item">
+                <div class="overview-icon">
+                  <i class="fa-solid fa-list-check"></i>
+                </div>
+                <div class="overview-content">
+                  <h4>Today’s focus</h4>
+                  <p>Stay consistent: review, take a quiz, then try one activity.</p>
+                  <ul class="overview-list">
+                    <li><strong>Reviewer</strong> — skim key points in 3–5 minutes</li>
+                    <li><strong>Quiz</strong> — aim for 80%+ accuracy</li>
+                    <li><strong>Activity</strong> — submit one short response</li>
+                  </ul>
+                  <div class="overview-actions">
+                    <a href="my-lesson.html" class="btn btn-ghost">Jump to reviewer</a>
+                    <a href="student-profile.html" class="btn btn-ghost">Update profile</a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -104,35 +126,33 @@
 
         <div class="content-stack">
           <article class="glass-card leaderboard-card">
-            <h3>Leaderboard Preview</h3>
-            <ul class="leaderboard-mini">
-              <li><strong>1. Andrea R.</strong> <small>1,360 pts</small></li>
-              <li><strong id="student-leaderboard-name">2. Student</strong> <small>1,280 pts</small></li>
-              <li><strong>3. Kevin L.</strong> <small>1,210 pts</small></li>
+            <h3>Leaderboard preview</h3>
+            <p class="content-subtitle">Top students by total quiz points</p>
+            <ul class="leaderboard-mini" id="dashboard-leaderboard-mini">
+              <li class="small-note">Loading…</li>
             </ul>
           </article>
 
           <article class="glass-card content-card">
-            <h3>Learning Progress</h3>
+            <h3>Activity summary</h3>
+            <p class="content-subtitle">From your quiz attempts and published lessons</p>
             <div class="progress-stats">
               <div class="progress-stat">
-                <span class="small-note">Lessons Completed</span>
-                <strong>12 / 15</strong>
+                <span class="small-note">Lessons practiced</span>
+                <strong id="dash-lesson-line">0 / 0</strong>
               </div>
               <div class="progress-stat">
-                <span class="small-note">Quiz Average</span>
-                <strong>85%</strong>
+                <span class="small-note">Quiz attempts</span>
+                <strong id="dash-quiz-line">0</strong>
               </div>
               <div class="progress-stat">
-                <span class="small-note">Activities Done</span>
-                <strong>28</strong>
+                <span class="small-note">Points (last 7 days)</span>
+                <strong id="dash-week-line">0</strong>
               </div>
             </div>
           </article>
         </div>
       </section>
-
-      <!-- Lesson actions moved to My Lesson page -->
     </main>
   </div>
 </body>

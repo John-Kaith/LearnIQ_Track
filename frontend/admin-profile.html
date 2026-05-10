@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Profile | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="profile-page">
+  <main class="page-shell container">
+    <div class="dashboard-shell">
+      <aside class="sidebar glass-card fade-up">
+        <div class="sidebar-header">
+          <div class="brand" style="gap:0.85rem;">
+            <span class="brand-mark">LQ</span>
+            <span>
+              <strong>LearnIQ Track</strong>
+              <small id="profile-brand-subtitle">Admin Control Center</small>
+            </span>
+          </div>
+          <p class="small-note">Review approvals, activity, and system health from one view.</p>
+        </div>
+        <nav class="side-links">
+          <a href="admin-approval.html"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+          <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
+          <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
+          <a href="admin-users.html"><i class="fa-solid fa-users"></i> Users</a>
+          <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
+          <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
+          <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
+          <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
+          <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
+          <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
+          <a href="admin-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+        <div class="sidebar-footer">
+          <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information" aria-current="page">
+            <span class="avatar" id="admin-sidebar-avatar">PC</span>
+            <div class="user-chip-text">
+              <strong id="admin-sidebar-name">Principal Cruz</strong>
+              <small id="admin-sidebar-role">Admin / Principal</small>
+            </div>
+          </a>
+          <button type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()">
+            <i class="fa-solid fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <section class="main-panel">
+        <section class="glass-card panel-header fade-up delay-1">
+          <div class="panel-title">
+            <h1 id="profile-title">Administrator profile</h1>
+            <p class="small-note" id="profile-subtitle">Your account information from this session.</p>
+          </div>
+          <a class="btn btn-secondary" href="admin-approval.html"><i class="fa-solid fa-arrow-left"></i> Back to dashboard</a>
+        </section>
+
+        <article class="glass-card content-card fade-up delay-2">
+          <h3>Account details</h3>
+          <div class="profile-kv-grid">
+            <div class="profile-kv">
+              <span class="small-note">Full name</span>
+              <strong id="profile-full-name">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Role</span>
+              <strong id="profile-role">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">ID number</span>
+              <strong id="profile-id-number">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Email</span>
+              <strong id="profile-email">—</strong>
+            </div>
+          </div>
+          <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
+        </article>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
