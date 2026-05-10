@@ -161,6 +161,7 @@
     wireLogout("#student-topnav-logout");
     wireMobileToggle(slot);
     window.addEventListener("hashchange", applyActiveStudentUnified);
+    if (window.LearnIQTheme && typeof window.LearnIQTheme.remount === "function") window.LearnIQTheme.remount();
   };
 
   window.LearnIQTopnav.mountTeacher = async function () {
@@ -175,6 +176,7 @@
     });
     wireMobileToggle(slot);
     window.addEventListener("hashchange", applyActiveTeacherNav);
+    if (window.LearnIQTheme && typeof window.LearnIQTheme.remount === "function") window.LearnIQTheme.remount();
   };
 
   window.LearnIQTopnav.mountAdmin = async function () {
@@ -187,6 +189,7 @@
     });
     wireMobileToggle(slot);
     window.addEventListener("hashchange", applyActiveAdminNav);
+    if (window.LearnIQTheme && typeof window.LearnIQTheme.remount === "function") window.LearnIQTheme.remount();
   };
 
   /* Back-compat mounts */
