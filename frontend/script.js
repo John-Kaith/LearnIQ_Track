@@ -1345,6 +1345,17 @@ function setupLoginPage() {
       setTimeout(() => {
         console.log("REDIRECT BLOCK REACHED");
         console.log("USER ROLE:", user.role);
+        try {
+          if (window.LearnIQTheme && typeof window.LearnIQTheme.set === "function") {
+            const themeFromDom =
+              document.documentElement.getAttribute("data-theme") === "light"
+                ? "light"
+                : "dark";
+            window.LearnIQTheme.set(themeFromDom);
+          }
+        } catch (_) {
+          /* keep redirect even if theme sync fails */
+        }
         if (user.role === "admin") {
           window.location.href = "admin-approval.html";
         } else if (user.role === "teacher") {

@@ -121,8 +121,45 @@
     if (link) link.classList.add("is-active");
   }
 
-  function wireMobileToggle(_slot) {
-    /* Shell V2 Phase 1: desktop-first; hamburger / collapse disabled until responsive phase. */
+  function wireMobileToggle(slot) {
+    var roots = slot ? slot.querySelectorAll(".lms-topnav") : document.querySelectorAll(".lms-topnav");
+    roots.forEach(function (header) {
+      if (header.getAttribute("data-lms-topnav-wired") === "1") return;
+      var btn = header.querySelector(".lms-topnav-menu-toggle");
+      var body = header.querySelector(".lms-topnav-body");
+      if (!btn || !body) return;
+      header.setAttribute("data-lms-topnav-wired", "1");
+
+      function closeIfNarrow() {
+        if (window.LearnIQMobile && typeof window.LearnIQMobile.closeTopNavIfNarrow === "function") {
+          window.LearnIQMobile.closeTopNavIfNarrow(header);
+        }
+      }
+
+      btn.addEventListener("click", function () {
+        var open = header.classList.toggle("lms-topnav--menu-open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      });
+
+      body.querySelectorAll("a[href]").forEach(function (link) {
+        link.addEventListener("click", closeIfNarrow);
+      });
+
+      var logoutBtn = header.querySelector(".lms-topnav-logout-btn");
+      if (logoutBtn) logoutBtn.addEventListener("click", closeIfNarrow);
+
+      var mq = window.matchMedia("(max-width: 900px)");
+      function syncDesktop() {
+        if (!mq.matches) {
+          header.classList.remove("lms-topnav--menu-open");
+          btn.setAttribute("aria-expanded", "false");
+          btn.setAttribute("aria-label", "Open menu");
+        }
+      }
+      if (typeof mq.addEventListener === "function") mq.addEventListener("change", syncDesktop);
+      else if (typeof mq.addListener === "function") mq.addListener(syncDesktop);
+    });
   }
 
   function wireLogout(selector, handler) {

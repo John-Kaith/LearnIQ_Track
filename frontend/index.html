@@ -12,185 +12,181 @@
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+  <script src="js/pages/landing-animations.js" defer></script>
 </head>
-<body>
-  <div class="page-shell">
-    <header class="topbar container">
-      <a class="brand" href="index.html">
-        <span class="brand-mark">LQ</span>
-        <span>
-          <strong>LearnIQ Track</strong>
-          <small>AI Learning Game Platform</small>
-        </span>
-      </a>
-      <nav class="topbar-nav">
-        <a data-nav="index" href="index.html">Home</a>
-        <a href="#features">Features</a>
-        <a data-nav="leaderboard" href="leaderboard.html">Leaderboard</a>
-        <a data-nav="teacher-dashboard" href="teacher-dashboard.html">Teacher Demo</a>
-      </nav>
-      <div class="topbar-actions">
-        <a class="btn btn-ghost" href="login.html">Login</a>
-        <a class="btn btn-primary" href="signup.html">Sign Up</a>
-      </div>
-    </header>
-
-    <main>
-      <section class="hero container">
-        <div class="hero-copy glass-card fade-up">
-          <span class="pill"><i class="fa-solid fa-wand-magic-sparkles"></i> AI-powered reviewer, quiz, and activities</span>
-          <h1>Level up classroom learning with <span class="text-gradient">LearnIQ Track</span></h1>
-          <p>
-            A modern capstone platform for Senior High School students and teachers—generate reviewers,
-            quizzes, and learning tasks from PDFs or PowerPoints while monitoring digital work immersion progress.
+<body class="index-landing">
+  <main class="landing-layout">
+    <section class="landing-hero" aria-label="LearnIQ Track welcome">
+      <div class="landing-hero-media" role="img" aria-label="School campus"></div>
+      <div class="landing-hero-scrim" aria-hidden="true"></div>
+      <div class="landing-hero-inner container">
+        <div class="landing-hero-copy">
+          <p class="landing-hero-eyebrow">AI learning &amp; digital immersion</p>
+          <h1 class="landing-hero-title">LearnIQ Track</h1>
+          <p class="landing-hero-lead">
+            Generate reviewers and quizzes from your files, then track immersion and scores in one simple dashboard.
           </p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="login.html">Login</a>
-            <a class="btn btn-secondary" href="signup.html">Create Account</a>
-          </div>
-          <div class="hero-stats">
-            <article>
-              <strong>3x faster</strong>
-              <span>Lesson review generation</span>
-            </article>
-            <article>
-              <strong>94%</strong>
-              <span>Student task engagement</span>
-            </article>
-            <article>
-              <strong>24/7</strong>
-              <span>AI learning support</span>
-            </article>
+          <div class="landing-hero-actions">
+            <a class="btn btn-primary landing-hero-btn-solid" href="login.html">Login</a>
+            <a class="btn landing-hero-btn-outline" href="signup.html">Sign Up</a>
           </div>
         </div>
+      </div>
+      <a class="landing-scroll-cue" href="#features">
+        <span>Features</span>
+        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+      </a>
+    </section>
 
-        <div class="hero-panel glass-card fade-up delay-1">
-          <div class="hero-widget">
-            <div>
-              <p class="widget-label">Today’s AI output</p>
-              <h3>Earth Science Reviewer</h3>
+    <div class="landing-rest page-shell">
+      <section id="features" class="container section-block landing-features-section">
+        <header class="landing-simple-head">
+          <h2>AI generation features</h2>
+          <p>Upload PDFs or slides and get three ready-to-use outputs from one lesson file.</p>
+        </header>
+
+        <div class="landing-features-stack">
+        <div class="feature-grid landing-feature-grid">
+          <article class="glass-card feature-card landing-feature-card">
+            <div class="landing-feature-card-head">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <h3>Reviewer</h3>
             </div>
-            <span class="status-badge online">Ready</span>
-          </div>
-
-          <div class="mini-card-grid">
-            <article class="mini-card">
-              <i class="fa-solid fa-file-lines"></i>
-              <div>
-                <strong>Reviewer</strong>
-                <span>12 key concepts summarized</span>
-              </div>
-            </article>
-            <article class="mini-card">
-              <i class="fa-solid fa-list-check"></i>
-              <div>
-                <strong>Quiz Pack</strong>
-                <span>15 auto-generated questions</span>
-              </div>
-            </article>
-            <article class="mini-card">
-              <i class="fa-solid fa-gamepad"></i>
-              <div>
-                <strong>Activities</strong>
-                <span>Interactive tasks for mastery</span>
-              </div>
-            </article>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-card-header">
-              <span>Immersion progress</span>
-              <strong>82%</strong>
+            <div class="landing-feature-card-body">
+              <p class="landing-feature-card-lead">Condensed study notes and key concepts from your upload—ready before class or exams.</p>
+              <ul class="landing-feature-card-list">
+                <li>Topic outline aligned to your file</li>
+                <li>Key terms and definitions highlighted</li>
+                <li>Easy to skim on phone or print</li>
+              </ul>
             </div>
-            <div class="progress-bar"><span style="width: 82%"></span></div>
-            <ul class="chart-legend">
-              <li><span class="dot blue"></span> On-site hours</li>
-              <li><span class="dot violet"></span> Journal submissions</li>
+            <div class="landing-feature-card-foot">
+              <span class="landing-feature-tag">Study output</span>
+              <span class="landing-feature-hint">Best for recap &amp; review sessions</span>
+            </div>
+          </article>
+          <article class="glass-card feature-card landing-feature-card">
+            <div class="landing-feature-card-head">
+              <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+              <h3>Quiz</h3>
+            </div>
+            <div class="landing-feature-card-body">
+              <p class="landing-feature-card-lead">Auto-generated items with choices and an answer key—use for drills or short tests.</p>
+              <ul class="landing-feature-card-list">
+                <li>Multiple-choice style questions</li>
+                <li>Answer key included</li>
+                <li>Matches topics from the same lesson file</li>
+              </ul>
+            </div>
+            <div class="landing-feature-card-foot">
+              <span class="landing-feature-tag">Assessment</span>
+              <span class="landing-feature-hint">Quick checks &amp; graded practice</span>
+            </div>
+          </article>
+          <article class="glass-card feature-card landing-feature-card">
+            <div class="landing-feature-card-head">
+              <i class="fa-solid fa-puzzle-piece" aria-hidden="true"></i>
+              <h3>Activity</h3>
+            </div>
+            <div class="landing-feature-card-body">
+              <p class="landing-feature-card-lead">Hands-on prompts and tasks that go beyond the quiz—deeper engagement with the lesson.</p>
+              <ul class="landing-feature-card-list">
+                <li>Short writes, diagrams, or scenarios</li>
+                <li>Individual or group-friendly</li>
+                <li>Extends the same concepts as reviewer &amp; quiz</li>
+              </ul>
+            </div>
+            <div class="landing-feature-card-foot">
+              <span class="landing-feature-tag">Engagement</span>
+              <span class="landing-feature-hint">Classroom or homework tasks</span>
+            </div>
+          </article>
+        </div>
+
+        <article class="glass-card landing-immersion-wide">
+          <div class="landing-immersion-wide-visual" aria-hidden="true">
+            <div class="landing-immersion-wide-icon">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+          </div>
+          <div class="landing-immersion-wide-body">
+            <div class="landing-immersion-wide-head">
+              <span class="landing-feature-tag">Immersion</span>
+              <h3>Immersion tracker</h3>
+            </div>
+            <p class="landing-immersion-wide-lead">
+              Log time in and out, keep daily journals, and see immersion hours alongside your LearnIQ work—built for Senior High digital work immersion requirements.
+            </p>
+            <ul class="landing-immersion-wide-list">
+              <li>Session timers and attendance-style time logs</li>
+              <li>Journal entries tied to your immersion schedule</li>
+              <li>Reports-friendly view for teachers and advisers</li>
             </ul>
           </div>
-        </div>
-      </section>
-
-      <section id="features" class="container section-block">
-        <div class="section-heading">
-          <span class="pill"><i class="fa-solid fa-layer-group"></i> Core features</span>
-          <h2>Built like a real education SaaS dashboard</h2>
-          <p>Clean workflows for students, teachers, and administrators in one responsive interface.</p>
-        </div>
-
-        <div class="feature-grid">
-          <article class="glass-card feature-card">
-            <i class="fa-solid fa-brain"></i>
-            <h3>AI Content Generation</h3>
-            <p>Upload lecture files and instantly produce reviewers, quizzes, and guided learning activities.</p>
-          </article>
-          <article class="glass-card feature-card">
-            <i class="fa-solid fa-trophy"></i>
-            <h3>Leaderboard & Gamification</h3>
-            <p>Motivate students with rankings, points, and visible progress toward mastery goals.</p>
-          </article>
-          <article class="glass-card feature-card">
-            <i class="fa-solid fa-user-clock"></i>
-            <h3>Immersion Tracking</h3>
-            <p>Monitor time in/out, work immersion journals, and digital performance from one dashboard.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="container section-block two-col-layout">
-        <article class="glass-card info-panel">
-          <div class="section-heading left-align">
-            <span class="pill"><i class="fa-solid fa-rocket"></i> Why LearnIQ Track?</span>
-            <h2>Smarter reviewing. Better engagement. Easier monitoring.</h2>
-          </div>
-          <ul class="bullet-list">
-            <li>Generate structured learning materials from teacher uploads.</li>
-            <li>Track student scores, ranks, and immersion activity logs.</li>
-            <li>Use a dark, distraction-free interface for a professional classroom experience.</li>
-          </ul>
         </article>
 
-        <article class="glass-card steps-panel">
-          <h3>How it works</h3>
-          <div class="step-item">
-            <span>01</span>
-            <div>
-              <strong>Upload a lesson file</strong>
-              <p>Teachers submit a PDF or PowerPoint resource.</p>
+        <article class="glass-card landing-developers-card" id="developers">
+          <header class="landing-developers-top">
+            <div class="landing-developers-icon" aria-hidden="true">
+              <i class="fa-solid fa-laptop-code"></i>
             </div>
-          </div>
-          <div class="step-item">
-            <span>02</span>
-            <div>
-              <strong>Generate learning assets</strong>
-              <p>The AI produces a reviewer, quiz items, and activities.</p>
+            <div class="landing-developers-intro">
+              <h3>Developer details</h3>
+              <p>
+                Capstone project for an <strong>AI-based learning game</strong> and <strong>digital work immersion monitoring</strong> system—LearnIQ Track.
+              </p>
             </div>
-          </div>
-          <div class="step-item">
-            <span>03</span>
+          </header>
+          <dl class="landing-developers-meta">
             <div>
-              <strong>Track outcomes</strong>
-              <p>Students learn, earn points, and update immersion records.</p>
+              <dt>Project</dt>
+              <dd>LearnIQ Track · Senior High capstone</dd>
             </div>
-          </div>
+            <div>
+              <dt>Tech stack</dt>
+              <dd>Python (FastAPI), HTML, CSS, JavaScript</dd>
+            </div>
+            <div>
+              <dt>Development team</dt>
+              <dd>Capstone development team</dd>
+            </div>
+          </dl>
         </article>
-      </section>
-
-      <section class="container cta-banner glass-card section-block">
-        <div>
-          <h2>Ready to present your capstone with a polished UI?</h2>
-          <p>This demo frontend is prepared for backend integration and classroom showcasing.</p>
-        </div>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="teacher-dashboard.html">Open Teacher Dashboard</a>
-          <a class="btn btn-ghost" href="learniq-dashboard.html">View Student Dashboard</a>
         </div>
       </section>
-    </main>
+    </div>
+  </main>
 
-    <footer class="footer container">
-      <p>© 2026 LearnIQ Track • AI-Based Learning Game & Digital Work Immersion Monitoring System</p>
-    </footer>
-  </div>
+  <footer class="landing-site-footer">
+    <div class="container landing-footer-grid">
+      <div class="landing-footer-brand">
+        <div class="landing-footer-logo">
+          <span class="brand-mark">LQ</span>
+          <strong>LearnIQ Track</strong>
+        </div>
+        <p>AI-based learning support and digital work immersion monitoring for Senior High School.</p>
+      </div>
+      <div class="landing-footer-col">
+        <h3 class="landing-footer-heading">Product</h3>
+        <a href="#features">Features</a>
+        <a href="immersion-dashboard.html">Immersion tracker</a>
+        <a href="leaderboard.html">Leaderboard</a>
+        <a href="teacher-dashboard.html">Teacher demo</a>
+      </div>
+      <div class="landing-footer-col">
+        <h3 class="landing-footer-heading">Account</h3>
+        <a href="login.html">Login</a>
+        <a href="signup.html">Sign up</a>
+        <a href="module-selection.html">Modules</a>
+      </div>
+    </div>
+    <div class="landing-footer-bar">
+      <div class="container landing-footer-bar-inner">
+        <p>© 2026 LearnIQ Track · AI learning game &amp; immersion monitoring</p>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

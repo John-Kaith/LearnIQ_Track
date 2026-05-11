@@ -5,12 +5,30 @@
 (function () {
   var THEME_KEY = "learniq-theme";
 
+  function normalizeStored(val) {
+    if (val == null) return null;
+    var s = String(val).trim().toLowerCase();
+    if (s === "light" || s === "dark") return s;
+    return null;
+  }
+
+  /** Resolved effective theme for UI (default dark). */
   function getTheme() {
+    var raw = readStoredTheme();
+    return raw === "light" ? "light" : "dark";
+  }
+
+  /** Raw preference from storage, or null if unset / unreadable. */
+  function readStoredTheme() {
     try {
-      return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
-    } catch (e) {
-      return "dark";
-    }
+      var a = normalizeStored(localStorage.getItem(THEME_KEY));
+      if (a) return a;
+    } catch (e) {}
+    try {
+      var b = normalizeStored(sessionStorage.getItem(THEME_KEY));
+      if (b) return b;
+    } catch (e) {}
+    return null;
   }
 
   function setMetaThemeColor() {
@@ -26,19 +44,32 @@
     );
   }
 
-  function applyTheme(theme) {
+  function persistTheme(theme) {
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
+    try {
+      sessionStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
+  }
+
+  /** Update DOM only (no storage writes). Safe for initial load / bfcache / storage events. */
+  function applyVisualTheme(theme) {
     var root = document.documentElement;
     if (theme === "light") {
       root.setAttribute("data-theme", "light");
     } else {
       root.removeAttribute("data-theme");
     }
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch (e) {}
     root.style.colorScheme = theme === "light" ? "light" : "dark";
     setMetaThemeColor();
     document.querySelectorAll(".theme-toggle-btn").forEach(updateBtnIcon);
+  }
+
+  /** User-facing: persist + apply (toggle, programmatic set). */
+  function applyTheme(theme) {
+    applyVisualTheme(theme);
+    persistTheme(theme);
   }
 
   function updateBtnIcon(btn) {
@@ -107,7 +138,11 @@
     document.querySelectorAll(".theme-toggle-btn").forEach(updateBtnIcon);
   }
 
-  applyTheme(getTheme());
+  function hydrateFromStorage() {
+    applyVisualTheme(getTheme());
+  }
+
+  hydrateFromStorage();
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", remount);
@@ -115,9 +150,23 @@
     remount();
   }
 
+  window.addEventListener("storage", function (e) {
+    if (e.key !== THEME_KEY || e.storageArea !== localStorage) return;
+    var t = normalizeStored(e.newValue);
+    applyVisualTheme(t === "light" ? "light" : "dark");
+  });
+
+  window.addEventListener("pageshow", function (ev) {
+    if (!ev.persisted) return;
+    hydrateFromStorage();
+    remount();
+  });
+
   window.LearnIQTheme = {
     get: getTheme,
+    readStored: readStoredTheme,
     set: applyTheme,
+    applyVisual: applyVisualTheme,
     toggle: toggleTheme,
     remount: remount,
   };
