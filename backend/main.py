@@ -786,18 +786,143 @@ async def unpublish_lesson(body: dict):
 
 
 @app.get("/student/lessons")
-def get_student_lessons():
+def get_student_lessons(subject_id: str | None = None):
     err = require_supabase()
     if err is not None:
         return err
     try:
         lessons = db_supabase.list_published_lessons_with_content()
-        print("STUDENT LESSONS DEBUG: Found", len(lessons), "published lessons")
+        if subject_id:
+            lessons = [
+                lesson for lesson in lessons
+                if str(lesson.get("subject_id") or "") == str(subject_id)
+            ]
+        print("STUDENT LESSONS DEBUG: Found", len(lessons), "published lessons (subject_id=", subject_id, ")")
         for i, lesson in enumerate(lessons):
             print(f"  Lesson {i+1}: {lesson.get('filename', 'No filename')} (id: {lesson.get('file_id', 'No id')})")
         return {"lessons": lessons}
     except Exception as e:
         print("STUDENT LESSONS ERROR:", str(e))
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/subjects")
+def list_subjects_endpoint():
+    """List all subjects with lesson counts (used by Student/Teacher/Admin UIs)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        subjects = db_supabase.list_subjects()
+        pub_counts = db_supabase.count_published_lessons_by_subject()
+        total_counts = db_supabase.count_lessons_by_subject()
+        teacher_counts = db_supabase.count_teachers_by_subject()
+        for s in subjects:
+            sid = s.get("id")
+            key = str(sid) if sid is not None else ""
+            s["published_lesson_count"] = pub_counts.get(key, 0)
+            s["total_lesson_count"] = total_counts.get(key, 0)
+            s["teacher_count"] = teacher_counts.get(key, 0)
+        return {"subjects": subjects, "count": len(subjects)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/subjects")
+async def create_subject_endpoint(body: dict):
+    """Create a new subject row (used by Teacher 'Add Subject' modal)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    name = (body.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "Subject name is required."}, status_code=400)
+    description = body.get("description")
+    color = body.get("color")
+    try:
+        row = db_supabase.create_subject(name=name, description=description, color=color)
+        sid = row.get("id") if isinstance(row, dict) else None
+        return {
+            "id": str(sid) if sid is not None else None,
+            "name": (row.get("name") if isinstance(row, dict) else name) or name,
+            "description": (row.get("description") if isinstance(row, dict) else description) or "",
+            "color": (row.get("color") if isinstance(row, dict) else color) or "",
+        }
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        msg = str(e)
+        # Friendly error if the database uniqueness constraint is violated.
+        if "duplicate" in msg.lower() or "unique" in msg.lower():
+            return JSONResponse({"error": "A subject with this name already exists."}, status_code=409)
+        return JSONResponse({"error": msg}, status_code=502)
+
+
+@app.put("/subjects/{subject_id}")
+async def update_subject_endpoint(subject_id: str, body: dict):
+    """Update a subject row (name/description/color). Admin-only in spirit."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not subject_id:
+        return JSONResponse({"error": "subject_id is required."}, status_code=400)
+    try:
+        row = db_supabase.update_subject(
+            subject_id=subject_id,
+            name=body.get("name"),
+            description=body.get("description"),
+            color=body.get("color"),
+        )
+        sid = row.get("id") if isinstance(row, dict) else subject_id
+        return {
+            "id": str(sid) if sid is not None else subject_id,
+            "name": (row.get("name") if isinstance(row, dict) else None) or body.get("name"),
+            "description": (row.get("description") if isinstance(row, dict) else None) or body.get("description") or "",
+            "color": (row.get("color") if isinstance(row, dict) else None) or body.get("color") or "",
+        }
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        msg = str(e)
+        if "duplicate" in msg.lower() or "unique" in msg.lower():
+            return JSONResponse({"error": "Another subject already uses this name."}, status_code=409)
+        return JSONResponse({"error": msg}, status_code=502)
+
+
+@app.delete("/subjects/{subject_id}")
+async def delete_subject_endpoint(subject_id: str):
+    """Delete a subject. Any lesson referencing it will have its subject_id set
+    to NULL first (so legacy lessons appear under 'Unassigned')."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not subject_id:
+        return JSONResponse({"error": "subject_id is required."}, status_code=400)
+    try:
+        db_supabase.delete_subject(subject_id)
+        return {"deleted_subject_id": subject_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/lesson/subject")
+async def set_lesson_subject(body: dict):
+    """Teacher edit: assign or change the subject of an existing lesson."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    lesson_id = body.get("lesson_id") or body.get("file_id")
+    if not lesson_id:
+        return JSONResponse({"error": "lesson_id (or file_id) is required."}, status_code=400)
+    subject_id = body.get("subject_id")
+    if subject_id is not None:
+        subject_id = str(subject_id) or None
+    try:
+        if not db_supabase.get_lesson_row(str(lesson_id)):
+            return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        db_supabase.update_lesson_subject(str(lesson_id), subject_id)
+        return {"lesson_id": lesson_id, "subject_id": subject_id}
+    except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
@@ -900,12 +1025,16 @@ async def upload_lesson_json(body: dict):
         tid = body.get("teacher_id_number") or body.get("teacher_id")
         if tid is not None:
             tid = str(tid)
+        subject_id = body.get("subject_id")
+        if subject_id is not None:
+            subject_id = str(subject_id) or None
         lesson = db_supabase.insert_lesson(
             filename=filename,
             file_type=ft,
             extracted_text=str(text)[:3000],
             storage_path=None,
             teacher_id_number=tid,
+            subject_id=subject_id,
         )
         return lesson
     except Exception as e:
@@ -913,11 +1042,16 @@ async def upload_lesson_json(body: dict):
 
 
 @app.post("/upload-file")
-async def upload_file(file: UploadFile = File(...), teacher_id_number: str = Form(...)):
+async def upload_file(
+    file: UploadFile = File(...),
+    teacher_id_number: str = Form(...),
+    subject_id: str | None = Form(default=None),
+):
     print("UPLOAD CALLED")
     print("Filename:", file.filename)
     print("Teacher ID Number:", teacher_id_number)
-    
+    print("Subject ID:", subject_id)
+
     err = require_supabase()
     if err is not None:
         return err
@@ -951,12 +1085,14 @@ async def upload_file(file: UploadFile = File(...), teacher_id_number: str = For
 
     try:
         print("CALLING INSERT LESSON...")
+        clean_subject_id = (str(subject_id).strip() or None) if subject_id else None
         lesson = db_supabase.insert_lesson(
             filename=file.filename,
             file_type=file_type,
             extracted_text=text,
             storage_path=temp_path,
             teacher_id_number=teacher_id_number,
+            subject_id=clean_subject_id,
         )
         lid = lesson["id"]
         print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}")

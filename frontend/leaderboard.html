@@ -13,7 +13,7 @@
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body>
+<body class="leaderboard-page">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -28,8 +28,9 @@
 
       <nav class="side-links">
         <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
-        <a href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
         <a class="active" href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
         <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
@@ -55,9 +56,6 @@
           <p>Rankings are built from submitted quiz scores. Results update automatically while you use the app.</p>
           <p class="leaderboard-live-meta" id="leaderboard-live-line">Loading rankings…</p>
         </div>
-        <button type="button" class="btn btn-secondary" id="leaderboard-refresh-btn" title="Refresh now">
-          <i class="fa-solid fa-rotate"></i> Refresh
-        </button>
       </section>
 
       <section id="leaderboard-empty" class="glass-card leaderboard-empty-state" hidden>

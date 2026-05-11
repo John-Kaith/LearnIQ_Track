@@ -1,3 +1,6 @@
+// Page-specific bootstrap. The tab/search/reset handlers are auto-mounted by
+// script.js (setupAdminUsersPageHandlers), so here we only handle the initial
+// data load + optional top-nav mount.
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     if (window.LearnIQTopnav && typeof LearnIQTopnav.mountAdmin === "function") {
@@ -8,20 +11,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   try {
-    await loadAllUsers();
+    if (typeof loadAllUsers === "function") {
+      await loadAllUsers();
+    }
   } catch (e) {
     console.error(e);
   }
 
   document.getElementById("refresh-users")?.addEventListener("click", () => {
-    loadAllUsers();
-    if (typeof showToast === "function") showToast("Users refreshed.", "success");
-  });
-
-  document.getElementById("users-reset")?.addEventListener("click", () => {
-    const s = document.getElementById("users-search");
-    if (s) s.value = "";
-    loadAllUsers();
+    if (typeof loadAllUsers === "function") {
+      loadAllUsers();
+      if (typeof showToast === "function") showToast("Users refreshed.", "success");
+    }
   });
 });
 

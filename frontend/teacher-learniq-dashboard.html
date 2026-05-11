@@ -27,7 +27,8 @@
       </div>
 
       <nav class="side-links">
-        <a class="active" href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> LearnIQ Dashboard</a>
+        <a class="active" href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
+        <a href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
         <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
@@ -51,33 +52,10 @@
     <main class="main-panel">
       <section id="teacher-learniq-panel-head" class="glass-card panel-header">
         <div class="panel-title">
-          <h1>Teacher LearnIQ Dashboard</h1>
-          <p>Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
+          <h1 id="teacher-dashboard-panel-title">Teacher LearnIQ Dashboard</h1>
+          <p id="teacher-dashboard-panel-subtitle">Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
         </div>
       </section>
-
-      <article class="glass-card content-card upload-box" data-upload-role="teacher" aria-label="Lesson upload form">
-        <div>
-          <h3>Upload Lesson File</h3>
-          <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. Extracted text is used for AI generation.</p>
-        </div>
-        <form id="upload-form" class="upload-form">
-          <p class="file-meta small-note" id="file-meta"></p>
-          <div class="file-input-wrapper">
-            <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file">
-            <button type="button" class="file-clear-btn" id="file-clear-btn" aria-label="Remove selected file" title="Remove file" hidden>
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-            <label for="file-input" class="file-input-label">
-              <i class="fa-solid fa-cloud-arrow-up"></i>
-              <span id="file-input-text">Choose file or drag here</span>
-            </label>
-          </div>
-          <button type="submit" class="btn btn-primary" id="upload-btn">
-            <i class="fa-solid fa-upload"></i> Upload File
-          </button>
-        </form>
-      </article>
 
       <section class="stats-grid">
         <article class="glass-card stat-card">

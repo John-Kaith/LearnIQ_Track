@@ -33,6 +33,7 @@
           <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
           <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
           <a href="admin-users.html" class="active"><i class="fa-solid fa-users"></i> Users</a>
+          <a href="admin-subjects.html"><i class="fa-solid fa-book-open"></i> Subjects</a>
           <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
           <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
           <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
@@ -61,11 +62,22 @@
             <h1>Users</h1>
             <p>View and manage all registered users.</p>
           </div>
-          <button id="refresh-users" class="btn btn-secondary">Refresh</button>
         </section>
 
-        <section class="glass-card fade-up delay-2">
-          <div class="search-box">
+        <section class="glass-card fade-up delay-2" style="padding: 1rem 1.25rem 1.25rem;">
+          <div class="workspace-tabs" role="tablist" aria-label="Filter users by role">
+            <button type="button" class="workspace-tab is-active" data-users-role-tab="all" role="tab" aria-selected="true">
+              All <span class="users-tab-count" id="users-tab-count-all">0</span>
+            </button>
+            <button type="button" class="workspace-tab" data-users-role-tab="student" role="tab" aria-selected="false">
+              Students <span class="users-tab-count" id="users-tab-count-student">0</span>
+            </button>
+            <button type="button" class="workspace-tab" data-users-role-tab="teacher" role="tab" aria-selected="false">
+              Teachers <span class="users-tab-count" id="users-tab-count-teacher">0</span>
+            </button>
+          </div>
+
+          <div class="search-box" style="margin-top:1rem;">
             <input id="users-search" type="search" placeholder="Search by name, ID, or role..." />
             <button id="users-reset" class="btn btn-secondary">Reset</button>
           </div>

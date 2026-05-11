@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Subjects | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="teacher-subjects-page">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
+        <a class="active" href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
+        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>My Subjects</h1>
+          <p>Pick a subject to view and manage only the lessons you uploaded for it.</p>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="content-stack lesson-workspace-main">
+          <article id="teacher-subjects-empty" class="glass-card content-card" hidden>
+            <h3>No subjects yet</h3>
+            <p class="content-subtitle" id="teacher-subjects-empty-text">
+              Your school has not set up any subjects yet. Please ask an administrator to add subjects in the database.
+            </p>
+          </article>
+
+          <article id="teacher-subjects-selection" class="glass-card content-card" hidden>
+            <h3>Subjects</h3>
+            <p class="content-subtitle">Each card shows how many of your uploads are tagged to that subject.</p>
+            <div id="teacher-subjects-list" class="lesson-grid"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add Subject modal -->
+  <div id="teacher-add-subject-modal" class="action-modal-backdrop" hidden>
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="teacher-add-subject-title">
+      <div class="action-modal-head">
+        <h3 id="teacher-add-subject-title">Add a new subject</h3>
+        <button id="teacher-add-subject-close" class="btn btn-ghost" type="button" aria-label="Close add subject dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p class="small-note">Create a new subject so you can group your uploaded lessons under it.</p>
+
+      <form id="teacher-add-subject-form" class="add-subject-form" autocomplete="off">
+        <label class="form-field">
+          <span class="small-note">Subject name <span class="required-mark">*</span></span>
+          <input type="text" id="teacher-add-subject-name" class="form-input" required maxlength="80" placeholder="e.g. Mathematics" />
+        </label>
+
+        <label class="form-field">
+          <span class="small-note">Description (optional)</span>
+          <textarea id="teacher-add-subject-description" class="form-input" rows="2" maxlength="240" placeholder="Short description shown on the subject card."></textarea>
+        </label>
+
+        <fieldset class="form-field add-subject-color-field">
+          <legend class="small-note">Card color</legend>
+          <div class="add-subject-swatches" id="teacher-add-subject-swatches" role="radiogroup" aria-label="Subject color">
+            <label class="swatch" style="--swatch:#60a5fa"><input type="radio" name="subject-color" value="#60a5fa" checked /></label>
+            <label class="swatch" style="--swatch:#34d399"><input type="radio" name="subject-color" value="#34d399" /></label>
+            <label class="swatch" style="--swatch:#f472b6"><input type="radio" name="subject-color" value="#f472b6" /></label>
+            <label class="swatch" style="--swatch:#facc15"><input type="radio" name="subject-color" value="#facc15" /></label>
+            <label class="swatch" style="--swatch:#fb923c"><input type="radio" name="subject-color" value="#fb923c" /></label>
+            <label class="swatch" style="--swatch:#a78bfa"><input type="radio" name="subject-color" value="#a78bfa" /></label>
+            <label class="swatch" style="--swatch:#22d3ee"><input type="radio" name="subject-color" value="#22d3ee" /></label>
+            <label class="swatch" style="--swatch:#f87171"><input type="radio" name="subject-color" value="#f87171" /></label>
+          </div>
+        </fieldset>
+
+        <p id="teacher-add-subject-error" class="small-note add-subject-error" hidden></p>
+
+        <div class="button-group">
+          <button id="teacher-add-subject-submit" type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-circle-plus"></i> Create Subject
+          </button>
+          <button id="teacher-add-subject-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

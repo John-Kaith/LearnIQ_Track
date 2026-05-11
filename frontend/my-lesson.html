@@ -32,8 +32,9 @@
 
       <nav class="side-links">
         <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
-        <a class="active" href="my-lesson.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a class="active" href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
         <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
@@ -55,12 +56,9 @@
     <main class="main-panel">
       <section class="glass-card panel-header">
         <div class="panel-title">
-          <h1>My Lesson</h1>
-          <p>Open published lessons, review content, answer quizzes, and continue activities.</p>
+          <h1 id="student-lesson-panel-title">My Lesson</h1>
+          <p id="student-lesson-panel-subtitle">Open a published lesson to review, take a quiz, or do an activity.</p>
         </div>
-        <button type="button" class="btn btn-secondary" id="student-refresh-lesson-btn">
-          <i class="fa-solid fa-rotate"></i> Refresh lessons
-        </button>
       </section>
 
       <section id="student-learning-block" class="dashboard-grid">
@@ -73,9 +71,10 @@
           </article>
 
           <article id="student-lesson-selection" class="glass-card content-card" hidden>
-            <h3>Published lessons</h3>
-            <p class="content-subtitle">Choose a lesson to open your AI-powered workspace.</p>
+            <h3 id="student-lesson-selection-title">Published lessons</h3>
+            <p class="content-subtitle" id="student-lesson-selection-subtitle">Choose a lesson to open your AI-powered workspace.</p>
             <div id="student-lesson-list" class="lesson-grid"></div>
+            <p id="student-lesson-empty-for-subject" class="small-note" hidden>No published lessons for this subject yet.</p>
           </article>
 
           <article id="student-workspace" class="glass-card content-card" hidden>

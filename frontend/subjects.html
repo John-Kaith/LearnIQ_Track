@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Settings | LearnIQ Track</title>
+  <title>Subjects | LearnIQ Track</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -13,7 +13,7 @@
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body class="teacher-learniq-page">
+<body class="subjects-page">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -21,26 +21,26 @@
           <span class="brand-mark">LQ</span>
           <span>
             <strong>LearnIQ Track</strong>
-            <small>Teacher LearnIQ</small>
+            <small>LearnIQ Module</small>
           </span>
         </a>
       </div>
 
       <nav class="side-links">
-        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
-        <a href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
-        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a class="active" href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="teacher-settings.html" class="active"><i class="fa-solid fa-gear"></i> Settings</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
-        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
-          <div class="avatar" id="student-avatar-initials">TC</div>
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">ST</div>
           <div class="user-chip-text">
-            <span id="student-display-name">Teacher</span>
-            <div class="small-note" id="student-display-track"></div>
+            <span id="student-display-name">Student</span>
+            <div class="small-note" id="student-display-track">STEM - 12 A</div>
           </div>
         </a>
         <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
@@ -50,14 +50,28 @@
     </aside>
 
     <main class="main-panel">
-      <section id="teacher-learniq-panel-head" class="glass-card panel-header">
+      <section class="glass-card panel-header">
         <div class="panel-title">
-          <h1>Settings</h1>
-          <p>Teacher workspace preferences will appear here as they are added.</p>
+          <h1>Subjects</h1>
+          <p>Pick a subject to see its published lessons.</p>
         </div>
       </section>
-      <section class="glass-card content-card fade-up delay-1">
-        <p class="small-note" style="margin:0;">You are signed in as a teacher. Use the sidebar to return to uploads or AI tools.</p>
+
+      <section class="dashboard-grid">
+        <div class="content-stack lesson-workspace-main">
+          <article id="subjects-empty" class="glass-card content-card" hidden>
+            <h3>No subjects yet</h3>
+            <p class="content-subtitle" id="subjects-empty-text">
+              Your school has not set up any subjects yet. Please ask an administrator to add subjects in the database.
+            </p>
+          </article>
+
+          <article id="subjects-selection" class="glass-card content-card" hidden>
+            <h3>Published subjects</h3>
+            <p class="content-subtitle">Each subject groups lessons published by your teachers.</p>
+            <div id="subjects-list" class="lesson-grid"></div>
+          </article>
+        </div>
       </section>
     </main>
   </div>

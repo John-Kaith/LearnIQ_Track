@@ -561,7 +561,7 @@ function setupLeaderboardPage() {
   }
 
   emptyCta?.addEventListener("click", () => {
-    window.location.href = "my-lesson.html";
+    window.location.href = "subjects.html";
   });
   retryBtn?.addEventListener("click", () => {
     defaultEmptyCopy();
@@ -1891,6 +1891,140 @@ async function openTeacherProfileModal(idNumber) {
   return openAdminProfilePreviewModal(idNumber, "Teacher profile");
 }
 
+// Admin Users page state — cached full list + active role tab + search term.
+// Allows tab switching + search filtering without re-hitting the server.
+let adminUsersCache = [];
+let adminUsersRoleFilter = "all";
+let adminUsersSearchTerm = "";
+
+function renderAdminUsersTable() {
+  const tableBody = document.querySelector('#users-table-body');
+  if (!tableBody) return;
+
+  const term = (adminUsersSearchTerm || "").trim().toLowerCase();
+  const role = (adminUsersRoleFilter || "all").toLowerCase();
+
+  const filtered = adminUsersCache.filter((u) => {
+    if (role !== "all") {
+      if (String(u.role || "").trim().toLowerCase() !== role) return false;
+    }
+    if (!term) return true;
+    const hay = [
+      u.full_name,
+      u.first_name,
+      u.last_name,
+      u.id_number,
+      u.email,
+      u.role,
+      u.approval_status,
+    ]
+      .map((v) => String(v || "").toLowerCase())
+      .join(" ");
+    return hay.includes(term);
+  });
+
+  if (!filtered.length) {
+    const msg = adminUsersCache.length
+      ? "No users match the current filter."
+      : "No users found.";
+    tableBody.innerHTML = `<tr><td colspan="6">${msg}</td></tr>`;
+    return;
+  }
+
+  tableBody.innerHTML = filtered
+    .map(
+      (user) => `
+      <tr>
+        <td>${escapeHtml(user.full_name || 'N/A')}</td>
+        <td>${escapeHtml(user.id_number || 'N/A')}</td>
+        <td>${escapeHtml(user.email || 'N/A')}</td>
+        <td>${escapeHtml(user.role || 'N/A')}</td>
+        <td>${formatStatusBadge(user.approval_status || 'pending')}</td>
+        <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
+      </tr>
+    `
+    )
+    .join('');
+}
+
+function updateAdminUsersTabCounts() {
+  const counts = { all: 0, student: 0, teacher: 0 };
+  for (const u of adminUsersCache) {
+    counts.all += 1;
+    const r = String(u.role || "").trim().toLowerCase();
+    if (r === "student") counts.student += 1;
+    else if (r === "teacher") counts.teacher += 1;
+  }
+  const ids = {
+    all: "users-tab-count-all",
+    student: "users-tab-count-student",
+    teacher: "users-tab-count-teacher",
+  };
+  for (const key of Object.keys(ids)) {
+    const el = document.getElementById(ids[key]);
+    if (el) el.textContent = String(counts[key]);
+  }
+}
+
+function setAdminUsersRoleFilter(role) {
+  adminUsersRoleFilter = (role || "all").toLowerCase();
+  document.querySelectorAll("[data-users-role-tab]").forEach((btn) => {
+    const isActive = btn.getAttribute("data-users-role-tab") === adminUsersRoleFilter;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  renderAdminUsersTable();
+}
+
+function setAdminUsersSearchTerm(term) {
+  adminUsersSearchTerm = String(term || "");
+  renderAdminUsersTable();
+}
+
+// Expose admin-users helpers on window so the page entry file (a separate
+// script) can always reach them no matter the cross-script timing.
+window.setAdminUsersRoleFilter = setAdminUsersRoleFilter;
+window.setAdminUsersSearchTerm = setAdminUsersSearchTerm;
+window.renderAdminUsersTable = renderAdminUsersTable;
+window.loadAllUsers = loadAllUsers;
+
+// Self-mounting: as soon as the Admin Users page DOM is ready, wire up the
+// tab + search + reset event listeners. This makes the page work even if
+// the page-specific entry file (admin-users.entry.js) has not yet attached
+// its own handlers, and is idempotent (data-users-handlers-bound guard).
+function setupAdminUsersPageHandlers() {
+  const tabsHost = document.querySelector(".workspace-tabs[aria-label='Filter users by role']");
+  if (!tabsHost) return; // not on the Admin Users page
+  if (tabsHost.dataset.usersHandlersBound === "1") return;
+  tabsHost.dataset.usersHandlersBound = "1";
+
+  document.querySelectorAll("[data-users-role-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const role = btn.getAttribute("data-users-role-tab") || "all";
+      setAdminUsersRoleFilter(role);
+    });
+  });
+
+  const searchInput = document.getElementById("users-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      setAdminUsersSearchTerm(e.target.value);
+    });
+  }
+
+  document.getElementById("users-reset")?.addEventListener("click", () => {
+    if (searchInput) searchInput.value = "";
+    setAdminUsersSearchTerm("");
+    setAdminUsersRoleFilter("all");
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupAdminUsersPageHandlers, { once: true });
+} else {
+  setupAdminUsersPageHandlers();
+}
+
 async function loadAllUsers() {
   const tableBody = document.querySelector('#users-table-body');
   if (!tableBody) return;
@@ -1901,21 +2035,10 @@ async function loadAllUsers() {
       tableBody.innerHTML = '<tr><td colspan="6">Failed to load users.</td></tr>';
       return;
     }
-
     const users = await response.json();
-
-    const rows = users.map(user => `
-      <tr>
-        <td>${user.full_name || 'N/A'}</td>
-        <td>${user.id_number || 'N/A'}</td>
-        <td>${user.email || 'N/A'}</td>
-        <td>${user.role || 'N/A'}</td>
-        <td>${formatStatusBadge(user.approval_status || 'pending')}</td>
-        <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
-      </tr>
-    `).join('');
-
-    tableBody.innerHTML = rows || '<tr><td colspan="6">No users found.</td></tr>';
+    adminUsersCache = Array.isArray(users) ? users : [];
+    updateAdminUsersTabCounts();
+    renderAdminUsersTable();
   } catch (error) {
     console.error('Failed to load all users:', error);
     tableBody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
@@ -2312,15 +2435,38 @@ function teacherLessonFileMetaLine(lesson) {
   return `${ft} • ${datePart}`;
 }
 
+function getTeacherDashboardSubjectFilter() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get("subject_id");
+    return sid && sid.trim() ? sid.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadTeacherDashboardLessons() {
   try {
-    const lessons = await fetchTeacherLessonsList();
-    
+    const allLessons = await fetchTeacherLessonsList();
+
+    // Optional subject filter coming from teacher-subjects.html.
+    const subjectFilter = getTeacherDashboardSubjectFilter();
+    let lessons = allLessons;
+    if (subjectFilter) {
+      if (subjectFilter === "__unassigned__") {
+        lessons = allLessons.filter((l) => !l.subject_id);
+      } else {
+        lessons = allLessons.filter((l) => String(l.subject_id || "") === subjectFilter);
+      }
+    }
+
     // Recent Lessons - all lessons sorted by created_at desc
     const recentLessonsList = document.getElementById('recent-lessons-list');
     if (recentLessonsList) {
       if (lessons.length === 0) {
-        recentLessonsList.innerHTML = '<p class="small-note">No uploaded lessons yet.</p>';
+        recentLessonsList.innerHTML = subjectFilter
+          ? '<p class="small-note">No uploaded lessons for this subject yet.</p>'
+          : '<p class="small-note">No uploaded lessons yet.</p>';
       } else {
         const sortedLessons = [...lessons].sort((a, b) => {
           const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -2356,7 +2502,9 @@ async function loadTeacherDashboardLessons() {
     if (publishedLessonsList) {
       const publishedLessons = lessons.filter((lesson) => lesson.is_published || lesson.published);
       if (publishedLessons.length === 0) {
-        publishedLessonsList.innerHTML = '<p class="small-note">No published lessons yet.</p>';
+        publishedLessonsList.innerHTML = subjectFilter
+          ? '<p class="small-note">No published lessons for this subject yet.</p>'
+          : '<p class="small-note">No published lessons yet.</p>';
       } else {
         publishedLessonsList.innerHTML = publishedLessons.map((lesson) => {
           const fname = escapeHtml(lesson.filename || "Untitled Lesson");
@@ -2390,7 +2538,9 @@ async function loadTeacherDashboardLessons() {
           (!lesson.lesson_content || !lesson.lesson_content.reviewer),
       );
       if (queuedLessons.length === 0) {
-        aiQueueList.innerHTML = '<p class="small-note">No lessons waiting for AI generation.</p>';
+        aiQueueList.innerHTML = subjectFilter
+          ? '<p class="small-note">No lessons waiting for AI generation under this subject.</p>'
+          : '<p class="small-note">No lessons waiting for AI generation.</p>';
       } else {
         aiQueueList.innerHTML = queuedLessons.map((lesson) => {
           const fname = escapeHtml(lesson.filename || "Untitled Lesson");
@@ -2571,7 +2721,7 @@ async function selectTeacherLesson(fileId, filename) {
   renderTeacherLessonsTable(lessons, fileId);
 }
 
-async function uploadFile(file) {
+async function uploadFile(file, subjectId = null) {
   const currentUser = getCurrentUserSession();
   if (!currentUser || !currentUser.id_number) {
     throw new Error("Teacher not logged in. Please log in again.");
@@ -2579,10 +2729,14 @@ async function uploadFile(file) {
 
   console.log("Uploading file:", file.name);
   console.log("teacher_id_number:", currentUser.id_number);
+  console.log("subject_id:", subjectId);
 
   const formData = new FormData();
   formData.append("file", file);
   formData.append("teacher_id_number", currentUser.id_number);
+  if (subjectId) {
+    formData.append("subject_id", subjectId);
+  }
 
   console.log("FormData contents:");
   for (let [key, value] of formData.entries()) {
@@ -2782,6 +2936,65 @@ async function runTeacherAiPack(previewBody) {
   }
 }
 
+async function hydrateTeacherDashboardSubjectHeader() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  const actions = document.getElementById("teacher-dashboard-header-actions");
+  const titleEl = document.getElementById("teacher-dashboard-panel-title");
+  const subtitleEl = document.getElementById("teacher-dashboard-panel-subtitle");
+
+  if (!subjectId) {
+    if (actions) actions.hidden = true;
+    return;
+  }
+  if (actions) actions.hidden = false;
+
+  if (subjectId === "__unassigned__") {
+    if (titleEl) titleEl.textContent = "Unassigned · Teacher LearnIQ";
+    if (subtitleEl) {
+      subtitleEl.textContent = "Lessons you uploaded that don't have a subject yet. Edit them to assign one.";
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch(apiUrl("/subjects"));
+    if (!res.ok) return;
+    const data = await res.json();
+    const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    const match = subjects.find((s) => String(s.id) === subjectId);
+    if (match && titleEl) {
+      titleEl.textContent = `${match.name} · Teacher LearnIQ`;
+    }
+    if (match && subtitleEl) {
+      subtitleEl.textContent = match.description
+        || "Manage the lessons you uploaded for this subject.";
+    }
+  } catch (e) {
+    console.log("DEBUG: hydrateTeacherDashboardSubjectHeader failed:", e);
+  }
+}
+
+async function loadTeacherSubjectOptions() {
+  const select = document.getElementById("upload-subject-select");
+  if (!select) return;
+  try {
+    const res = await fetch(apiUrl("/subjects"));
+    if (!res.ok) return;
+    const data = await res.json();
+    const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    const placeholder = '<option value="" disabled selected>Choose subject…</option>';
+    const opts = subjects
+      .map((s) => `<option value="${escapeHtml(String(s.id))}">${escapeHtml(s.name || "Untitled subject")}</option>`)
+      .join("");
+    select.innerHTML = placeholder + opts;
+    if (subjects.length === 0) {
+      select.innerHTML = '<option value="" disabled selected>No subjects available — add one in the database.</option>';
+    }
+  } catch (e) {
+    console.log("DEBUG: loadTeacherSubjectOptions failed:", e);
+  }
+}
+
 function setupTeacherDashboard() {
   const fileInput = document.querySelector("#file-input");
   const fileMeta = document.querySelector("#file-meta");
@@ -2789,9 +3002,19 @@ function setupTeacherDashboard() {
   const tbody = document.getElementById("teacher-lessons-tbody");
   const uploadBtn = document.getElementById("upload-btn");
   const clearBtn = document.getElementById("file-clear-btn");
+  const subjectSelect = document.getElementById("upload-subject-select");
 
   hydrateStudentSidebarChip();
   void initTeacherLearniqDashboardStatsIfPresent();
+
+  // Load subjects into the dropdown (Teacher LearnIQ page only).
+  if (subjectSelect) {
+    void loadTeacherSubjectOptions();
+  }
+
+  // If a subject filter is present in the URL, reveal the back link and tweak
+  // the header copy. Also try to swap the title to the subject name.
+  void hydrateTeacherDashboardSubjectHeader();
 
   // Load dashboard lessons on page load
   loadTeacherDashboardLessons();
@@ -2831,18 +3054,25 @@ function setupTeacherDashboard() {
     uploadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       console.log("Form submitted");
-      
+
       const selectedFile = fileInput?.files?.[0];
       if (!selectedFile) {
         if (fileMeta) fileMeta.textContent = "No file selected yet";
         return;
       }
-      
+
+      const subjectId = subjectSelect ? subjectSelect.value : "";
+      if (subjectSelect && !subjectId) {
+        showToast("Please choose a subject for this lesson.", "error");
+        subjectSelect.focus();
+        return;
+      }
+
       if (fileMeta) fileMeta.textContent = `Uploading ${selectedFile.name}…`;
       currentFileId = null;
       currentQuiz = [];
       try {
-        await uploadFile(selectedFile);
+        await uploadFile(selectedFile, subjectId || null);
         if (fileMeta) fileMeta.textContent = `Uploaded: ${selectedFile.name}`;
         fileInput.value = "";
       } catch (e) {
@@ -2917,6 +3147,1046 @@ function answersMatch(studentPick, correctAnswer) {
   return false;
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Subjects page (frontend/subjects.html) — student entry point that renders
+// subject cards using the SAME lesson-card design as my-lesson.html.
+// Clicking a card navigates to my-lesson.html?subject_id=<uuid>.
+// ───────────────────────────────────────────────────────────────────────────
+
+function buildSubjectCardHtml(subject) {
+  const safeId = String(subject.id).replace(/'/g, "\\'");
+  const color = subject.color || "#60a5fa";
+  const name = subject.name || "Untitled subject";
+  const description = subject.description || "Lessons grouped under this subject.";
+  const count = Number(subject.published_lesson_count || 0);
+  const lessonsLabel = count === 1 ? "1 lesson" : `${count} lessons`;
+  const targetUrl = `my-lesson.html?subject_id=${encodeURIComponent(subject.id)}`;
+  return `
+    <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+      <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
+      <div class="lesson-info">
+        <h4>${escapeHtml(name)}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${lessonsLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-bookmark"></i> Subject</span>
+        </div>
+        <p class="lesson-card-tagline">${escapeHtml(description)}</p>
+        <p class="lesson-card-features small-note">Reviewer • Quiz • Activities</p>
+      </div>
+      <div class="lesson-actions">
+        <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
+      </div>
+    </article>
+  `;
+}
+
+async function renderSubjectsPage() {
+  const listEl = document.getElementById("subjects-list");
+  const selectionEl = document.getElementById("subjects-selection");
+  const emptyEl = document.getElementById("subjects-empty");
+  if (!listEl || !selectionEl || !emptyEl) return;
+
+  try {
+    const [subjectsRes, lessonsRes] = await Promise.all([
+      fetch(apiUrl("/subjects")),
+      fetch(apiUrl("/student/lessons")),
+    ]);
+
+    let subjects = [];
+    if (subjectsRes.ok) {
+      const data = await subjectsRes.json();
+      subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    }
+
+    let lessons = [];
+    if (lessonsRes.ok) {
+      const data = await lessonsRes.json();
+      lessons = Array.isArray(data.lessons) ? data.lessons : [];
+    }
+
+    // Recompute counts from the freshly fetched published lessons (in case
+    // /subjects count is stale) and inject an "Unassigned" virtual subject
+    // for legacy lessons without subject_id.
+    const liveCounts = lessons.reduce((acc, l) => {
+      const sid = l.subject_id ? String(l.subject_id) : "__unassigned__";
+      acc[sid] = (acc[sid] || 0) + 1;
+      return acc;
+    }, {});
+    subjects = subjects.map((s) => ({
+      ...s,
+      published_lesson_count:
+        liveCounts[String(s.id)] != null
+          ? liveCounts[String(s.id)]
+          : (s.published_lesson_count || 0),
+    }));
+    if (liveCounts["__unassigned__"]) {
+      subjects.push({
+        id: "__unassigned__",
+        name: "Unassigned",
+        description: "Published lessons that don't have a subject yet.",
+        color: "#94a3b8",
+        published_lesson_count: liveCounts["__unassigned__"],
+      });
+    }
+
+    if (subjects.length === 0) {
+      selectionEl.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+
+    emptyEl.hidden = true;
+    selectionEl.hidden = false;
+    listEl.innerHTML = subjects.map(buildSubjectCardHtml).join("");
+  } catch (e) {
+    console.log("DEBUG: renderSubjectsPage failed:", e);
+    selectionEl.hidden = true;
+    emptyEl.hidden = false;
+    const text = document.getElementById("subjects-empty-text");
+    if (text) text.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+  }
+}
+
+function setupSubjectsPage() {
+  console.log("PAGE INIT RUNNING: setupSubjectsPage() called");
+  hydrateStudentSidebarChip();
+  void hydrateSidebarProfileFromDatabase();
+
+  document.getElementById("subjects-refresh-btn")?.addEventListener("click", () => {
+    renderSubjectsPage();
+  });
+
+  void renderSubjectsPage();
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Teacher Subjects page (frontend/teacher-subjects.html) — same lesson-card
+// design as student subjects, but lesson counts are scoped to the signed-in
+// teacher's own uploads. Clicking a card filters the teacher dashboard.
+// ───────────────────────────────────────────────────────────────────────────
+
+function buildTeacherSubjectCardHtml(subject) {
+  const safeId = String(subject.id).replace(/'/g, "\\'");
+  const color = subject.color || "#60a5fa";
+  const name = subject.name || "Untitled subject";
+  const description = subject.description || "Lessons grouped under this subject.";
+  const myCount = Number(subject.my_lesson_count || 0);
+  const publishedCount = Number(subject.my_published_count || 0);
+  const myLabel = myCount === 1 ? "1 of your lessons" : `${myCount} of your lessons`;
+  const pubLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
+  const targetUrl = `teacher-learniq-dashboard.html?subject_id=${encodeURIComponent(subject.id)}`;
+  return `
+    <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+      <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
+      <div class="lesson-info">
+        <h4>${escapeHtml(name)}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${myLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-eye"></i> ${pubLabel}</span>
+        </div>
+        <p class="lesson-card-tagline">${escapeHtml(description)}</p>
+        <p class="lesson-card-features small-note">Upload • Generate • Publish</p>
+      </div>
+      <div class="lesson-actions">
+        <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
+      </div>
+    </article>
+  `;
+}
+
+async function renderTeacherSubjectsPage() {
+  const listEl = document.getElementById("teacher-subjects-list");
+  const selectionEl = document.getElementById("teacher-subjects-selection");
+  const emptyEl = document.getElementById("teacher-subjects-empty");
+  const emptyText = document.getElementById("teacher-subjects-empty-text");
+  if (!listEl || !selectionEl || !emptyEl) return;
+
+  const currentUser = getCurrentUserSession();
+  if (!currentUser || !currentUser.id_number) {
+    selectionEl.hidden = true;
+    emptyEl.hidden = false;
+    if (emptyText) emptyText.textContent = "Please sign in as a teacher to view your subjects.";
+    return;
+  }
+
+  try {
+    const [subjectsRes, lessonsRes] = await Promise.all([
+      fetch(apiUrl("/subjects")),
+      fetch(apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(currentUser.id_number)}`)),
+    ]);
+
+    let subjects = [];
+    if (subjectsRes.ok) {
+      const data = await subjectsRes.json();
+      subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    }
+
+    let myLessons = [];
+    if (lessonsRes.ok) {
+      const data = await lessonsRes.json();
+      myLessons = Array.isArray(data.lessons) ? data.lessons : [];
+    }
+
+    // Count THIS teacher's lessons per subject (total + published).
+    const totals = {};
+    const published = {};
+    for (const lesson of myLessons) {
+      const sid = lesson.subject_id ? String(lesson.subject_id) : "__unassigned__";
+      totals[sid] = (totals[sid] || 0) + 1;
+      if (lesson.is_published || lesson.published) {
+        published[sid] = (published[sid] || 0) + 1;
+      }
+    }
+
+    subjects = subjects.map((s) => {
+      const key = String(s.id);
+      return {
+        ...s,
+        my_lesson_count: totals[key] || 0,
+        my_published_count: published[key] || 0,
+      };
+    });
+
+    if (totals["__unassigned__"]) {
+      subjects.push({
+        id: "__unassigned__",
+        name: "Unassigned",
+        description: "Your lessons that don't have a subject yet. Edit them to assign one.",
+        color: "#94a3b8",
+        my_lesson_count: totals["__unassigned__"],
+        my_published_count: published["__unassigned__"] || 0,
+      });
+    }
+
+    if (subjects.length === 0) {
+      selectionEl.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+
+    emptyEl.hidden = true;
+    selectionEl.hidden = false;
+    listEl.innerHTML = subjects.map(buildTeacherSubjectCardHtml).join("");
+  } catch (e) {
+    console.log("DEBUG: renderTeacherSubjectsPage failed:", e);
+    selectionEl.hidden = true;
+    emptyEl.hidden = false;
+    if (emptyText) emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+  }
+}
+
+function setupTeacherSubjectsPage() {
+  console.log("PAGE INIT RUNNING: setupTeacherSubjectsPage() called");
+  hydrateStudentSidebarChip();
+  void hydrateSidebarProfileFromDatabase();
+
+  document.getElementById("teacher-subjects-refresh-btn")?.addEventListener("click", () => {
+    renderTeacherSubjectsPage();
+  });
+
+  setupTeacherAddSubjectModal();
+
+  void renderTeacherSubjectsPage();
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Admin Subjects page (frontend/admin-subjects.html) — drill-down flow:
+//   Default view      → Teacher profile cards
+//   ?teacher_id=X     → Subjects for that teacher (only subjects they teach)
+//   ?teacher_id=X
+//     &subject_id=Y   → Lessons by that teacher under that subject
+//
+// The page also retains an "Add Subject" modal in the header for global
+// subject management (subjects are school-wide and shared across teachers).
+// ───────────────────────────────────────────────────────────────────────────
+
+let adminSubjectsCache = [];
+let adminTeachersCache = [];
+let adminAllLessonsCache = [];
+const UNASSIGNED_SUBJECT_ID = "__unassigned__";
+
+function getAdminSubjectsViewParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    teacherId: (params.get("teacher_id") || "").trim(),
+    subjectId: (params.get("subject_id") || "").trim(),
+  };
+}
+
+function teacherInitialsFromName(name) {
+  const cleaned = (name || "").trim();
+  if (!cleaned) return "T";
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function buildAdminTeacherCardHtml(teacher, lessonStats) {
+  const tid = String(teacher.id_number || "").replace(/'/g, "\\'");
+  const safeTid = escapeHtml(teacher.id_number || "");
+  const firstName = teacher.first_name || "";
+  const lastName = teacher.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim() || teacher.email || "Unnamed Teacher";
+  const initials = teacherInitialsFromName(fullName);
+  const subjectCount = Number(lessonStats?.subject_count || 0);
+  const lessonCount = Number(lessonStats?.lesson_count || 0);
+  const publishedCount = Number(lessonStats?.published_count || 0);
+  const subjectLabel = subjectCount === 1 ? "1 subject" : `${subjectCount} subjects`;
+  const lessonLabel = lessonCount === 1 ? "1 lesson" : `${lessonCount} lessons`;
+  const publishedLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
+  const drillUrl = `admin-subjects.html?teacher_id=${encodeURIComponent(teacher.id_number || "")}`;
+  return `
+    <article class="lesson-card subject-card-themed admin-teacher-card" data-teacher-id="${safeTid}" style="--subject-color: #60a5fa;" onclick="window.location.href='${drillUrl}'">
+      <div class="lesson-card-icon admin-teacher-card-avatar">${escapeHtml(initials)}</div>
+      <div class="lesson-info">
+        <h4>${escapeHtml(fullName)}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-book-open"></i> ${subjectLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${lessonLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-eye"></i> ${publishedLabel}</span>
+        </div>
+        <p class="lesson-card-tagline">ID No.: ${safeTid || "—"}</p>
+        <p class="lesson-card-features small-note">Tap to view this teacher's subjects.</p>
+      </div>
+      <div class="lesson-actions">
+        <button type="button" class="btn btn-primary btn-small" onclick="event.stopPropagation(); window.location.href='${drillUrl}'">
+          <i class="fa-solid fa-arrow-right"></i> Open Subjects
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function buildAdminSubjectDrillCardHtml(subject, teacherIdNumber, stats) {
+  const safeSid = String(subject.id).replace(/'/g, "\\'");
+  const color = subject.color || "#60a5fa";
+  const name = subject.name || "Untitled subject";
+  const description = subject.description || "No description set.";
+  const lessonCount = Number(stats?.lesson_count || 0);
+  const publishedCount = Number(stats?.published_count || 0);
+  const lessonLabel = lessonCount === 1 ? "1 lesson" : `${lessonCount} lessons`;
+  const publishedLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
+  const drillUrl = `admin-subjects.html?teacher_id=${encodeURIComponent(teacherIdNumber || "")}&subject_id=${encodeURIComponent(subject.id || "")}`;
+  return `
+    <article class="lesson-card subject-card-themed" data-subject-id="${safeSid}" style="--subject-color: ${escapeHtml(color)};" onclick="window.location.href='${drillUrl}'">
+      <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
+      <div class="lesson-info">
+        <h4>${escapeHtml(name)}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${lessonLabel}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-eye"></i> ${publishedLabel}</span>
+        </div>
+        <p class="lesson-card-tagline">${escapeHtml(description)}</p>
+        <p class="lesson-card-features small-note">Tap to see this teacher's lessons.</p>
+      </div>
+      <div class="lesson-actions">
+        <button type="button" class="btn btn-primary btn-small" onclick="event.stopPropagation(); window.location.href='${drillUrl}'">
+          <i class="fa-solid fa-arrow-right"></i> Open Lessons
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function buildAdminLessonCardHtml(lesson) {
+  const filename = lesson.filename || "Untitled lesson";
+  const fileType = (lesson.file_type || "file").toString().toUpperCase();
+  const isPublished = !!(lesson.is_published || lesson.published);
+  const createdAt = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "—";
+  const quizCount = Number(lesson.quiz_count || 0);
+  const hasReviewer = !!lesson.has_reviewer;
+  const hasActivities = !!lesson.has_activities;
+  return `
+    <article class="lesson-card">
+      <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
+      <div class="lesson-info">
+        <h4>${escapeHtml(filename)}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-file"></i> ${escapeHtml(fileType)}</span>
+          <span class="lesson-card-pill ${isPublished ? "lesson-pill-published" : "lesson-pill-draft"}">
+            <i class="fa-solid ${isPublished ? "fa-circle-check" : "fa-clock"}"></i> ${isPublished ? "Published" : "Draft"}
+          </span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ${escapeHtml(createdAt)}</span>
+        </div>
+        <p class="lesson-card-tagline">
+          Reviewer: ${hasReviewer ? "Yes" : "No"} • Quiz items: ${quizCount} • Activities: ${hasActivities ? "Yes" : "No"}
+        </p>
+      </div>
+    </article>
+  `;
+}
+
+async function fetchAdminTeachers() {
+  const res = await fetch(apiUrl("/users"));
+  if (!res.ok) throw new Error(`/users status ${res.status}`);
+  const rows = await res.json();
+  const list = Array.isArray(rows) ? rows : (rows.users || []);
+  return list.filter((u) => {
+    const role = String(u.role || "").trim().toLowerCase();
+    if (role !== "teacher") return false;
+    const status = String(u.approval_status || "approved").trim().toLowerCase();
+    // Show approved teachers by default; pending/rejected are hidden from the
+    // drill-down because they normally cannot upload lessons anyway.
+    return status === "approved";
+  });
+}
+
+async function fetchAdminAllLessons() {
+  const res = await fetch(apiUrl("/lessons"));
+  if (!res.ok) throw new Error(`/lessons status ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data.lessons) ? data.lessons : [];
+}
+
+async function fetchAdminSubjects() {
+  const res = await fetch(apiUrl("/subjects"));
+  if (!res.ok) throw new Error(`/subjects status ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data.subjects) ? data.subjects : [];
+}
+
+function computeStatsByTeacher(lessons) {
+  const stats = {};
+  for (const l of lessons) {
+    const tid = (l.teacher_id_number || "").trim();
+    if (!tid) continue;
+    if (!stats[tid]) stats[tid] = { lesson_count: 0, published_count: 0, subjects: new Set() };
+    stats[tid].lesson_count += 1;
+    if (l.is_published || l.published) stats[tid].published_count += 1;
+    const sid = l.subject_id ? String(l.subject_id) : UNASSIGNED_SUBJECT_ID;
+    stats[tid].subjects.add(sid);
+  }
+  for (const t of Object.keys(stats)) {
+    stats[t].subject_count = stats[t].subjects.size;
+    delete stats[t].subjects;
+  }
+  return stats;
+}
+
+function showAdminEmpty(title, text) {
+  const empty = document.getElementById("admin-empty-state");
+  const t = document.getElementById("admin-empty-title");
+  const p = document.getElementById("admin-empty-text");
+  if (empty) empty.hidden = false;
+  if (t) t.textContent = title;
+  if (p) p.textContent = text;
+}
+
+function hideAllAdminViews() {
+  ["admin-empty-state", "admin-teachers-view", "admin-subjects-view", "admin-lessons-view"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+}
+
+function setAdminSubjectsHeader({ title, subtitle, backHref, backText, showAddButton }) {
+  const titleEl = document.getElementById("admin-subjects-title");
+  const subEl = document.getElementById("admin-subjects-subtitle");
+  const backEl = document.getElementById("admin-subjects-back-link");
+  const backTxtEl = document.getElementById("admin-subjects-back-text");
+  const addBtn = document.getElementById("admin-add-subject-btn");
+
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = subtitle;
+  if (backEl) {
+    if (backHref) {
+      backEl.hidden = false;
+      backEl.setAttribute("href", backHref);
+    } else {
+      backEl.hidden = true;
+    }
+  }
+  if (backTxtEl && backText) backTxtEl.textContent = backText;
+  if (addBtn) addBtn.hidden = !showAddButton;
+}
+
+async function renderAdminTeachersView() {
+  hideAllAdminViews();
+  setAdminSubjectsHeader({
+    title: "Teachers",
+    subtitle: "Pick a teacher to see the subjects they have uploaded lessons for.",
+    backHref: null,
+    backText: "",
+    showAddButton: true,
+  });
+
+  const viewEl = document.getElementById("admin-teachers-view");
+  const listEl = document.getElementById("admin-teachers-list");
+  if (!viewEl || !listEl) return;
+
+  try {
+    const [teachers, lessons] = await Promise.all([
+      fetchAdminTeachers(),
+      fetchAdminAllLessons(),
+    ]);
+    adminTeachersCache = teachers;
+    adminAllLessonsCache = lessons;
+
+    if (!teachers.length) {
+      showAdminEmpty("No teachers yet", "There are no approved teachers in the system yet.");
+      return;
+    }
+
+    const statsByTeacher = computeStatsByTeacher(lessons);
+    teachers.sort((a, b) => {
+      const an = `${a.first_name || ""} ${a.last_name || ""}`.trim().toLowerCase();
+      const bn = `${b.first_name || ""} ${b.last_name || ""}`.trim().toLowerCase();
+      return an.localeCompare(bn);
+    });
+
+    viewEl.hidden = false;
+    listEl.innerHTML = teachers
+      .map((t) => buildAdminTeacherCardHtml(t, statsByTeacher[String(t.id_number || "").trim()]))
+      .join("");
+  } catch (e) {
+    console.log("DEBUG: renderAdminTeachersView failed:", e);
+    showAdminEmpty("Cannot load teachers", "Is the LearnIQ Track backend running?");
+  }
+}
+
+async function renderAdminTeacherSubjectsView(teacherIdNumber) {
+  hideAllAdminViews();
+
+  // Set placeholder header so the Back button works immediately.
+  setAdminSubjectsHeader({
+    title: "Loading subjects…",
+    subtitle: "Fetching this teacher's subjects from the database.",
+    backHref: "admin-subjects.html",
+    backText: "Back to Teachers",
+    showAddButton: false,
+  });
+
+  // Resolve teacher name (best-effort).
+  let teacherName = `Teacher ${teacherIdNumber}`;
+  try {
+    if (!adminTeachersCache.length) {
+      adminTeachersCache = await fetchAdminTeachers();
+    }
+    const teacher = adminTeachersCache.find(
+      (t) => String(t.id_number || "").trim() === String(teacherIdNumber)
+    );
+    if (teacher) {
+      const composed = [teacher.first_name, teacher.last_name].filter(Boolean).join(" ").trim();
+      teacherName = composed || teacher.full_name || teacher.email || teacherName;
+    }
+  } catch (e) {
+    console.log("DEBUG: teacher subjects view — teacher lookup skipped:", e);
+  }
+
+  // ── ACTUAL FETCH FROM DATABASE ─────────────────────────────────────────
+  // GET /teacher/lessons?teacher_id_number=X is backed by Supabase, so we
+  // get real lesson rows here. Each row already includes subject_id.
+  let lessons = [];
+  try {
+    const res = await fetch(
+      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`)
+    );
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`/teacher/lessons status ${res.status}: ${errBody}`);
+    }
+    const data = await res.json();
+    lessons = Array.isArray(data.lessons) ? data.lessons : [];
+  } catch (e) {
+    console.log("DEBUG: renderAdminTeacherSubjectsView — lessons fetch failed:", e);
+    setAdminSubjectsHeader({
+      title: `${teacherName}'s Subjects`,
+      subtitle: "We couldn't load this teacher's lessons. See console for details.",
+      backHref: "admin-subjects.html",
+      backText: "Back to Teachers",
+      showAddButton: false,
+    });
+    showAdminEmpty(
+      "Cannot load subjects",
+      "The backend returned an error while reading this teacher's lessons. Is the LearnIQ Track backend running?"
+    );
+    return;
+  }
+
+  // Fetch global subjects (for names/colors). Failure is non-fatal — we fall
+  // back to showing subject IDs.
+  let subjects = [];
+  try {
+    subjects = adminSubjectsCache.length ? adminSubjectsCache : await fetchAdminSubjects();
+    adminSubjectsCache = subjects;
+  } catch (e) {
+    console.log("DEBUG: teacher subjects view — /subjects fetch skipped:", e);
+    subjects = [];
+  }
+
+  setAdminSubjectsHeader({
+    title: `${teacherName}'s Subjects`,
+    subtitle: "Click a subject card to see lessons uploaded by this teacher under that subject.",
+    backHref: "admin-subjects.html",
+    backText: "Back to Teachers",
+    showAddButton: false,
+  });
+  const viewTitle = document.getElementById("admin-subjects-view-title");
+  if (viewTitle) viewTitle.textContent = `Subjects taught by ${teacherName}`;
+
+  if (!lessons.length) {
+    showAdminEmpty(
+      "No lessons uploaded yet",
+      `${teacherName} has not uploaded any lessons yet, so there are no subjects to show.`
+    );
+    return;
+  }
+
+  // Group lessons by subject_id and compute counts.
+  const grouped = {};
+  for (const l of lessons) {
+    const sid = l.subject_id ? String(l.subject_id) : UNASSIGNED_SUBJECT_ID;
+    if (!grouped[sid]) grouped[sid] = { lesson_count: 0, published_count: 0 };
+    grouped[sid].lesson_count += 1;
+    if (l.is_published || l.published) grouped[sid].published_count += 1;
+  }
+
+  const subjectById = {};
+  for (const s of subjects) subjectById[String(s.id)] = s;
+  const cards = [];
+  for (const sid of Object.keys(grouped)) {
+    let subject;
+    if (sid === UNASSIGNED_SUBJECT_ID) {
+      subject = { id: UNASSIGNED_SUBJECT_ID, name: "Unassigned", description: "Lessons not yet tagged with a subject.", color: "#9ca3af" };
+    } else {
+      subject = subjectById[sid] || { id: sid, name: "Unknown subject", description: "", color: "#9ca3af" };
+    }
+    cards.push(buildAdminSubjectDrillCardHtml(subject, teacherIdNumber, grouped[sid]));
+  }
+
+  const viewEl = document.getElementById("admin-subjects-view");
+  const listEl = document.getElementById("admin-subjects-list");
+  if (!viewEl || !listEl) return;
+  viewEl.hidden = false;
+  listEl.innerHTML = cards.join("");
+}
+
+async function renderAdminTeacherLessonsView(teacherIdNumber, subjectId) {
+  hideAllAdminViews();
+
+  // Set a temporary header right away so the Back link works even if the
+  // fetch fails or returns no rows.
+  setAdminSubjectsHeader({
+    title: "Loading lessons…",
+    subtitle: "Fetching lessons from the database.",
+    backHref: `admin-subjects.html?teacher_id=${encodeURIComponent(teacherIdNumber)}`,
+    backText: "Back to Subjects",
+    showAddButton: false,
+  });
+
+  // Resolve teacher name (best-effort, never blocks the lessons fetch).
+  let teacherName = `Teacher ${teacherIdNumber}`;
+  try {
+    if (!adminTeachersCache.length) {
+      adminTeachersCache = await fetchAdminTeachers();
+    }
+    const teacher = adminTeachersCache.find(
+      (t) => String(t.id_number || "").trim() === String(teacherIdNumber)
+    );
+    if (teacher) {
+      const composed = [teacher.first_name, teacher.last_name].filter(Boolean).join(" ").trim();
+      teacherName = composed || teacher.full_name || teacher.email || teacherName;
+    }
+  } catch (e) {
+    console.log("DEBUG: lessons view — teacher lookup skipped:", e);
+  }
+
+  // Resolve subject name (best-effort, never blocks the lessons fetch).
+  let subjectName = "Subject";
+  try {
+    if (subjectId === UNASSIGNED_SUBJECT_ID) {
+      subjectName = "Unassigned";
+    } else {
+      const subjects = adminSubjectsCache.length ? adminSubjectsCache : await fetchAdminSubjects();
+      adminSubjectsCache = subjects;
+      const subj = subjects.find((s) => String(s.id) === String(subjectId));
+      if (subj && subj.name) subjectName = subj.name;
+    }
+  } catch (e) {
+    console.log("DEBUG: lessons view — subject lookup skipped:", e);
+  }
+
+  // ── ACTUAL LESSON FETCH FROM DATABASE ──────────────────────────────────
+  // GET /teacher/lessons?teacher_id_number=X is backed by db_supabase.list_teacher_lessons(),
+  // which directly queries the Supabase `lessons` table. We filter the
+  // returned rows client-side by subject_id.
+  let allLessons = [];
+  try {
+    const res = await fetch(
+      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`)
+    );
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`/teacher/lessons status ${res.status}: ${errBody}`);
+    }
+    const data = await res.json();
+    allLessons = Array.isArray(data.lessons) ? data.lessons : [];
+  } catch (e) {
+    console.log("DEBUG: renderAdminTeacherLessonsView — lessons fetch failed:", e);
+    setAdminSubjectsHeader({
+      title: `${subjectName} — ${teacherName}`,
+      subtitle: "We couldn't load the lessons. See console for details.",
+      backHref: `admin-subjects.html?teacher_id=${encodeURIComponent(teacherIdNumber)}`,
+      backText: `Back to ${teacherName}'s Subjects`,
+      showAddButton: false,
+    });
+    showAdminEmpty(
+      "Cannot load lessons",
+      "The backend returned an error while fetching this teacher's lessons. Is the LearnIQ Track backend running?"
+    );
+    return;
+  }
+
+  const filtered = allLessons.filter((l) => {
+    const sid = l.subject_id ? String(l.subject_id) : UNASSIGNED_SUBJECT_ID;
+    return sid === String(subjectId);
+  });
+
+  setAdminSubjectsHeader({
+    title: `${subjectName} — ${teacherName}`,
+    subtitle: filtered.length
+      ? `${filtered.length} lesson${filtered.length === 1 ? "" : "s"} uploaded by ${teacherName} under ${subjectName}.`
+      : `No lessons by ${teacherName} under ${subjectName} yet.`,
+    backHref: `admin-subjects.html?teacher_id=${encodeURIComponent(teacherIdNumber)}`,
+    backText: `Back to ${teacherName}'s Subjects`,
+    showAddButton: false,
+  });
+
+  const viewTitle = document.getElementById("admin-lessons-view-title");
+  if (viewTitle) viewTitle.textContent = `Lessons in ${subjectName}`;
+
+  if (!filtered.length) {
+    showAdminEmpty(
+      "No lessons in this subject",
+      `${teacherName} has not uploaded any lessons under ${subjectName} yet.`
+    );
+    return;
+  }
+
+  const viewEl = document.getElementById("admin-lessons-view");
+  const listEl = document.getElementById("admin-lessons-list");
+  if (!viewEl || !listEl) return;
+
+  filtered.sort((a, b) => {
+    const ad = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bd = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bd - ad;
+  });
+
+  viewEl.hidden = false;
+  listEl.innerHTML = filtered.map(buildAdminLessonCardHtml).join("");
+}
+
+async function renderAdminSubjectsPage() {
+  const { teacherId, subjectId } = getAdminSubjectsViewParams();
+  if (teacherId && subjectId) {
+    await renderAdminTeacherLessonsView(teacherId, subjectId);
+  } else if (teacherId) {
+    await renderAdminTeacherSubjectsView(teacherId);
+  } else {
+    await renderAdminTeachersView();
+  }
+}
+
+function setAdminSubjectModalMode(mode, subject) {
+  const titleEl = document.getElementById("admin-subject-modal-title");
+  const hintEl = document.getElementById("admin-subject-modal-hint");
+  const submitBtn = document.getElementById("admin-subject-submit");
+  const editIdInput = document.getElementById("admin-subject-edit-id");
+  const nameInput = document.getElementById("admin-subject-name");
+  const descInput = document.getElementById("admin-subject-description");
+  const errorEl = document.getElementById("admin-subject-form-error");
+
+  if (errorEl) {
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+  }
+
+  if (mode === "edit" && subject) {
+    if (titleEl) titleEl.textContent = "Edit subject";
+    if (hintEl) hintEl.textContent = "Update the name, description, or color of this subject.";
+    if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save changes';
+    if (editIdInput) editIdInput.value = String(subject.id);
+    if (nameInput) nameInput.value = subject.name || "";
+    if (descInput) descInput.value = subject.description || "";
+    const wantedColor = (subject.color || "").trim();
+    const radios = document.querySelectorAll('input[name="admin-subject-color"]');
+    let matched = false;
+    radios.forEach((r) => {
+      if (r.value.toLowerCase() === wantedColor.toLowerCase()) {
+        r.checked = true;
+        matched = true;
+      }
+    });
+    if (!matched && radios.length > 0) radios[0].checked = true;
+  } else {
+    if (titleEl) titleEl.textContent = "Add a new subject";
+    if (hintEl) hintEl.textContent = "Create a new subject so teachers can group their uploaded lessons under it.";
+    if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-circle-plus"></i> Create Subject';
+    if (editIdInput) editIdInput.value = "";
+    if (nameInput) nameInput.value = "";
+    if (descInput) descInput.value = "";
+    const first = document.querySelector('input[name="admin-subject-color"]');
+    if (first) first.checked = true;
+  }
+}
+
+function openAdminSubjectAddModal() {
+  const modal = document.getElementById("admin-subject-modal");
+  if (!modal) return;
+  setAdminSubjectModalMode("add", null);
+  modal.removeAttribute("hidden");
+  document.getElementById("admin-subject-name")?.focus();
+}
+
+function openAdminSubjectEditModal(subjectId) {
+  const modal = document.getElementById("admin-subject-modal");
+  if (!modal) return;
+  const subject = adminSubjectsCache.find((s) => String(s.id) === String(subjectId));
+  if (!subject) {
+    showToast("Subject not found. Refreshing list.", "error");
+    void renderAdminSubjectsPage();
+    return;
+  }
+  setAdminSubjectModalMode("edit", subject);
+  modal.removeAttribute("hidden");
+  document.getElementById("admin-subject-name")?.focus();
+}
+
+function closeAdminSubjectModal() {
+  const modal = document.getElementById("admin-subject-modal");
+  if (modal) modal.setAttribute("hidden", "");
+}
+
+async function adminDeleteSubject(subjectId) {
+  const subject = adminSubjectsCache.find((s) => String(s.id) === String(subjectId));
+  const subjectName = subject?.name || "this subject";
+  const total = Number(subject?.total_lesson_count || 0);
+
+  let ok = false;
+  if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+    ok = await window.LearnIQConfirm.show({
+      title: `Delete "${subjectName}"?`,
+      message: total > 0
+        ? `${total} lesson${total === 1 ? "" : "s"} are tagged with this subject. They will become "Unassigned" after deletion. Continue?`
+        : "This subject has no lessons tagged to it. Continue?",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      danger: true,
+    });
+  } else {
+    ok = window.confirm(`Delete "${subjectName}"? This cannot be undone.`);
+  }
+  if (!ok) return;
+
+  try {
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}`), { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Delete failed (status ${res.status}).`);
+    }
+    showToast(`Subject "${subjectName}" deleted.`, "success");
+    await renderAdminSubjectsPage();
+  } catch (e) {
+    console.log("DEBUG: adminDeleteSubject failed:", e);
+    showToast(e?.message || "Could not delete subject.", "error");
+  }
+}
+
+window.openAdminSubjectEditModal = openAdminSubjectEditModal;
+window.adminDeleteSubject = adminDeleteSubject;
+
+function setupAdminSubjectModal() {
+  const modal = document.getElementById("admin-subject-modal");
+  const openBtn = document.getElementById("admin-add-subject-btn");
+  const closeBtn = document.getElementById("admin-subject-modal-close");
+  const cancelBtn = document.getElementById("admin-subject-cancel");
+  const form = document.getElementById("admin-subject-form");
+  const nameInput = document.getElementById("admin-subject-name");
+  const descInput = document.getElementById("admin-subject-description");
+  const submitBtn = document.getElementById("admin-subject-submit");
+  const errorEl = document.getElementById("admin-subject-form-error");
+
+  if (!modal || !openBtn || !form) return;
+
+  openBtn.addEventListener("click", () => openAdminSubjectAddModal());
+  closeBtn?.addEventListener("click", closeAdminSubjectModal);
+  cancelBtn?.addEventListener("click", closeAdminSubjectModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeAdminSubjectModal();
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (errorEl) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+    const editId = (document.getElementById("admin-subject-edit-id")?.value || "").trim();
+    const name = (nameInput?.value || "").trim();
+    const description = (descInput?.value || "").trim();
+    const colorInput = form.querySelector('input[name="admin-subject-color"]:checked');
+    const color = colorInput ? colorInput.value : "#60a5fa";
+
+    if (!name) {
+      if (errorEl) {
+        errorEl.textContent = "Subject name is required.";
+        errorEl.hidden = false;
+      }
+      nameInput?.focus();
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.dataset.prevHtml = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    }
+
+    try {
+      let res;
+      if (editId) {
+        res = await fetch(apiUrl(`/subjects/${encodeURIComponent(editId)}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description, color }),
+        });
+      } else {
+        res = await fetch(apiUrl("/subjects"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description, color }),
+        });
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Request failed (status ${res.status}).`);
+      }
+      closeAdminSubjectModal();
+      showToast(editId ? `Subject "${name}" updated.` : `Subject "${name}" added.`, "success");
+      await renderAdminSubjectsPage();
+    } catch (e) {
+      console.log("DEBUG: admin subject save failed:", e);
+      if (errorEl) {
+        errorEl.textContent = e?.message || "Could not save subject. Please try again.";
+        errorEl.hidden = false;
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = submitBtn.dataset.prevHtml || 'Save';
+      }
+    }
+  });
+}
+
+function setupAdminSubjectsPage() {
+  console.log("PAGE INIT RUNNING: setupAdminSubjectsPage() called");
+  if (typeof hydrateAdminSidebarFromSession === "function") {
+    hydrateAdminSidebarFromSession();
+  }
+
+  setupAdminSubjectModal();
+
+  document.getElementById("admin-subjects-refresh-btn")?.addEventListener("click", () => {
+    renderAdminSubjectsPage();
+  });
+
+  void renderAdminSubjectsPage();
+}
+
+function setupTeacherAddSubjectModal() {
+  const modal = document.getElementById("teacher-add-subject-modal");
+  const openBtn = document.getElementById("teacher-add-subject-btn");
+  const closeBtn = document.getElementById("teacher-add-subject-close");
+  const cancelBtn = document.getElementById("teacher-add-subject-cancel");
+  const form = document.getElementById("teacher-add-subject-form");
+  const nameInput = document.getElementById("teacher-add-subject-name");
+  const descInput = document.getElementById("teacher-add-subject-description");
+  const submitBtn = document.getElementById("teacher-add-subject-submit");
+  const errorEl = document.getElementById("teacher-add-subject-error");
+
+  if (!modal || !openBtn || !form) return;
+
+  const open = () => {
+    if (errorEl) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+    if (nameInput) nameInput.value = "";
+    if (descInput) descInput.value = "";
+    // Reset color to the first swatch.
+    const first = form.querySelector('input[name="subject-color"]');
+    if (first) first.checked = true;
+    modal.removeAttribute("hidden");
+    nameInput?.focus();
+  };
+  const close = () => {
+    modal.setAttribute("hidden", "");
+  };
+
+  openBtn.addEventListener("click", open);
+  closeBtn?.addEventListener("click", close);
+  cancelBtn?.addEventListener("click", close);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) close();
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (errorEl) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+    const name = (nameInput?.value || "").trim();
+    const description = (descInput?.value || "").trim();
+    const colorInput = form.querySelector('input[name="subject-color"]:checked');
+    const color = colorInput ? colorInput.value : "#60a5fa";
+
+    if (!name) {
+      if (errorEl) {
+        errorEl.textContent = "Subject name is required.";
+        errorEl.hidden = false;
+      }
+      nameInput?.focus();
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.dataset.prevHtml = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating…';
+    }
+
+    try {
+      const res = await fetch(apiUrl("/subjects"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, color }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to add subject (status ${res.status}).`);
+      }
+      const created = await res.json().catch(() => ({}));
+      close();
+      showToast(`Subject "${created.name || name}" added.`, "success");
+      await renderTeacherSubjectsPage();
+    } catch (e) {
+      console.log("DEBUG: create subject failed:", e);
+      if (errorEl) {
+        errorEl.textContent = e?.message || "Could not add subject. Please try again.";
+        errorEl.hidden = false;
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = submitBtn.dataset.prevHtml || 'Create Subject';
+      }
+    }
+  });
+}
+
 function setupStudentDashboard() {
   console.log("PAGE INIT RUNNING: setupStudentDashboard() called");
 
@@ -2949,6 +4219,8 @@ const tabActivity = document.getElementById("student-tab-activity");
 
 
 let studentLessons = []; // All published lessons
+let studentSubjects = []; // All subjects (with published_lesson_count)
+let selectedSubjectId = null; // Currently selected subject (null = show subject grid)
 let selectedLesson = null; // Currently selected lesson
 let activeContentType = null; // Controls which section is displayed: "reviewer", "quiz", "activity", or null
 let lessonData = null; // Legacy - for backward compatibility
@@ -2982,49 +4254,92 @@ let quizScore = 0;
     el.setAttribute("hidden", "");
   }
 
-  function renderLessonSelection() {
+  function getActiveStudentLessons() {
+  if (!selectedSubjectId) return studentLessons;
+  if (String(selectedSubjectId) === "__unassigned__") {
+    return studentLessons.filter((l) => !l.subject_id);
+  }
+  return studentLessons.filter((l) => String(l.subject_id || "") === String(selectedSubjectId));
+}
+
+function updateMyLessonHeaderForSubject() {
+  const headerTitle = document.getElementById("student-lesson-panel-title");
+  const headerSubtitle = document.getElementById("student-lesson-panel-subtitle");
+  const backLink = document.getElementById("student-back-to-subjects-link");
+
+  if (selectedSubjectId) {
+    if (backLink) backLink.hidden = false;
+    const subjectMeta = studentSubjects.find((s) => String(s.id) === String(selectedSubjectId));
+    const name = subjectMeta?.name
+      || (String(selectedSubjectId) === "__unassigned__" ? "Unassigned" : null);
+    if (headerTitle) headerTitle.textContent = name ? `${name} Lessons` : "My Lesson";
+    if (headerSubtitle) {
+      headerSubtitle.textContent = "Open a published lesson to review, take a quiz, or do an activity.";
+    }
+  } else {
+    if (backLink) backLink.hidden = true;
+    if (headerTitle) headerTitle.textContent = "My Lesson";
+    if (headerSubtitle) {
+      headerSubtitle.textContent = "Open a published lesson to review, take a quiz, or do an activity.";
+    }
+  }
+}
+
+function renderLessonSelection() {
   console.log("DEBUG: renderLessonSelection called");
   console.log("DEBUG: studentLessons length:", studentLessons.length);
-  
+
   const selectionEl = document.getElementById("student-lesson-selection");
   const lessonListEl = document.getElementById("student-lesson-list");
-  
-  console.log("selectionEl:", selectionEl);
-  console.log("lessonListEl:", lessonListEl);
-  console.log("DEBUG: selectionEl found:", !!selectionEl);
-  console.log("DEBUG: lessonListEl found:", !!lessonListEl);
-  
+  const subjectEmptyEl = document.getElementById("student-lesson-empty-for-subject");
+  const titleEl = document.getElementById("student-lesson-selection-title");
+  const subtitleEl = document.getElementById("student-lesson-selection-subtitle");
+
   if (!selectionEl || !lessonListEl) {
     console.log("DEBUG: Missing DOM elements - aborting render");
     return;
   }
-  
-  if (studentLessons.length === 0) {
-    console.log("DEBUG: No lessons to render - hiding selection");
-    selectionEl.hidden = true;
+
+  updateMyLessonHeaderForSubject();
+
+  const lessons = getActiveStudentLessons();
+  selectionEl.hidden = false;
+
+  const subjectMeta = selectedSubjectId
+    ? studentSubjects.find((s) => String(s.id) === String(selectedSubjectId))
+    : null;
+  if (titleEl) {
+    titleEl.textContent = subjectMeta?.name
+      ? `${subjectMeta.name} · published lessons`
+      : "Published lessons";
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = lessons.length
+      ? "Choose a lesson to open your AI-powered workspace."
+      : selectedSubjectId
+        ? "No lessons published for this subject yet."
+        : "No published lessons yet.";
+  }
+
+  if (lessons.length === 0) {
+    lessonListEl.innerHTML = "";
+    if (subjectEmptyEl) subjectEmptyEl.hidden = false;
     return;
   }
-  
-  console.log("DEBUG: About to show lesson selection");
-  console.log("DEBUG: selectionEl.hidden before:", selectionEl.hidden);
-  selectionEl.hidden = false;
-  console.log("DEBUG: selectionEl.hidden after:", selectionEl.hidden);
-  
-  console.log("DEBUG: About to generate HTML for", studentLessons.length, "lessons");
-  
+  if (subjectEmptyEl) subjectEmptyEl.hidden = true;
+
   let html = "";
-  studentLessons.forEach((lesson, index) => {
-    console.log(`DEBUG: Processing lesson ${index + 1}:`, lesson.filename);
+  lessons.forEach((lesson) => {
     const teacherName = lesson.teacher_name || lesson.teacher_id_number || "Teacher";
     const createdLabel = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "Unknown date";
     html += `
-    <article class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}" 
+    <article class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}"
          data-lesson-id="${lesson.file_id}">
       <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
       <div class="lesson-info">
-        <h4>${lesson.filename || 'Untitled Lesson'}</h4>
+        <h4>${escapeHtml(lesson.filename || 'Untitled Lesson')}</h4>
         <div class="lesson-card-meta-row">
-          <span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ${lesson.file_type?.toUpperCase() || 'Unknown'}</span>
+          <span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ${escapeHtml((lesson.file_type || 'Unknown').toUpperCase())}</span>
           <span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ${createdLabel}</span>
           <span class="lesson-card-pill"><i class="fa-solid fa-user"></i> ${escapeHtml(teacherName)}</span>
         </div>
@@ -3037,12 +4352,8 @@ let quizScore = 0;
     </article>
   `;
   });
-  
-  console.log("DEBUG: Generated HTML length:", html.length);
-  console.log("DEBUG: Generated HTML preview:", html.substring(0, 200) + "...");
-  console.log("DEBUG: lessonListEl.innerHTML before:", lessonListEl.innerHTML);
+
   lessonListEl.innerHTML = html;
-  console.log("DEBUG: lessonListEl.innerHTML after:", lessonListEl.innerHTML);
 }
 
 function selectLessonById(lessonId) {
@@ -3084,8 +4395,7 @@ window.selectLesson = selectLesson;
 
 function renderDashboardOverview() {
   const selectionEl = document.getElementById("student-lesson-selection");
-  
-  // Hide all lesson-related content on dashboard
+
   if (emptyEl) emptyEl.hidden = true;
   if (selectionEl) selectionEl.hidden = true;
   if (metaCard) metaCard.hidden = true;
@@ -3107,6 +4417,8 @@ function showEmpty(message) {
     lessonData = null;
     selectedLesson = null;
     activeContentType = null;
+    const selectionEl = document.getElementById("student-lesson-selection");
+    if (selectionEl) selectionEl.hidden = true;
     if (emptyEl) emptyEl.hidden = false;
     if (emptyText) emptyText.textContent = message;
     if (metaCard) metaCard.hidden = true;
@@ -3351,6 +4663,50 @@ function showEmpty(message) {
       const pct = Math.round((correct / Math.max(1, total)) * 100);
       if (quizProgress) quizProgress.textContent = "Results";
       if (quizScoreEl) quizScoreEl.textContent = `Score: ${correct} / ${total} (${pct}%)`;
+
+      try {
+        if (typeof recordStudentHistory === "function") {
+          const questionsSnapshot = questions.map((question, idx) => ({
+            question: String(question?.question || ""),
+            choices: Array.isArray(question?.choices) ? question.choices.map((c) => String(c)) : [],
+            answer: String(question?.answer || "").trim().toUpperCase(),
+            student_answer: studentAnswers[idx] ? String(studentAnswers[idx]).toUpperCase() : null,
+          }));
+          recordStudentHistory("quiz", {
+            lesson_id: selectedLesson?.file_id || selectedLesson?.lesson_id || null,
+            lesson_title: selectedLesson?.title || selectedLesson?.filename || "Lesson",
+            subject_name: selectedLesson?.subject_name || "",
+            score: correct,
+            total,
+            questions: questionsSnapshot,
+          });
+        }
+      } catch (e) {
+        console.warn("recordStudentHistory(quiz) failed:", e);
+      }
+
+      try {
+        const lessonIdForBackend = selectedLesson?.file_id || selectedLesson?.lesson_id;
+        if (lessonIdForBackend) {
+          const session =
+            typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+          const idNumber = String(session?.id_number || "").trim() || null;
+          fetch(apiUrl("/quiz-attempt"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lesson_id: lessonIdForBackend,
+              score: correct,
+              total_questions: total,
+              answers: studentAnswers,
+              student_id_number: idNumber,
+            }),
+          }).catch((err) => console.warn("Failed to save quiz attempt to server:", err));
+        }
+      } catch (e) {
+        console.warn("Quiz attempt POST setup failed:", e);
+      }
+
       quizBody.innerHTML = `
         <div class="glass-card" style="padding:1rem;border:1px solid rgba(148,163,184,0.18);border-radius:16px;background:rgba(15,23,42,0.35);">
           <h4 style="margin:0 0 0.35rem;">Quiz Results</h4>
@@ -3382,6 +4738,31 @@ function showEmpty(message) {
     });
   }
 
+  async function loadStudentSubjects() {
+    try {
+      const res = await fetch(apiUrl("/subjects"));
+      if (!res.ok) {
+        studentSubjects = [];
+        return;
+      }
+      const data = await res.json();
+      studentSubjects = Array.isArray(data.subjects) ? data.subjects : [];
+    } catch (e) {
+      console.log("DEBUG: loadStudentSubjects failed:", e);
+      studentSubjects = [];
+    }
+  }
+
+  function readSelectedSubjectFromUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sid = params.get("subject_id");
+      return sid && sid.trim() ? sid.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadStudentLessons() {
     console.log("DEBUG: loadStudentLessons called");
     console.log("DEBUG: Current page:", window.location.pathname);
@@ -3391,46 +4772,52 @@ function showEmpty(message) {
       renderDashboardOverview();
       return;
     }
-    
+
+    // Pin the subject for this page view to whatever is in the URL.
+    selectedSubjectId = readSelectedSubjectFromUrl();
+
     try {
+      await loadStudentSubjects();
+
       console.log("Calling /student/lessons...");
       const apiUrlValue = apiUrl("/student/lessons");
-      console.log("DEBUG: Full API URL:", apiUrlValue);
-      
       const res = await fetch(apiUrlValue);
-      console.log("DEBUG: Fetch executed");
-      console.log("DEBUG: API response status:", res.status);
-      console.log("DEBUG: API response ok:", res.ok);
-      
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.log("DEBUG: API error:", err);
+        studentLessons = [];
         showEmpty(err.error || "No published lessons yet. Ask your teacher to publish one.");
         return;
       }
-      
+
       const data = await res.json();
-      console.log("DEBUG: JSON parsed successfully");
-      console.log("Lessons received:", data.lessons);
-      console.log("Lessons count:", data.lessons?.length);
-      
       studentLessons = data.lessons || [];
-      console.log("DEBUG: studentLessons assigned:", studentLessons);
-      console.log("studentLessons API:", data.lessons); // Debug: Log API response
-      console.log("studentLessons array:", studentLessons); // Debug: Log array
-      
-      console.log("DEBUG: On My Lesson page - calling renderLessonSelection()");
+      console.log("Lessons count:", studentLessons.length);
+
       if (selectedLesson?.file_id) {
         const matched = studentLessons.find((lesson) => lesson.file_id === selectedLesson.file_id);
         if (matched) {
           selectedLesson = { ...selectedLesson, ...matched };
         }
       }
-      renderLessonSelection();
-      if (studentLessons.length > 0) {
-        if (emptyEl) emptyEl.hidden = true;
+
+      // When no subject was passed in the URL, default to showing every lesson
+      // (legacy behavior). When a subject is pinned, filtering happens inside
+      // getActiveStudentLessons().
+      if (!selectedSubjectId && studentLessons.length === 0) {
+        showEmpty("No published lesson yet. Ask your teacher to publish one.");
+        return;
       }
-    } catch {
+      if (selectedSubjectId && getActiveStudentLessons().length === 0 && studentLessons.length === 0) {
+        showEmpty("No published lesson yet for this subject.");
+        return;
+      }
+
+      if (emptyEl) emptyEl.hidden = true;
+      renderLessonSelection();
+    } catch (e) {
+      console.log("DEBUG: loadStudentLessons error:", e);
       showEmpty("Cannot reach the server. Is the LearnIQ Track backend running?");
     }
   }
@@ -3481,6 +4868,17 @@ function showEmpty(message) {
             : String(selectedLesson.reviewer || "").trim())
         ) {
           updateReviewerDisplay(selectedLesson.reviewer);
+          try {
+            if (typeof recordStudentHistory === "function") {
+              recordStudentHistory("reviewer", {
+                lesson_id: selectedLesson.file_id || selectedLesson.lesson_id || null,
+                lesson_title: selectedLesson.title || selectedLesson.filename || "Lesson",
+                subject_name: selectedLesson.subject_name || "",
+              });
+            }
+          } catch (e) {
+            console.warn("recordStudentHistory(reviewer) failed:", e);
+          }
         } else {
           if (reviewerList) {
             reviewerList.innerHTML =
@@ -3503,6 +4901,18 @@ function showEmpty(message) {
       case "activity":
         if (selectedLesson && selectedLesson.activities && selectedLesson.activities.length > 0) {
           updateActivitiesDisplay(selectedLesson.activities);
+          try {
+            if (typeof recordStudentHistory === "function") {
+              recordStudentHistory("activity", {
+                lesson_id: selectedLesson.file_id || selectedLesson.lesson_id || null,
+                lesson_title: selectedLesson.title || selectedLesson.filename || "Lesson",
+                subject_name: selectedLesson.subject_name || "",
+                activity_count: selectedLesson.activities.length,
+              });
+            }
+          } catch (e) {
+            console.warn("recordStudentHistory(activity) failed:", e);
+          }
         } else {
           if (activitiesList) activitiesList.innerHTML = '<p class="small-note">No activities yet. Click "Generate Activity".</p>';
         }
@@ -3870,6 +5280,527 @@ async function renderAiResultPage() {
     acts.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No activities yet.</li>";
 }
 
+// =====================================================================
+// Student History (Quiz / Reviewer / Activity)
+// =====================================================================
+
+const STUDENT_HISTORY_KEYS = {
+  quiz: "learniq_history_quiz",
+  reviewer: "learniq_history_reviewer",
+  activity: "learniq_history_activity",
+};
+const STUDENT_HISTORY_MAX_PER_TYPE = 100;
+let activeHistoryTab = "quiz";
+let currentHistoryDetailContext = null;
+
+function getStudentHistoryUserKey() {
+  try {
+    const session = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    const idn = String(session?.id_number || "").trim();
+    return idn ? `:${idn}` : "";
+  } catch {
+    return "";
+  }
+}
+
+function readStudentHistoryList(type) {
+  try {
+    const baseKey = STUDENT_HISTORY_KEYS[type];
+    if (!baseKey) return [];
+    const key = `${baseKey}${getStudentHistoryUserKey()}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStudentHistoryList(type, list) {
+  try {
+    const baseKey = STUDENT_HISTORY_KEYS[type];
+    if (!baseKey) return;
+    const key = `${baseKey}${getStudentHistoryUserKey()}`;
+    const capped = Array.isArray(list) ? list.slice(0, STUDENT_HISTORY_MAX_PER_TYPE) : [];
+    localStorage.setItem(key, JSON.stringify(capped));
+  } catch (e) {
+    console.warn("writeStudentHistoryList failed:", e);
+  }
+}
+
+function recordStudentHistory(type, payload) {
+  if (!STUDENT_HISTORY_KEYS[type]) return;
+  const entry = {
+    ...(payload || {}),
+    timestamp: new Date().toISOString(),
+  };
+  const list = readStudentHistoryList(type);
+
+  // For reviewer/activity, avoid spam by collapsing repeat opens of the same
+  // lesson within a 5-minute window into the most recent entry.
+  if (type !== "quiz" && list.length > 0) {
+    const last = list[0];
+    const sameLesson = String(last.lesson_id || "") === String(payload?.lesson_id || "");
+    const lastTime = last.timestamp ? new Date(last.timestamp).getTime() : 0;
+    const recently = Date.now() - lastTime < 5 * 60 * 1000;
+    if (sameLesson && recently) {
+      list[0] = entry;
+      writeStudentHistoryList(type, list);
+      if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
+      return;
+    }
+  }
+
+  list.unshift(entry);
+  writeStudentHistoryList(type, list);
+  if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
+}
+
+function formatHistoryTimestamp(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString();
+  } catch {
+    return "—";
+  }
+}
+
+function buildHistoryItemHtml(type, item, index) {
+  const title = escapeHtml(String(item.lesson_title || item.title || "Lesson"));
+  const subject = item.subject_name
+    ? `<span class="history-pill">${escapeHtml(item.subject_name)}</span>`
+    : "";
+  const when = formatHistoryTimestamp(item.timestamp);
+  let iconHtml = "";
+  let summary = "";
+
+  if (type === "quiz") {
+    const score = Number(item.score || 0);
+    const total = Number(item.total || 0);
+    const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+    iconHtml = '<i class="fa-solid fa-clipboard-question" aria-hidden="true"></i>';
+    summary = `<span class="history-summary-pill">Score <strong>${score}/${total}</strong> &nbsp;<span class="small-note">(${pct}%)</span></span>`;
+  } else if (type === "reviewer") {
+    iconHtml = '<i class="fa-solid fa-book" aria-hidden="true"></i>';
+    summary = '<span class="small-note">Reviewer opened</span>';
+  } else if (type === "activity") {
+    iconHtml = '<i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>';
+    summary = '<span class="small-note">Activity opened</span>';
+  }
+
+  return `
+    <button type="button" class="history-item" data-history-type="${escapeHtml(type)}" data-history-index="${index}" aria-label="View ${escapeHtml(type)} details for ${title}">
+      <span class="history-item-icon">${iconHtml}</span>
+      <span class="history-item-body">
+        <span class="history-item-header">
+          <span class="history-item-title">${title}</span>
+          ${subject}
+        </span>
+        <span class="history-item-summary-line">${summary}</span>
+      </span>
+      <span class="history-item-date">
+        <i class="fa-regular fa-clock" aria-hidden="true"></i>
+        <span>${escapeHtml(when)}</span>
+      </span>
+      <span class="history-item-chevron" aria-hidden="true">
+        <i class="fa-solid fa-chevron-right"></i>
+      </span>
+    </button>
+  `;
+}
+
+function renderStudentHistoryList(type) {
+  const host = document.getElementById("history-list-host");
+  if (!host) return;
+  const list = readStudentHistoryList(type);
+  if (!list.length) {
+    const labels = {
+      quiz: {
+        title: "No quiz history yet",
+        body: "When you submit a quiz, it will appear here.",
+      },
+      reviewer: {
+        title: "No reviewer history yet",
+        body: "Open a reviewer from any lesson and it will appear here.",
+      },
+      activity: {
+        title: "No activity history yet",
+        body: "Open an activity from any lesson and it will appear here.",
+      },
+    };
+    const l = labels[type] || labels.quiz;
+    host.innerHTML = `
+      <article class="glass-card content-card history-empty">
+        <h3>${l.title}</h3>
+        <p class="content-subtitle">${l.body}</p>
+      </article>
+    `;
+    return;
+  }
+  host.innerHTML = list.map((item, idx) => buildHistoryItemHtml(type, item, idx)).join("");
+}
+
+// --- History detail modal ---
+
+function openHistoryDetailModal() {
+  const modal = document.getElementById("history-detail-modal");
+  if (!modal) return;
+  modal.removeAttribute("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeHistoryDetailModal() {
+  const modal = document.getElementById("history-detail-modal");
+  if (!modal) return;
+  modal.setAttribute("hidden", "");
+  document.body.style.overflow = "";
+}
+
+function setHistoryDetailHeader(title, subtitle) {
+  const titleEl = document.getElementById("history-detail-title");
+  const subEl = document.getElementById("history-detail-subtitle");
+  if (titleEl) titleEl.textContent = title || "Details";
+  if (subEl) subEl.textContent = subtitle || "";
+}
+
+function setHistoryDetailBody(html) {
+  const body = document.getElementById("history-detail-body");
+  if (body) body.innerHTML = html;
+}
+
+function renderQuizDetailIntoModal(item) {
+  const questions = Array.isArray(item?.questions) ? item.questions : [];
+  const score = Number(item?.score || 0);
+  const total = Number(item?.total || 0);
+  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+
+  const summary = `
+    <div class="history-detail-score-card">
+      <div>
+        <p class="small-note" style="margin:0;">Final score</p>
+        <h2 style="margin:0.15rem 0 0;">${score} / ${total}</h2>
+      </div>
+      <div class="history-detail-score-pct">
+        <strong>${pct}%</strong>
+      </div>
+    </div>
+  `;
+
+  if (!questions.length) {
+    setHistoryDetailBody(`
+      ${summary}
+      <p class="small-note" style="margin-top:1rem;">No question details were saved for this attempt.</p>
+    `);
+    return;
+  }
+
+  const rows = questions
+    .map((q, i) => {
+      const studentAns = q.student_answer ? String(q.student_answer).toUpperCase() : "—";
+      const correctAns = String(q.answer || "").trim().toUpperCase();
+      const ok = studentAns !== "—" && studentAns === correctAns;
+      const choicesHtml = Array.isArray(q.choices)
+        ? q.choices
+            .map((c, idx) => {
+              const letter = ["A", "B", "C", "D", "E"][idx] || String(idx + 1);
+              const isStudent = studentAns === letter;
+              const isCorrect = correctAns === letter;
+              const cls = [
+                "history-quiz-choice",
+                isStudent ? "is-student" : "",
+                isCorrect ? "is-correct" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return `<li class="${cls}"><strong>${letter}.</strong> ${escapeHtml(String(c))}</li>`;
+            })
+            .join("")
+        : "";
+      return `
+        <article class="history-quiz-question">
+          <header class="history-quiz-question-head">
+            <h4>Q${i + 1}. ${escapeHtml(String(q.question || ""))}</h4>
+            <span class="history-quiz-mark ${ok ? "is-ok" : "is-bad"}">
+              ${ok ? '<i class="fa-solid fa-circle-check"></i> Correct' : '<i class="fa-solid fa-circle-xmark"></i> Wrong'}
+            </span>
+          </header>
+          <ol class="history-quiz-choices">${choicesHtml}</ol>
+          <p class="small-note history-quiz-answer-line">
+            Your answer: <strong>${escapeHtml(studentAns)}</strong> &nbsp;·&nbsp;
+            Correct answer: <strong>${escapeHtml(correctAns || "—")}</strong>
+          </p>
+        </article>
+      `;
+    })
+    .join("");
+
+  setHistoryDetailBody(`
+    ${summary}
+    <div class="history-quiz-list">${rows}</div>
+  `);
+}
+
+async function renderReviewerDetailIntoModal(item) {
+  setHistoryDetailBody('<p class="small-note">Loading reviewer…</p>');
+  const lessonId = item?.lesson_id;
+  if (!lessonId) {
+    setHistoryDetailBody('<p class="small-note">No lesson linked to this entry.</p>');
+    return;
+  }
+  try {
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`));
+    if (!res.ok) {
+      setHistoryDetailBody('<p class="small-note">Failed to load reviewer content.</p>');
+      return;
+    }
+    const data = await res.json();
+    const reviewer = data?.reviewer;
+    const hasReviewer =
+      typeof normalizeReviewerMarkdown === "function"
+        ? normalizeReviewerMarkdown(reviewer).length > 0
+        : Boolean(String(reviewer || "").trim());
+
+    if (!hasReviewer) {
+      setHistoryDetailBody('<p class="small-note">No reviewer content available for this lesson anymore.</p>');
+      return;
+    }
+
+    setHistoryDetailBody('<div id="history-reviewer-target" class="reviewer-markdown-body"></div>');
+    const target = document.getElementById("history-reviewer-target");
+    if (typeof mountReviewerMarkdownInto === "function") {
+      mountReviewerMarkdownInto(target, reviewer);
+    } else if (target) {
+      target.innerHTML = `<pre>${escapeHtml(String(reviewer || ""))}</pre>`;
+    }
+  } catch (e) {
+    console.warn("renderReviewerDetailIntoModal error:", e);
+    setHistoryDetailBody('<p class="small-note">Could not reach the server.</p>');
+  }
+}
+
+async function renderActivityDetailIntoModal(item) {
+  setHistoryDetailBody('<p class="small-note">Loading activity…</p>');
+  const lessonId = item?.lesson_id;
+  if (!lessonId) {
+    setHistoryDetailBody('<p class="small-note">No lesson linked to this entry.</p>');
+    return;
+  }
+  try {
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`));
+    if (!res.ok) {
+      setHistoryDetailBody('<p class="small-note">Failed to load activity content.</p>');
+      return;
+    }
+    const data = await res.json();
+    const activities = Array.isArray(data?.activities) ? data.activities : [];
+    if (!activities.length) {
+      setHistoryDetailBody('<p class="small-note">No activities available for this lesson anymore.</p>');
+      return;
+    }
+    const rows = activities
+      .map(
+        (act, i) => `
+          <article class="activity-item history-activity-item">
+            <strong>Activity ${i + 1}</strong>
+            <p>${escapeHtml(String(act))}</p>
+          </article>
+        `
+      )
+      .join("");
+    setHistoryDetailBody(`<div class="history-activity-list">${rows}</div>`);
+  } catch (e) {
+    console.warn("renderActivityDetailIntoModal error:", e);
+    setHistoryDetailBody('<p class="small-note">Could not reach the server.</p>');
+  }
+}
+
+function openHistoryItemDetail(type, index) {
+  const list = readStudentHistoryList(type);
+  const item = list[Number(index)];
+  if (!item) return;
+  currentHistoryDetailContext = { type, item };
+  const subtitle = [
+    item.subject_name ? String(item.subject_name) : "",
+    formatHistoryTimestamp(item.timestamp),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  setHistoryDetailHeader(String(item.lesson_title || "Lesson"), subtitle);
+  setHistoryDetailBody('<p class="small-note">Loading…</p>');
+  openHistoryDetailModal();
+
+  if (type === "quiz") {
+    renderQuizDetailIntoModal(item);
+  } else if (type === "reviewer") {
+    void renderReviewerDetailIntoModal(item);
+  } else if (type === "activity") {
+    void renderActivityDetailIntoModal(item);
+  } else {
+    setHistoryDetailBody('<p class="small-note">Nothing to show.</p>');
+  }
+}
+
+function downloadHistoryDetailAsPdf() {
+  const body = document.getElementById("history-detail-body");
+  const titleEl = document.getElementById("history-detail-title");
+  const subEl = document.getElementById("history-detail-subtitle");
+  if (!body) return;
+
+  const ctx = currentHistoryDetailContext || {};
+  const type = ctx.type || "history";
+  const item = ctx.item || {};
+  const lessonTitle = String(item.lesson_title || titleEl?.textContent || "history").trim();
+  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const baseName = `${typeLabel}_${lessonTitle}`;
+
+  if (typeof html2pdf === "undefined") {
+    if (typeof showToast === "function") {
+      showToast("PDF export is not ready. Refresh the page and try again.", "error");
+    }
+    return;
+  }
+
+  const clone = document.createElement("div");
+  clone.className = "history-pdf-export reviewer-markdown-body";
+  const sanitizedTitle = escapeHtml(lessonTitle);
+  const sanitizedSubtitle = escapeHtml(String(subEl?.textContent || ""));
+  const header = `
+    <div class="history-pdf-header">
+      <p class="history-pdf-eyebrow">${escapeHtml(typeLabel)} history</p>
+      <h1>${sanitizedTitle}</h1>
+      ${sanitizedSubtitle ? `<p class="history-pdf-subtitle">${sanitizedSubtitle}</p>` : ""}
+    </div>
+  `;
+  clone.innerHTML = header + body.innerHTML;
+  clone.setAttribute("aria-hidden", "true");
+  clone.style.cssText = [
+    "position:fixed",
+    "left:-12000px",
+    "top:0",
+    "width:190mm",
+    "box-sizing:border-box",
+    "padding:14mm 14mm",
+    "font:11pt/1.55 Inter,system-ui,Segoe UI,sans-serif",
+    "background:#ffffff",
+    "color:#111827",
+  ].join(";");
+
+  document.body.appendChild(clone);
+
+  const safeBase =
+    (baseName || "history")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^\w\-]+/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 80) || "history";
+
+  const opt = {
+    margin: [8, 8, 8, 8],
+    filename: `${safeBase}.pdf`,
+    image: { type: "jpeg", quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    pagebreak: { mode: ["css", "legacy"] },
+  };
+
+  const btn = document.getElementById("history-detail-download");
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Preparing PDF…';
+  }
+
+  html2pdf()
+    .set(opt)
+    .from(clone)
+    .save()
+    .then(() => {
+      if (typeof showToast === "function") showToast("PDF downloaded.", "success");
+    })
+    .catch((err) => {
+      console.error(err);
+      if (typeof showToast === "function") showToast("Could not create PDF. Try again.", "error");
+    })
+    .finally(() => {
+      clone.remove();
+      if (btn) {
+        btn.disabled = false;
+        if (originalHtml !== null) btn.innerHTML = originalHtml;
+      }
+    });
+}
+
+function updateStudentHistoryTabCounts() {
+  ["quiz", "reviewer", "activity"].forEach((type) => {
+    const el = document.getElementById(`history-tab-count-${type}`);
+    if (el) el.textContent = String(readStudentHistoryList(type).length);
+  });
+}
+
+function setStudentHistoryActiveTab(type) {
+  const valid = ["quiz", "reviewer", "activity"];
+  if (!valid.includes(type)) type = "quiz";
+  activeHistoryTab = type;
+  document.querySelectorAll(".workspace-tab[data-history-tab]").forEach((btn) => {
+    const tab = btn.getAttribute("data-history-tab");
+    const isActive = tab === type;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  renderStudentHistoryList(type);
+}
+
+function setupStudentHistoryPage() {
+  if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
+  if (typeof hydrateSidebarProfileFromDatabase === "function") {
+    void hydrateSidebarProfileFromDatabase();
+  }
+  updateStudentHistoryTabCounts();
+  setStudentHistoryActiveTab(activeHistoryTab);
+
+  document.querySelectorAll(".workspace-tab[data-history-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.getAttribute("data-history-tab");
+      setStudentHistoryActiveTab(tab);
+    });
+  });
+
+  const host = document.getElementById("history-list-host");
+  if (host && !host.dataset.historyClicksBound) {
+    host.dataset.historyClicksBound = "1";
+    host.addEventListener("click", (e) => {
+      const btn = e.target.closest(".history-item[data-history-type]");
+      if (!btn) return;
+      const type = btn.getAttribute("data-history-type");
+      const idx = btn.getAttribute("data-history-index");
+      openHistoryItemDetail(type, idx);
+    });
+  }
+
+  const modal = document.getElementById("history-detail-modal");
+  if (modal && !modal.dataset.historyModalBound) {
+    modal.dataset.historyModalBound = "1";
+    const closeBtn = document.getElementById("history-detail-close");
+    if (closeBtn) closeBtn.addEventListener("click", closeHistoryDetailModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeHistoryDetailModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hasAttribute("hidden")) closeHistoryDetailModal();
+    });
+    const downloadBtn = document.getElementById("history-detail-download");
+    if (downloadBtn) downloadBtn.addEventListener("click", downloadHistoryDetailAsPdf);
+  }
+}
+
+// Expose for other inline pages / debugging.
+if (typeof window !== "undefined") {
+  window.recordStudentHistory = recordStudentHistory;
+  window.setupStudentHistoryPage = setupStudentHistoryPage;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired:", window.location.pathname);
   animateProgressBars();
@@ -3889,8 +5820,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.location.pathname.includes('admin-approval.html') || window.location.pathname.includes('admin-dashboard.html')) {
     setupAdminPage();
   }
+  if (window.location.pathname.includes('admin-subjects.html')) {
+    setupAdminSubjectsPage();
+  }
   if (window.location.pathname.includes('teacher-learniq-dashboard.html') || window.location.pathname.includes('teacher-dashboard.html')) {
     setupTeacherDashboard();
+  }
+  if (window.location.pathname.includes('teacher-subjects.html')) {
+    setupTeacherSubjectsPage();
   }
   if (window.location.pathname.includes("immersion-dashboard.html")) {
     setupImmersionDashboard();
@@ -3903,6 +5840,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (window.location.pathname.includes('learniq-dashboard.html') || window.location.pathname.includes('my-lesson.html')) {
     setupStudentDashboard();
+  }
+  if (window.location.pathname.includes('subjects.html')) {
+    setupSubjectsPage();
+  }
+  if (window.location.pathname.includes('history.html')) {
+    setupStudentHistoryPage();
   }
   if (
     window.location.pathname.includes("student-settings.html") ||

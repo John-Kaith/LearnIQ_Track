@@ -138,15 +138,26 @@ def insert_lesson(
     extracted_text: str,
     storage_path: str | None,
     teacher_id_number: str | None = None,
+    subject_id: str | None = None,
 ) -> dict[str, Any]:
     print(f"INSERT LESSON CALLED:")
     print(f"  filename: {filename}")
     print(f"  file_type: {file_type}")
     print(f"  teacher_id_number: {teacher_id_number}")
-    
+    print(f"  subject_id: {subject_id}")
+
     # Support both new and older lessons table schemas.
     # Try full row first, then retry without columns older schemas may not have.
     attempts = [
+        {
+            "filename": filename,
+            "file_type": file_type,
+            "extracted_text": extracted_text,
+            "storage_path": storage_path,
+            "is_published": False,
+            "teacher_id_number": teacher_id_number,
+            "subject_id": subject_id,
+        },
         {
             "filename": filename,
             "file_type": file_type,
@@ -218,27 +229,54 @@ def list_lessons_with_content() -> list[dict[str, Any]]:
 
 
 def list_teacher_lessons(teacher_id_number: str) -> list[dict[str, Any]]:
-    res = (
-        _sb()
-        .table("lessons")
-        .select("id, filename, file_type, is_published, created_at, teacher_id_number, lesson_content(reviewer, quiz, activities)")
-        .eq("teacher_id_number", teacher_id_number)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return res.data or []
+    # Fall back to the original SELECT if the schema doesn't have subject_id yet.
+    selects = [
+        "id, filename, file_type, is_published, created_at, teacher_id_number, subject_id, lesson_content(reviewer, quiz, activities)",
+        "id, filename, file_type, is_published, created_at, teacher_id_number, lesson_content(reviewer, quiz, activities)",
+    ]
+    last_error: Exception | None = None
+    for sel in selects:
+        try:
+            res = (
+                _sb()
+                .table("lessons")
+                .select(sel)
+                .eq("teacher_id_number", teacher_id_number)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return res.data or []
+        except Exception as e:
+            last_error = e
+            print(f"list_teacher_lessons select '{sel}': {e}")
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 def list_all_lessons() -> list[dict[str, Any]]:
     """All lesson uploads (admin dashboard, files table)."""
-    res = (
-        _sb()
-        .table("lessons")
-        .select("id, filename, file_type, is_published, created_at, teacher_id_number, lesson_content(reviewer, quiz, activities)")
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return res.data or []
+    selects = [
+        "id, filename, file_type, is_published, created_at, teacher_id_number, subject_id, lesson_content(reviewer, quiz, activities)",
+        "id, filename, file_type, is_published, created_at, teacher_id_number, lesson_content(reviewer, quiz, activities)",
+    ]
+    last_error: Exception | None = None
+    for sel in selects:
+        try:
+            res = (
+                _sb()
+                .table("lessons")
+                .select(sel)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return res.data or []
+        except Exception as e:
+            last_error = e
+            print(f"list_all_lessons select '{sel}': {e}")
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 def count_lessons_total() -> int:
@@ -587,6 +625,9 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
         .order("created_at", desc=True)
         .execute()
     )
+    # Build a lookup of subjects so we can attach name/color/description to each lesson.
+    subjects_by_id = {str(s.get("id")): s for s in list_subjects()}
+
     lessons = []
     for row in res.data or []:
         nested = row.get("lesson_content")
@@ -594,7 +635,7 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
             lc = nested[0] if nested else {}
         else:
             lc = nested or {}
-        
+
         # Process reviewer (single Markdown string; join legacy list rows)
         reviewer = lc.get("reviewer")
         if isinstance(reviewer, list):
@@ -614,6 +655,10 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
             activities = []
 
         clean = {k: v for k, v in row.items() if k != "lesson_content"}
+        sid = clean.get("subject_id")
+        sid_key = str(sid) if sid is not None else None
+        subject = subjects_by_id.get(sid_key) if sid_key else None
+
         lessons.append({
             "file_id": clean["id"],
             "filename": clean.get("filename") or "",
@@ -622,9 +667,169 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
             "reviewer": reviewer_str,
             "quiz": quiz,
             "activities": activities,
+            "subject_id": sid_key,
+            "subject_name": (subject or {}).get("name") or "",
+            "subject_color": (subject or {}).get("color") or "",
         })
-    
+
     return lessons
+
+
+def list_subjects() -> list[dict[str, Any]]:
+    """All subject rows (used by Student My Lesson + Teacher upload UI)."""
+    try:
+        res = (
+            _sb()
+            .table("subjects")
+            .select("id, name, description, color, created_at")
+            .order("name")
+            .execute()
+        )
+        rows = res.data or []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            out.append(
+                {
+                    "id": str(r.get("id")) if r.get("id") is not None else None,
+                    "name": (r.get("name") or "").strip(),
+                    "description": r.get("description") or "",
+                    "color": r.get("color") or "",
+                    "created_at": r.get("created_at"),
+                }
+            )
+        return out
+    except Exception as e:
+        print(f"list_subjects: {e}")
+        return []
+
+
+def create_subject(name: str, description: str | None = None, color: str | None = None) -> dict[str, Any]:
+    """Insert a new subject row and return it."""
+    payload: dict[str, Any] = {"name": (name or "").strip()}
+    if not payload["name"]:
+        raise ValueError("Subject name is required.")
+    if description is not None:
+        payload["description"] = str(description).strip() or None
+    if color is not None:
+        payload["color"] = str(color).strip() or None
+    try:
+        res = _sb().table("subjects").insert(payload).execute()
+        rows = res.data or []
+        return rows[0] if rows else payload
+    except Exception as e:
+        print(f"create_subject: {e}")
+        raise
+
+
+def count_published_lessons_by_subject() -> dict[str, int]:
+    """Return {subject_id: published_lesson_count} for badge counts on Subject cards."""
+    counts: dict[str, int] = {}
+    try:
+        res = (
+            _sb()
+            .table("lessons")
+            .select("subject_id")
+            .eq("is_published", True)
+            .execute()
+        )
+        for r in res.data or []:
+            sid = r.get("subject_id")
+            if sid is None:
+                continue
+            key = str(sid)
+            counts[key] = counts.get(key, 0) + 1
+    except Exception as e:
+        print(f"count_published_lessons_by_subject: {e}")
+    return counts
+
+
+def count_lessons_by_subject() -> dict[str, int]:
+    """Return {subject_id: total_lesson_count} regardless of publish status."""
+    counts: dict[str, int] = {}
+    try:
+        res = _sb().table("lessons").select("subject_id").execute()
+        for r in res.data or []:
+            sid = r.get("subject_id")
+            if sid is None:
+                continue
+            key = str(sid)
+            counts[key] = counts.get(key, 0) + 1
+    except Exception as e:
+        print(f"count_lessons_by_subject: {e}")
+    return counts
+
+
+def count_teachers_by_subject() -> dict[str, int]:
+    """Return {subject_id: distinct_teacher_count} — how many teachers have at
+    least one lesson under each subject."""
+    teachers: dict[str, set[str]] = {}
+    try:
+        res = (
+            _sb()
+            .table("lessons")
+            .select("subject_id, teacher_id_number")
+            .execute()
+        )
+        for r in res.data or []:
+            sid = r.get("subject_id")
+            tid = (r.get("teacher_id_number") or "").strip()
+            if sid is None or not tid:
+                continue
+            key = str(sid)
+            teachers.setdefault(key, set()).add(tid)
+    except Exception as e:
+        print(f"count_teachers_by_subject: {e}")
+    return {k: len(v) for k, v in teachers.items()}
+
+
+def update_subject(subject_id: str, name: str | None = None, description: str | None = None, color: str | None = None) -> dict[str, Any]:
+    """Update one or more fields on a subject row."""
+    payload: dict[str, Any] = {}
+    if name is not None:
+        cleaned = str(name).strip()
+        if not cleaned:
+            raise ValueError("Subject name cannot be empty.")
+        payload["name"] = cleaned
+    if description is not None:
+        payload["description"] = str(description).strip() or None
+    if color is not None:
+        payload["color"] = str(color).strip() or None
+    if not payload:
+        raise ValueError("Nothing to update.")
+    try:
+        res = _sb().table("subjects").update(payload).eq("id", subject_id).execute()
+        rows = res.data or []
+        return rows[0] if rows else payload
+    except Exception as e:
+        print(f"update_subject: {e}")
+        raise
+
+
+def delete_subject(subject_id: str) -> None:
+    """Delete a subject row. Caller should ensure no lessons reference it.
+
+    To play safe, this first NULL-outs subject_id on any lesson that still
+    references it (in case the FK is set to RESTRICT) and then deletes."""
+    try:
+        try:
+            _sb().table("lessons").update({"subject_id": None}).eq("subject_id", subject_id).execute()
+        except Exception as inner:
+            # Non-fatal — if the FK is ON DELETE SET NULL/CASCADE, this may
+            # be unnecessary. Log and proceed.
+            print(f"delete_subject (null lessons.subject_id): {inner}")
+        _sb().table("subjects").delete().eq("id", subject_id).execute()
+    except Exception as e:
+        print(f"delete_subject: {e}")
+        raise
+
+
+def update_lesson_subject(lesson_id: str, subject_id: str | None) -> None:
+    """Reassign the subject of a lesson (teacher edit)."""
+    try:
+        _sb().table("lessons").update({"subject_id": subject_id}).eq("id", lesson_id).execute()
+    except Exception as e:
+        print(f"update_lesson_subject: {e}")
+        raise
 
 
 def get_published_lesson_with_content() -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -1478,6 +1683,7 @@ def lesson_to_api_list_item(row: dict[str, Any]) -> dict[str, Any]:
         quiz = []
     lid = str(row["id"])
     pub = bool(row.get("is_published"))
+    sid = row.get("subject_id")
     return {
         "id": lid,
         "file_id": lid,
@@ -1489,6 +1695,7 @@ def lesson_to_api_list_item(row: dict[str, Any]) -> dict[str, Any]:
         "has_activities": bool(lc.get("activities")),
         "published": pub,
         "is_published": pub,
+        "subject_id": str(sid) if sid is not None else None,
         "lesson_content": {
             "reviewer": lc.get("reviewer"),
             "quiz": quiz,

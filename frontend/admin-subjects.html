@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subjects | Admin · LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="admin-subjects-page">
+  <main class="page-shell container">
+    <div class="dashboard-shell">
+      <aside class="sidebar glass-card fade-up">
+        <div class="sidebar-header">
+          <div class="brand" style="gap:0.85rem;">
+            <span class="brand-mark">LQ</span>
+            <span>
+              <strong>LearnIQ Track</strong>
+              <small>Admin Control Center</small>
+            </span>
+          </div>
+          <p class="small-note">Review approvals, activity, and system health from one view.</p>
+        </div>
+
+        <nav class="side-links">
+          <a href="admin-approval.html"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+          <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
+          <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
+          <a href="admin-users.html"><i class="fa-solid fa-users"></i> Users</a>
+          <a class="active" href="admin-subjects.html"><i class="fa-solid fa-book-open"></i> Subjects</a>
+          <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
+          <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
+          <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
+          <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
+          <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
+          <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
+          <a href="admin-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
+            <span class="avatar" id="admin-sidebar-avatar">PC</span>
+            <div class="user-chip-text">
+              <strong id="admin-sidebar-name">Principal Cruz</strong>
+              <small id="admin-sidebar-role">Admin / Principal</small>
+            </div>
+          </a>
+          <button id="sidebar-logout" type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()">
+            <i class="fa-solid fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <section class="main-panel">
+        <section class="glass-card panel-header fade-up delay-1">
+          <div class="panel-title">
+            <h1 id="admin-subjects-title">Teachers</h1>
+            <p id="admin-subjects-subtitle">Pick a teacher to see the subjects they have uploaded lessons for.</p>
+          </div>
+        </section>
+
+        <section class="dashboard-grid">
+          <div class="content-stack">
+            <article id="admin-empty-state" class="glass-card content-card" hidden>
+              <h3 id="admin-empty-title">Nothing here yet</h3>
+              <p class="content-subtitle" id="admin-empty-text">There is no data to display.</p>
+            </article>
+
+            <article id="admin-teachers-view" class="glass-card content-card" hidden>
+              <h3>Teachers</h3>
+              <p class="content-subtitle">Click a teacher card to drill down into their subjects.</p>
+              <div id="admin-teachers-list" class="lesson-grid"></div>
+            </article>
+
+            <article id="admin-subjects-view" class="glass-card content-card" hidden>
+              <h3 id="admin-subjects-view-title">Subjects</h3>
+              <p class="content-subtitle">Click a subject card to see lessons for this teacher.</p>
+              <div id="admin-subjects-list" class="lesson-grid"></div>
+            </article>
+
+            <article id="admin-lessons-view" class="glass-card content-card" hidden>
+              <h3 id="admin-lessons-view-title">Lessons</h3>
+              <p class="content-subtitle">All lessons uploaded by this teacher under the selected subject.</p>
+              <div id="admin-lessons-list" class="lesson-grid"></div>
+            </article>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <!-- Add Subject modal (subjects are school-wide) -->
+  <div id="admin-subject-modal" class="action-modal-backdrop" hidden>
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="admin-subject-modal-title">
+      <div class="action-modal-head">
+        <h3 id="admin-subject-modal-title">Add a new subject</h3>
+        <button id="admin-subject-modal-close" class="btn btn-ghost" type="button" aria-label="Close subject dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p class="small-note" id="admin-subject-modal-hint">Create a new subject so teachers can group their uploaded lessons under it.</p>
+
+      <form id="admin-subject-form" class="add-subject-form" autocomplete="off">
+        <input type="hidden" id="admin-subject-edit-id" value="" />
+
+        <label class="form-field">
+          <span class="small-note">Subject name <span class="required-mark">*</span></span>
+          <input type="text" id="admin-subject-name" class="form-input" required maxlength="80" placeholder="e.g. Mathematics" />
+        </label>
+
+        <label class="form-field">
+          <span class="small-note">Description (optional)</span>
+          <textarea id="admin-subject-description" class="form-input" rows="2" maxlength="240" placeholder="Short description shown on the subject card."></textarea>
+        </label>
+
+        <fieldset class="form-field add-subject-color-field">
+          <legend class="small-note">Card color</legend>
+          <div class="add-subject-swatches" id="admin-subject-swatches" role="radiogroup" aria-label="Subject color">
+            <label class="swatch" style="--swatch:#60a5fa"><input type="radio" name="admin-subject-color" value="#60a5fa" checked /></label>
+            <label class="swatch" style="--swatch:#34d399"><input type="radio" name="admin-subject-color" value="#34d399" /></label>
+            <label class="swatch" style="--swatch:#f472b6"><input type="radio" name="admin-subject-color" value="#f472b6" /></label>
+            <label class="swatch" style="--swatch:#facc15"><input type="radio" name="admin-subject-color" value="#facc15" /></label>
+            <label class="swatch" style="--swatch:#fb923c"><input type="radio" name="admin-subject-color" value="#fb923c" /></label>
+            <label class="swatch" style="--swatch:#a78bfa"><input type="radio" name="admin-subject-color" value="#a78bfa" /></label>
+            <label class="swatch" style="--swatch:#22d3ee"><input type="radio" name="admin-subject-color" value="#22d3ee" /></label>
+            <label class="swatch" style="--swatch:#f87171"><input type="radio" name="admin-subject-color" value="#f87171" /></label>
+          </div>
+        </fieldset>
+
+        <p id="admin-subject-form-error" class="small-note add-subject-error" hidden></p>
+
+        <div class="button-group">
+          <button id="admin-subject-submit" type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-circle-plus"></i> Create Subject
+          </button>
+          <button id="admin-subject-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
