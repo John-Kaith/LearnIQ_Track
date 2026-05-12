@@ -1278,7 +1278,7 @@ async def generate_activities(body: dict):
             status_code=400,
         )
 
-    activity_type = (body.get("activity_type") or "short_answer").strip().lower()
+    activity_type = (body.get("activity_type") or "essay").strip().lower()
     count = body.get("count", 5)
     try:
         count = int(count)
@@ -1287,21 +1287,32 @@ async def generate_activities(body: dict):
     if count not in (5, 10, 15):
         count = 5
 
-    allowed = {"identification", "true_false", "matching", "fill_blank", "short_answer"}
+    allowed = {"essay", "flashcards"}
     if activity_type not in allowed:
-        activity_type = "short_answer"
+        activity_type = "essay"
 
     schema_by_type = {
-        "identification": '{ "activities": [ { "question": "...", "answer": "..." } ] }',
-        "true_false": '{ "activities": [ { "question": "...", "answer": true } ] }',
-        "fill_blank": '{ "activities": [ { "question": "Fill in the blank: ... ____ ...", "answer": "..." } ] }',
-        "short_answer": '{ "activities": [ { "question": "...", "answer": "..." } ] }',
-        "matching": '{ "pairs": [ { "left": "...", "right": "..." } ] }',
+        "essay": '{ "activities": [ { "question": "Essay prompt...", "answer": "Sample answer or key points the response should cover (2-4 sentences)." } ] }',
+        "flashcards": '{ "cards": [ { "front": "Term or question (short)", "back": "Definition or answer (concise)" } ] }',
+    }
+
+    type_instructions = {
+        "essay": (
+            "Write open-ended essay prompts that require the student to explain, analyze, "
+            "compare, or evaluate ideas from the lesson. Each prompt should be 1-2 sentences. "
+            "The 'answer' field should be a concise sample answer or list of key points (no markdown)."
+        ),
+        "flashcards": (
+            "Create study flashcards. The 'front' is a short term, concept, or question "
+            "(max ~8 words). The 'back' is a concise definition or answer (1-2 sentences). "
+            "Cover the most important concepts from the lesson."
+        ),
     }
 
     prompt = (
         "You are an educational content generator.\n"
         f"Create exactly {count} items for activity type: {activity_type}.\n"
+        f"{type_instructions[activity_type]}\n"
         "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences).\n"
         f"Schema:\n{schema_by_type[activity_type]}\n\n"
         "LESSON TEXT:\n"
@@ -1332,14 +1343,18 @@ async def generate_activities(body: dict):
         print(f"[DEBUG] JSON parsing error: {e}")
         return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)
 
-    # Normalize to DB storage format: list of dicts, or a single matching object with pairs.
+    # Normalize to DB storage format: list of dicts, or a single deck object for flashcards.
     normalized_activities = []
-    if activity_type == "matching":
-        pairs = activity_data.get("pairs") if isinstance(activity_data.get("pairs"), list) else []
-        pairs = [p for p in pairs if isinstance(p, dict) and p.get("left") and p.get("right")]
-        if not pairs:
-            return JSONResponse({"error": "Failed to generate matching activity. Please retry."}, status_code=502)
-        normalized_activities = [{"activity_type": "matching", "pairs": pairs}]
+    if activity_type == "flashcards":
+        cards = activity_data.get("cards") if isinstance(activity_data.get("cards"), list) else []
+        cards = [
+            {"front": str(c.get("front") or "").strip(), "back": str(c.get("back") or "").strip()}
+            for c in cards
+            if isinstance(c, dict) and c.get("front") and c.get("back")
+        ]
+        if not cards:
+            return JSONResponse({"error": "Failed to generate flashcards. Please retry."}, status_code=502)
+        normalized_activities = [{"activity_type": "flashcards", "cards": cards}]
     else:
         acts = activity_data.get("activities") if isinstance(activity_data.get("activities"), list) else []
         for a in acts:

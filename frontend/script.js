@@ -35,6 +35,325 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ============================================================
+// Flashcards modal study experience
+// ------------------------------------------------------------
+// One modal is reused for any number of decks. The launcher in
+// the Activities tab stores its cards as a JSON payload on the
+// data-fc-cards attribute; clicking opens the modal with that
+// deck loaded.
+// ============================================================
+
+const _fcState = {
+  cards: [],
+  current: 0,
+  animating: false,
+};
+
+function _fcEls() {
+  return {
+    modal: document.getElementById("flashcards-modal"),
+    card: document.getElementById("fc-card"),
+    front: document.getElementById("fc-card-front-text"),
+    back: document.getElementById("fc-card-back-text"),
+    counter: document.getElementById("fc-modal-counter"),
+    prev: document.getElementById("fc-prev-btn"),
+    next: document.getElementById("fc-next-btn"),
+    close: document.getElementById("fc-modal-close"),
+    cardView: document.getElementById("fc-card-view"),
+    completeView: document.getElementById("fc-complete-view"),
+    completeCount: document.getElementById("fc-complete-count"),
+    reviewAgain: document.getElementById("fc-review-again"),
+    closeDeck: document.getElementById("fc-close-deck"),
+  };
+}
+
+function _fcShowCard(idx) {
+  const els = _fcEls();
+  if (!els.card || !_fcState.cards.length) return;
+  const c = _fcState.cards[idx];
+  if (!c) return;
+  els.card.classList.remove("flipped");
+  if (els.front) els.front.textContent = c.front;
+  if (els.back) els.back.textContent = c.back;
+  if (els.counter) els.counter.textContent = `${idx + 1} / ${_fcState.cards.length}`;
+  _fcState.current = idx;
+
+  if (els.prev) els.prev.disabled = idx === 0;
+  if (els.next) {
+    els.next.innerHTML =
+      idx === _fcState.cards.length - 1
+        ? 'Finish <i class="fa-solid fa-flag-checkered"></i>'
+        : 'Next <i class="fa-solid fa-chevron-right"></i>';
+  }
+}
+
+function _fcShowCompletion() {
+  const els = _fcEls();
+  if (els.cardView) els.cardView.hidden = true;
+  if (els.completeView) els.completeView.hidden = false;
+  if (els.completeCount) els.completeCount.textContent = String(_fcState.cards.length);
+}
+
+function _fcShowDeck() {
+  const els = _fcEls();
+  if (els.cardView) els.cardView.hidden = false;
+  if (els.completeView) els.completeView.hidden = true;
+}
+
+function openFlashcardsModal(cards) {
+  const els = _fcEls();
+  if (!els.modal) {
+    console.warn("[Flashcards] Modal element not found in DOM.");
+    return;
+  }
+  const list = (Array.isArray(cards) ? cards : []).filter((c) => c && c.front && c.back);
+  if (!list.length) {
+    console.warn("[Flashcards] No valid cards to display.");
+    return;
+  }
+  _fcState.cards = list;
+  _fcState.current = 0;
+  _fcShowDeck();
+  _fcShowCard(0);
+  els.modal.removeAttribute("hidden");
+  document.body.style.overflow = "hidden";
+  els.card?.focus();
+}
+
+function closeFlashcardsModal() {
+  const els = _fcEls();
+  if (!els.modal) return;
+  els.modal.setAttribute("hidden", "");
+  document.body.style.overflow = "";
+  _fcState.cards = [];
+  _fcState.current = 0;
+  if (els.card) els.card.classList.remove("flipped");
+}
+
+function wireFlashcardLauncher(launcherEl) {
+  if (!launcherEl || launcherEl.dataset.fcWired === "1") return;
+  launcherEl.dataset.fcWired = "1";
+  launcherEl.addEventListener("click", () => {
+    const raw = launcherEl.dataset.fcCards || "";
+    if (!raw) return;
+    try {
+      const cards = JSON.parse(decodeURIComponent(raw));
+      openFlashcardsModal(cards);
+    } catch (err) {
+      console.warn("[Flashcards] Failed to parse cards payload:", err);
+    }
+  });
+}
+
+/**
+ * Wire global modal controls once at startup.
+ * Idempotent: safe to call multiple times.
+ */
+function _fcWireModalControlsOnce() {
+  if (typeof document === "undefined") return;
+  if (document.body && document.body.dataset.fcModalWired === "1") return;
+  const els = _fcEls();
+  if (!els.modal) return;
+  if (document.body) document.body.dataset.fcModalWired = "1";
+
+  els.card?.addEventListener("click", () => {
+    if (_fcState.animating) return;
+    els.card.classList.toggle("flipped");
+  });
+  els.card?.addEventListener("keydown", (ev) => {
+    if (ev.key === " " || ev.key === "Enter") {
+      ev.preventDefault();
+      els.card.classList.toggle("flipped");
+    }
+  });
+
+  els.prev?.addEventListener("click", () => {
+    if (_fcState.current > 0) _fcShowCard(_fcState.current - 1);
+  });
+  els.next?.addEventListener("click", () => {
+    if (_fcState.current < _fcState.cards.length - 1) {
+      _fcShowCard(_fcState.current + 1);
+    } else {
+      _fcShowCompletion();
+    }
+  });
+
+  els.close?.addEventListener("click", closeFlashcardsModal);
+  els.closeDeck?.addEventListener("click", closeFlashcardsModal);
+  els.reviewAgain?.addEventListener("click", () => {
+    _fcShowDeck();
+    _fcShowCard(0);
+  });
+
+  els.modal.addEventListener("click", (ev) => {
+    if (ev.target === els.modal) closeFlashcardsModal();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (els.modal.hasAttribute("hidden")) return;
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeFlashcardsModal();
+    }
+  });
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _fcWireModalControlsOnce);
+  } else {
+    _fcWireModalControlsOnce();
+  }
+}
+
+/**
+ * Render the AI-generated activities list (essays, flashcards, plus legacy types)
+ * into a target container. Returns immediately if the container is missing.
+ * Wires up any flashcard decks after insertion.
+ */
+function renderActivitiesInto(targetEl, activities) {
+  if (!targetEl) return;
+  const acts = Array.isArray(activities) ? activities : activities == null ? [] : [activities];
+  const flashcardDeckIds = [];
+
+  const html = acts
+    .map((item, i) => {
+      if (typeof item === "string") {
+        return `
+          <div class="activity-item">
+            <strong>Activity ${i + 1}</strong>
+            <p>${escapeHtml(item)}</p>
+          </div>`;
+      }
+
+      if (typeof item !== "object" || item === null) {
+        return `
+          <div class="activity-item">
+            <strong>Activity ${i + 1}</strong>
+            <p>${escapeHtml(String(item))}</p>
+          </div>`;
+      }
+
+      // Flashcards deck — renders as a stack-thumbnail launcher that opens the study modal
+      if (item.activity_type === "flashcards" && Array.isArray(item.cards)) {
+        const cards = item.cards.filter((c) => c && c.front && c.back);
+        if (cards.length === 0) {
+          return `
+            <div class="activity-item">
+              <strong>Flashcards</strong>
+              <p class="small-note">No cards generated.</p>
+            </div>`;
+        }
+        const launcherId = `fc-launcher-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        flashcardDeckIds.push(launcherId);
+        const cardsPayload = encodeURIComponent(JSON.stringify(cards));
+        const previewText = escapeHtml(cards[0].front.length > 70 ? cards[0].front.slice(0, 70) + "…" : cards[0].front);
+        return `
+          <div class="activity-item flashcard-activity">
+            <button
+              type="button"
+              id="${launcherId}"
+              class="fc-launcher"
+              data-fc-cards="${cardsPayload}"
+              aria-label="Open flashcards deck with ${cards.length} cards">
+              <div class="fc-launcher-stack" aria-hidden="true">
+                <div class="fc-launcher-card fc-launcher-card-3"></div>
+                <div class="fc-launcher-card fc-launcher-card-2"></div>
+                <div class="fc-launcher-card fc-launcher-card-1">
+                  <span class="fc-launcher-label"><i class="fa-solid fa-clone"></i> Flashcards</span>
+                  <span class="fc-launcher-preview">${previewText}</span>
+                </div>
+              </div>
+              <div class="fc-launcher-meta">
+                <strong><i class="fa-solid fa-clone"></i> Flashcards deck</strong>
+                <span class="small-note">${cards.length} card${cards.length === 1 ? "" : "s"} · Click to study</span>
+                <span class="fc-launcher-cta">
+                  <i class="fa-solid fa-play"></i> Start studying
+                </span>
+              </div>
+            </button>
+          </div>`;
+      }
+
+      // Essay (open-ended prompt with optional sample answer)
+      if (item.activity_type === "essay" && item.question) {
+        const sample = item.answer == null ? "" : String(item.answer);
+        return `
+          <div class="activity-item essay-activity">
+            <div class="essay-header">
+              <strong>Essay ${i + 1}</strong>
+              <span class="essay-chip"><i class="fa-solid fa-pen-nib"></i> Essay</span>
+            </div>
+            <p class="essay-prompt">${escapeHtml(item.question)}</p>
+            <textarea class="form-textarea essay-response" rows="6" placeholder="Write your response here..."></textarea>
+            ${
+              sample
+                ? `<details class="essay-sample">
+                    <summary><i class="fa-solid fa-lightbulb"></i> Show sample answer / key points</summary>
+                    <p>${escapeHtml(sample)}</p>
+                  </details>`
+                : ""
+            }
+          </div>`;
+      }
+
+      // Legacy: matching (kept for previously-stored data)
+      if (item.activity_type === "matching" && Array.isArray(item.pairs)) {
+        const pairs = item.pairs
+          .slice(0, 10)
+          .map((p) => `<li><strong>${escapeHtml(p.left || "")}</strong> — ${escapeHtml(p.right || "")}</li>`)
+          .join("");
+        return `
+          <div class="activity-item">
+            <strong>Matching Type</strong>
+            <span class="small-note">Match the pairs below</span>
+            <ul class="small-note" style="margin:0.6rem 0 0; padding-left:1.2rem;">
+              ${pairs || "<li>—</li>"}
+            </ul>
+          </div>`;
+      }
+
+      // Legacy: generic question/answer (identification, true/false, fill_blank, short_answer)
+      if (Object.prototype.hasOwnProperty.call(item, "question") && Object.prototype.hasOwnProperty.call(item, "answer")) {
+        const ans =
+          typeof item.answer === "boolean"
+            ? item.answer
+              ? "True"
+              : "False"
+            : item.answer == null
+            ? "—"
+            : String(item.answer);
+        return `
+          <div class="activity-item">
+            <strong>${escapeHtml((item.activity_type || "activity").replace("_", " "))} ${i + 1}</strong>
+            <p>${escapeHtml(item.question || "")}</p>
+            <small>Answer: ${escapeHtml(ans)}</small>
+          </div>`;
+      }
+
+      return `
+        <div class="activity-item">
+          <strong>${escapeHtml(item.title || `Activity ${i + 1}`)}</strong>
+          <span class="small-note">${escapeHtml(item.activity_type || "activity")}</span>
+          <div class="activity-instructions">
+            <em>${escapeHtml(item.instructions || "")}</em>
+          </div>
+          <p>${escapeHtml(item.question_or_task || "")}</p>
+        </div>`;
+    })
+    .join("");
+
+  targetEl.innerHTML = html || '<p class="small-note">No activities yet.</p>';
+
+  flashcardDeckIds.forEach((id) => {
+    const launcherEl = document.getElementById(id);
+    if (launcherEl && typeof wireFlashcardLauncher === "function") {
+      wireFlashcardLauncher(launcherEl);
+    }
+  });
+}
+
 async function readApiJson(response) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -4242,7 +4561,6 @@ let quizScore = 0;
   const activitySettingsCancel = document.getElementById("student-activity-generate-cancel");
   const activitySettingsConfirm = document.getElementById("student-activity-generate-confirm");
   const activityTypeSelect = document.getElementById("student-activity-type");
-  const activityCountSelect = document.getElementById("student-activity-count");
 
   function openModal(el) {
     if (!el) return;
@@ -4465,70 +4783,7 @@ function showEmpty(message) {
     if (activitiesList) {
       const acts = data.activities || [];
       console.log("[DEBUG] Rendering activities. acts:", acts);
-      console.log("[DEBUG] activitiesList element:", activitiesList);
-      activitiesList.innerHTML = acts
-        .map(
-          (item, i) => {
-            // Handle both old string format and new structured format
-            if (typeof item === 'string') {
-              return `
-                <div class="activity-item">
-                  <strong>Activity ${i + 1}</strong>
-                  <p>${escapeHtml(item)}</p>
-                </div>`;
-            } else if (typeof item === 'object' && item !== null) {
-              if (item.activity_type === "matching" && Array.isArray(item.pairs)) {
-                const pairs = item.pairs
-                  .slice(0, 10)
-                  .map((p) => `<li><strong>${escapeHtml(p.left || "")}</strong> — ${escapeHtml(p.right || "")}</li>`)
-                  .join("");
-                return `
-                  <div class="activity-item">
-                    <strong>Matching Type</strong>
-                    <span class="small-note">Match the pairs below</span>
-                    <ul class="small-note" style="margin:0.6rem 0 0; padding-left:1.2rem;">
-                      ${pairs || "<li>—</li>"}
-                    </ul>
-                  </div>`;
-              }
-
-              if (Object.prototype.hasOwnProperty.call(item, "question") && Object.prototype.hasOwnProperty.call(item, "answer")) {
-                const ans =
-                  typeof item.answer === "boolean"
-                    ? item.answer
-                      ? "True"
-                      : "False"
-                    : item.answer == null
-                    ? "—"
-                    : String(item.answer);
-                return `
-                  <div class="activity-item">
-                    <strong>${escapeHtml((item.activity_type || "activity").replace("_", " "))} ${i + 1}</strong>
-                    <p>${escapeHtml(item.question || "")}</p>
-                    <small>Answer: ${escapeHtml(ans)}</small>
-                  </div>`;
-              }
-
-              return `
-                <div class="activity-item">
-                  <strong>${escapeHtml(item.title || `Activity ${i + 1}`)}</strong>
-                  <span class="small-note">${escapeHtml(item.activity_type || 'activity')}</span>
-                  <div class="activity-instructions">
-                    <em>${escapeHtml(item.instructions || '')}</em>
-                  </div>
-                  <p>${escapeHtml(item.question_or_task || '')}</p>
-                </div>`;
-            } else {
-              return `
-                <div class="activity-item">
-                  <strong>Activity ${i + 1}</strong>
-                  <p>${escapeHtml(String(item))}</p>
-                </div>`;
-            }
-          }
-        )
-        .join("") || '<p class="small-note">No activities yet.</p>';
-      console.log("[DEBUG] activitiesList.innerHTML after render:", activitiesList.innerHTML);
+      renderActivitiesInto(activitiesList, acts);
     }
 
     quizIndex = 0;
@@ -4564,13 +4819,33 @@ function showEmpty(message) {
 
   function updateActivitiesDisplay(activitiesData) {
     if (!activitiesList) return;
-    const activitiesArray = Array.isArray(activitiesData) ? activitiesData : [activitiesData];
+    console.log("[DEBUG] updateActivitiesDisplay called with:", activitiesData);
+
+    const arr = Array.isArray(activitiesData) ? activitiesData : activitiesData == null ? [] : [activitiesData];
+    const hasLegacyStringified = arr.some(
+      (it) => typeof it === "string" && it.trim() === "[object Object]"
+    );
+    if (hasLegacyStringified) {
+      console.warn("[DEBUG] Detected legacy stringified activities ('[object Object]') in DB.");
+      activitiesList.innerHTML = `
+        <div class="activity-item">
+          <strong>Outdated activities</strong>
+          <p class="small-note">These activities were saved with an older version and can no longer be displayed. Click <strong>Generate Activity</strong> again to create fresh AI-generated essays or flashcards.</p>
+        </div>`;
+      return;
+    }
+
+    if (typeof renderActivitiesInto === "function") {
+      renderActivitiesInto(activitiesList, activitiesData);
+      return;
+    }
+    const activitiesArray = arr;
     activitiesList.innerHTML = activitiesArray
       .map(
         (item, i) => `
       <div class="activity-item">
         <strong>Activity ${i + 1}</strong>
-        <p>${escapeHtml(item)}</p>
+        <p>${escapeHtml(typeof item === "string" ? item : JSON.stringify(item))}</p>
       </div>`
       )
       .join("") || '<p class="small-note">No activities yet.</p>';
@@ -4954,8 +5229,8 @@ function showEmpty(message) {
       if (diff) requestPayload.difficulty = diff;
     }
     if (actionType === "activity") {
-      requestPayload.activity_type = (activityTypeSelect?.value || "short_answer").trim();
-      requestPayload.count = Number(activityCountSelect?.value || 5);
+      requestPayload.activity_type = (activityTypeSelect?.value || "essay").trim();
+      requestPayload.count = requestPayload.activity_type === "flashcards" ? 10 : 5;
     }
 
     console.log("STARTING AI GENERATION");
@@ -5277,7 +5552,43 @@ async function renderAiResultPage() {
 
   const acts = Array.isArray(payload.activities) ? payload.activities : [];
   activitiesList.innerHTML =
-    acts.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No activities yet.</li>";
+    acts
+      .map((item) => {
+        if (typeof item === "string") return `<li>${escapeHtml(item)}</li>`;
+        if (item && typeof item === "object") {
+          if (item.activity_type === "flashcards" && Array.isArray(item.cards)) {
+            const cards = item.cards
+              .filter((c) => c && c.front && c.back)
+              .map(
+                (c) =>
+                  `<li><strong>${escapeHtml(c.front)}</strong> — ${escapeHtml(c.back)}</li>`
+              )
+              .join("");
+            return `<li><strong>Flashcards</strong><ul>${cards}</ul></li>`;
+          }
+          if (item.activity_type === "essay" && item.question) {
+            return `<li><strong>Essay:</strong> ${escapeHtml(item.question)}${
+              item.answer
+                ? `<br /><small>Sample: ${escapeHtml(String(item.answer))}</small>`
+                : ""
+            }</li>`;
+          }
+          if (item.question != null) {
+            const ans =
+              typeof item.answer === "boolean"
+                ? item.answer
+                  ? "True"
+                  : "False"
+                : item.answer == null
+                ? "—"
+                : String(item.answer);
+            return `<li><strong>${escapeHtml(item.question)}</strong><br /><small>Answer: ${escapeHtml(ans)}</small></li>`;
+          }
+          return `<li>${escapeHtml(JSON.stringify(item))}</li>`;
+        }
+        return `<li>${escapeHtml(String(item))}</li>`;
+      })
+      .join("") || "<li>No activities yet.</li>";
 }
 
 // =====================================================================
@@ -5599,17 +5910,22 @@ async function renderActivityDetailIntoModal(item) {
       setHistoryDetailBody('<p class="small-note">No activities available for this lesson anymore.</p>');
       return;
     }
-    const rows = activities
-      .map(
-        (act, i) => `
-          <article class="activity-item history-activity-item">
-            <strong>Activity ${i + 1}</strong>
-            <p>${escapeHtml(String(act))}</p>
-          </article>
-        `
-      )
-      .join("");
-    setHistoryDetailBody(`<div class="history-activity-list">${rows}</div>`);
+    setHistoryDetailBody('<div class="history-activity-list" id="history-activity-render-target"></div>');
+    const target = document.getElementById("history-activity-render-target");
+    if (target && typeof renderActivitiesInto === "function") {
+      renderActivitiesInto(target, activities);
+    } else if (target) {
+      target.innerHTML = activities
+        .map(
+          (act, i) => `
+            <article class="activity-item history-activity-item">
+              <strong>Activity ${i + 1}</strong>
+              <p>${escapeHtml(typeof act === "string" ? act : JSON.stringify(act))}</p>
+            </article>
+          `
+        )
+        .join("");
+    }
   } catch (e) {
     console.warn("renderActivityDetailIntoModal error:", e);
     setHistoryDetailBody('<p class="small-note">Could not reach the server.</p>');

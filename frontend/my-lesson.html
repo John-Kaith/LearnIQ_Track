@@ -8,14 +8,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026051203" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
   <script src="js/shared/reviewer-markdown.js" defer></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026051203" defer></script>
 </head>
 <body class="my-lesson-page">
   <div class="dashboard-shell container">
@@ -210,25 +210,14 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <p class="small-note">Pick an activity type and how many items to generate.</p>
+      <p class="small-note">Pick an activity type to generate.</p>
 
-      <div class="two-field-grid" style="margin-top: 0.75rem;">
+      <div style="margin-top: 0.75rem;">
         <label>
           <span class="small-note">Activity type</span>
           <select id="student-activity-type" class="form-select">
-            <option value="identification">Identification</option>
-            <option value="true_false">True or False</option>
-            <option value="matching">Matching Type</option>
-            <option value="fill_blank">Fill in the Blank</option>
-            <option value="short_answer" selected>Short Answer</option>
-          </select>
-        </label>
-        <label>
-          <span class="small-note">Question count</span>
-          <select id="student-activity-count" class="form-select">
-            <option value="5" selected>5</option>
-            <option value="10">10</option>
-            <option value="15">15</option>
+            <option value="essay" selected>Essay</option>
+            <option value="flashcards">Flashcards</option>
           </select>
         </label>
       </div>
@@ -238,6 +227,65 @@
           <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Activities
         </button>
         <button id="student-activity-generate-cancel" type="button" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flashcards study modal -->
+  <div id="flashcards-modal" class="fc-modal-backdrop" hidden>
+    <div class="fc-modal" role="dialog" aria-modal="true" aria-labelledby="fc-modal-title">
+      <div class="fc-modal-head">
+        <div class="fc-modal-title-wrap">
+          <h3 id="fc-modal-title"><i class="fa-solid fa-clone"></i> Flashcards</h3>
+          <span class="fc-modal-counter" id="fc-modal-counter">1 / 1</span>
+        </div>
+        <button id="fc-modal-close" type="button" class="btn btn-ghost" aria-label="Close flashcards">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="fc-modal-body">
+        <!-- Card view -->
+        <div id="fc-card-view" class="fc-card-view">
+          <div class="fc-card" id="fc-card" role="button" tabindex="0" aria-label="Click to flip card">
+            <div class="fc-card-inner">
+              <div class="fc-card-face fc-card-front">
+                <span class="fc-card-label">Question</span>
+                <div class="fc-card-text" id="fc-card-front-text">—</div>
+                <span class="fc-card-hint"><i class="fa-solid fa-arrows-rotate"></i> Click to flip</span>
+              </div>
+              <div class="fc-card-face fc-card-back">
+                <span class="fc-card-label">Answer</span>
+                <div class="fc-card-text" id="fc-card-back-text">—</div>
+                <span class="fc-card-hint"><i class="fa-solid fa-arrows-rotate"></i> Click to flip back</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fc-modal-controls">
+            <button id="fc-prev-btn" type="button" class="btn btn-secondary" aria-label="Previous card">
+              <i class="fa-solid fa-chevron-left"></i> Prev
+            </button>
+            <button id="fc-next-btn" type="button" class="btn btn-primary" aria-label="Next card">
+              Next <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Completion view (hidden until last Next) -->
+        <div id="fc-complete-view" class="fc-complete-view" hidden>
+          <div class="fc-complete-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <h4>Deck complete!</h4>
+          <p class="small-note">You reviewed all <span id="fc-complete-count">0</span> cards. Want to go through them again?</p>
+          <div class="fc-complete-actions">
+            <button id="fc-review-again" type="button" class="btn btn-primary">
+              <i class="fa-solid fa-rotate-right"></i> Review again
+            </button>
+            <button id="fc-close-deck" type="button" class="btn btn-secondary">
+              <i class="fa-solid fa-xmark"></i> Close
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
