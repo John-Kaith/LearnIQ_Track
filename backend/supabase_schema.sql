@@ -76,3 +76,12 @@ alter table if exists public.attendance_logs
 
 alter table if exists public.journals
   add column if not exists attendance_id uuid references public.attendance_logs (id) on delete set null;
+
+-- Editable profile fields (bio, contact, avatar). Safe for existing installs.
+alter table if exists public.profiles
+  add column if not exists bio text,
+  add column if not exists phone text,
+  add column if not exists section text,
+  add column if not exists dob date,
+  add column if not exists address text,
+  add column if not exists avatar_data text;

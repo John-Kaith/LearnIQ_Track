@@ -67,6 +67,13 @@ function hydrateImmersionSidebarUserChip() {
   const trackEl = document.getElementById("student-display-track");
   const full = (u.full_name && String(u.full_name).trim()) || "";
   if (nameEl && full) nameEl.textContent = full;
-  if (initialsEl) initialsEl.textContent = getUserInitials(full || u.email || "");
+  if (initialsEl) {
+    const fallback = getUserInitials(full || u.email || "");
+    if (window.LearnIQAvatar) {
+      window.LearnIQAvatar.applyToElement(initialsEl, u, fallback);
+    } else {
+      initialsEl.textContent = fallback;
+    }
+  }
   if (trackEl && u.id_number) trackEl.textContent = `ID ${u.id_number}`;
 }

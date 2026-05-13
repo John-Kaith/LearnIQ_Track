@@ -31,6 +31,7 @@
         <a class="active" href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
         <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="teacher-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
         <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
@@ -59,6 +60,35 @@
 
       <section class="dashboard-grid">
         <div class="content-stack lesson-workspace-main">
+          <article class="glass-card content-card upload-box" id="teacher-subjects-upload-panel" data-upload-role="teacher" aria-label="Lesson upload form">
+            <div>
+              <h3>Upload lesson file</h3>
+              <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. PDF gives the best text for AI.</p>
+            </div>
+            <form id="teacher-subjects-upload-form" class="upload-form" autocomplete="off">
+              <label class="upload-subject-field form-field" for="teacher-subjects-upload-subject-select">
+                <span class="small-note">Subject <span class="required-mark">*</span></span>
+                <select id="teacher-subjects-upload-subject-select" class="form-input" required>
+                  <option value="" disabled selected>Choose subject…</option>
+                </select>
+              </label>
+              <div class="file-input-wrapper">
+                <input type="file" id="teacher-subjects-file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file" />
+                <label for="teacher-subjects-file-input" class="file-input-label">
+                  <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                  <span id="teacher-subjects-file-input-text">Choose PDF or PPT file</span>
+                </label>
+                <button type="button" class="file-clear-btn" id="teacher-subjects-file-clear-btn" hidden aria-label="Clear selected file">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+              <button type="submit" class="btn btn-primary" id="teacher-subjects-upload-btn">
+                <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload PDF/PPT
+              </button>
+              <p class="file-meta small-note" id="teacher-subjects-file-meta">No file selected yet.</p>
+            </form>
+          </article>
+
           <article id="teacher-subjects-empty" class="glass-card content-card" hidden>
             <h3>No subjects yet</h3>
             <p class="content-subtitle" id="teacher-subjects-empty-text">
@@ -75,6 +105,8 @@
       </section>
     </main>
   </div>
+
+  <input type="file" id="teacher-subjects-quick-file-input" class="file-input-sr-only" accept=".pdf,.ppt,.pptx" hidden aria-hidden="true" tabindex="-1" />
 
   <!-- Add Subject modal -->
   <div id="teacher-add-subject-modal" class="action-modal-backdrop" hidden>

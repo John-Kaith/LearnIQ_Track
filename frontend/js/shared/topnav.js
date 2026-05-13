@@ -29,7 +29,12 @@
         let ini = "";
         if (parts.length >= 2) ini = (parts[0][0] + parts[1][0]).toUpperCase();
         else ini = parts[0] ? parts[0].slice(0, 2).toUpperCase() : "";
-        initialsEl.textContent = ini || "ST";
+        const fallback = ini || "ST";
+        if (window.LearnIQAvatar) {
+          window.LearnIQAvatar.applyToElement(initialsEl, u, fallback);
+        } else {
+          initialsEl.textContent = fallback;
+        }
       }
       if (trackEl && u.id_number) trackEl.textContent = "ID " + u.id_number;
     } catch (_) {}

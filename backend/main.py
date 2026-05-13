@@ -424,6 +424,35 @@ async def login_user(body: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/auth/refresh")
+async def refresh_access_token(body: dict):
+    """Exchange a Supabase refresh_token for a new access_token.
+
+    Body: { "refresh_token": "..." }
+    Returns: { "access_token": "...", "refresh_token": "...", "expires_in": int }
+    """
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        refresh_token = (body.get("refresh_token") or "").strip()
+        if not refresh_token:
+            return JSONResponse({"error": "refresh_token required."}, status_code=400)
+        result = supabase.auth.refresh_session(refresh_token)
+        session = getattr(result, "session", None)
+        if not session or not getattr(session, "access_token", None):
+            return JSONResponse({"error": "Could not refresh session."}, status_code=401)
+        return {
+            "access_token": session.access_token,
+            "refresh_token": getattr(session, "refresh_token", refresh_token),
+            "expires_in": getattr(session, "expires_in", None),
+        }
+    except Exception as e:
+        msg = str(e) or "Refresh failed."
+        print("AUTH REFRESH ERROR:", msg)
+        return JSONResponse({"error": msg}, status_code=401)
+
+
 @app.post("/forgot-password")
 async def forgot_password(body: dict):
     err = require_supabase()
@@ -701,6 +730,24 @@ def get_teacher_dashboard_stats(authorization: str | None = Header(default=None)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
+def _profile_response_payload(prof: dict) -> dict:
+    """Shared shape returned by GET /me and PATCH /me/profile."""
+    return {
+        "id": prof.get("id"),
+        "full_name": prof.get("full_name"),
+        "id_number": prof.get("id_number"),
+        "email": prof.get("email"),
+        "role": prof.get("role"),
+        "approval_status": prof.get("approval_status"),
+        "bio": prof.get("bio") or "",
+        "phone": prof.get("phone") or "",
+        "section": prof.get("section") or "",
+        "dob": (str(prof.get("dob")) if prof.get("dob") else ""),
+        "address": prof.get("address") or "",
+        "avatar_data": prof.get("avatar_data") or "",
+    }
+
+
 @app.get("/me")
 def get_me(authorization: str | None = Header(default=None)):
     """Return signed-in user's profile row (Bearer token)."""
@@ -714,16 +761,61 @@ def get_me(authorization: str | None = Header(default=None)):
         prof = db_supabase.get_profile_by_id_number(sid)
         if not prof:
             return JSONResponse({"error": "Profile not found."}, status_code=404)
-        return {
-            "id": prof.get("id"),
-            "full_name": prof.get("full_name"),
-            "id_number": prof.get("id_number"),
-            "email": prof.get("email"),
-            "role": prof.get("role"),
-            "approval_status": prof.get("approval_status"),
-        }
+        return _profile_response_payload(prof)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.patch("/me/profile")
+async def patch_my_profile(
+    body: dict = Body(default={}),
+    authorization: str | None = Header(default=None),
+):
+    """Signed-in user updates their own editable profile fields.
+
+    Accepts any subset of: bio, phone, section, dob (YYYY-MM-DD), address,
+    avatar_data (data URL string). Other keys are ignored. Empty strings
+    clear the column (stored as NULL).
+    """
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = student_id_number_from_authorization(authorization)
+    if not sid:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        payload = body if isinstance(body, dict) else {}
+        editable: dict = {}
+        for f in db_supabase.PROFILE_EXTRA_FIELDS:
+            if f in payload:
+                editable[f] = payload[f]
+        if not editable:
+            return JSONResponse({"error": "No editable fields provided."}, status_code=400)
+        # Basic guard: keep avatar payload reasonable (~2 MB of base64 ≈ 1.5 MB image).
+        av = editable.get("avatar_data")
+        if isinstance(av, str) and len(av) > 2_500_000:
+            return JSONResponse(
+                {"error": "Avatar is too large after encoding. Try a smaller image."},
+                status_code=413,
+            )
+        updated = db_supabase.update_profile_extras(sid, editable)
+        if not updated:
+            return JSONResponse({"error": "Could not update profile."}, status_code=500)
+        return _profile_response_payload(updated)
+    except Exception as e:
+        msg = str(e)
+        if "column" in msg.lower() and ("does not exist" in msg.lower() or "schema cache" in msg.lower()):
+            return JSONResponse(
+                {
+                    "error": (
+                        "Profile columns are missing in the database. Run "
+                        "`backend/migrations/profile_extras.sql` in the Supabase "
+                        "SQL editor and try again."
+                    )
+                },
+                status_code=500,
+            )
+        return JSONResponse({"error": msg}, status_code=502)
 
 
 @app.get("/lessons")
@@ -1662,6 +1754,252 @@ def journals_list(
         if bad is not None:
             return bad
         return db_supabase.list_journals_for_student(sid)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+# ============================================================
+# Student Gradecard endpoints
+# ============================================================
+
+@app.get("/grading-periods")
+def list_grading_periods_endpoint():
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        rows = db_supabase.list_grading_periods()
+        current = db_supabase.get_current_grading_period() or {}
+        return {"periods": rows, "current_id": current.get("id")}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/grading-periods/current")
+def current_grading_period_endpoint():
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        period = db_supabase.get_current_grading_period()
+        if not period:
+            return JSONResponse(
+                {"error": "No grading period configured. Run the gradecard migration SQL."},
+                status_code=404,
+            )
+        return period
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/gradecard")
+def get_gradecard_endpoint(
+    student_id_number: str = Query(...),
+    period_id: str | None = Query(default=None),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    try:
+        data = db_supabase.build_full_gradecard(sid, period_id)
+        return data
+    except RuntimeError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
+    except Exception as e:
+        import traceback
+        print("GRADECARD ERROR:", repr(e))
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/student-grades")
+async def save_student_grade_endpoint(body: dict = Body(...)):
+    """Teacher saves / updates a per-subject grade row."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+
+    student_id_number = str(payload.get("student_id_number") or "").strip()
+    subject_id = payload.get("subject_id")
+    period_id = payload.get("grading_period_id")
+
+    if not student_id_number or not subject_id:
+        return JSONResponse(
+            {"error": "student_id_number and subject_id are required"},
+            status_code=400,
+        )
+
+    if not period_id:
+        cur = db_supabase.get_current_grading_period() or {}
+        period_id = cur.get("id")
+    if not period_id:
+        return JSONResponse({"error": "No grading_period_id and no current period configured."}, status_code=400)
+
+    student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+
+    db_payload = {
+        "student_id": student_uuid,
+        "subject_id": str(subject_id),
+        "grading_period_id": period_id,
+        "teacher_id_number": payload.get("teacher_id_number"),
+        "quiz_average": payload.get("quiz_average"),
+        "activity_average": payload.get("activity_average"),
+        "attendance_percent": payload.get("attendance_percent"),
+        "final_grade": payload.get("final_grade"),
+        "remarks": payload.get("remarks"),
+        "teacher_comments": payload.get("teacher_comments"),
+        "finalized_at": payload.get("finalized_at"),
+    }
+
+    try:
+        row = db_supabase.upsert_student_grade(db_payload)
+        return {"ok": True, "grade": row}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/gradecards")
+async def save_gradecard_endpoint(body: dict = Body(...)):
+    """Adviser/Admin saves the top-level gradecard summary."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+
+    student_id_number = str(payload.get("student_id_number") or "").strip()
+    period_id = payload.get("grading_period_id")
+
+    if not student_id_number:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+
+    period = db_supabase.get_grading_period(period_id)
+    if not period:
+        return JSONResponse({"error": "No grading period available"}, status_code=400)
+
+    student = db_supabase.get_profile_by_id_number(student_id_number)
+    if not student:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+
+    db_payload = {
+        "student_id": str(student["id"]),
+        "grading_period_id": period["id"],
+        "general_average": payload.get("general_average"),
+        "standing": payload.get("standing"),
+        "conduct": payload.get("conduct"),
+        "days_present": payload.get("days_present"),
+        "days_absent": payload.get("days_absent"),
+        "times_tardy": payload.get("times_tardy"),
+        "adviser_comments": payload.get("adviser_comments"),
+        "reference_no": payload.get("reference_no"),
+        "finalized_at": payload.get("finalized_at"),
+    }
+
+    try:
+        row = db_supabase.upsert_gradecard(db_payload)
+        return {"ok": True, "gradecard": row}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/enrollments")
+def list_enrollments_endpoint(
+    student_id_number: str = Query(...),
+    period_id: str | None = Query(default=None),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    student_uuid = db_supabase.profile_uuid_for_id_number(sid)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+    if not period_id:
+        cur = db_supabase.get_current_grading_period() or {}
+        period_id = cur.get("id")
+    try:
+        rows = db_supabase.list_enrollments_for_student(student_uuid, period_id)
+        return {"enrollments": rows}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/enrollments")
+async def upsert_enrollment_endpoint(body: dict = Body(...)):
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+
+    student_id_number = str(payload.get("student_id_number") or "").strip()
+    subject_id = payload.get("subject_id")
+    if not student_id_number or not subject_id:
+        return JSONResponse(
+            {"error": "student_id_number and subject_id are required"},
+            status_code=400,
+        )
+
+    student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+
+    period_id = payload.get("grading_period_id")
+    if not period_id:
+        cur = db_supabase.get_current_grading_period() or {}
+        period_id = cur.get("id")
+
+    try:
+        row = db_supabase.upsert_enrollment(
+            student_uuid=student_uuid,
+            subject_id=str(subject_id),
+            teacher_id_number=payload.get("teacher_id_number"),
+            grading_period_id=period_id,
+        )
+        return {"ok": True, "enrollment": row}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/submit-activity")
+async def submit_activity_endpoint(
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Student submits an essay response or flashcard review log."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+
+    student_id_number, bad = resolve_student_id_number_or_403(payload, authorization)
+    if bad is not None:
+        return bad
+
+    lesson_id = payload.get("lesson_id") or payload.get("file_id")
+    if not lesson_id:
+        return JSONResponse({"error": "lesson_id is required"}, status_code=400)
+
+    student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
+    if not student_uuid:
+        return JSONResponse({"error": "Student profile not found"}, status_code=404)
+
+    try:
+        row = db_supabase.insert_activity_attempt({
+            "student_id": student_uuid,
+            "lesson_id": lesson_id,
+            "activity_index": payload.get("activity_index") or 0,
+            "activity_type": payload.get("activity_type") or "essay",
+            "response": payload.get("response"),
+            "score": payload.get("score"),
+        })
+        return {"ok": True, "attempt": row}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 

@@ -467,6 +467,398 @@ function getCurrentUserSession() {
   }
 }
 
+/* =========================================================
+ * Profile avatar + extra profile details (per-account)
+ *
+ * Photos and extra fields (bio, phone, section, dob, address)
+ * are stored on the user's `profiles` row in Supabase (source of
+ * truth). They are also kept in localStorage as an offline cache
+ * so synchronous APIs like `applyToElement` can render the avatar
+ * instantly on any page without waiting for a network round-trip.
+ *
+ * Read path (sync):
+ *   `LearnIQAvatar.get(user)`        → cache → localStorage → null
+ *   `LearnIQProfileDetails.get(user)` → cache → localStorage → empty
+ *
+ * Write path (async):
+ *   `LearnIQAvatar.set(user, url)`           → PATCH /me/profile
+ *   `LearnIQProfileDetails.set(user, obj)`   → PATCH /me/profile
+ *
+ * Both writers update the local cache on success. Any code that
+ * fetches `/me` should call `LearnIQProfile.absorb(user, payload)`
+ * (or call `LearnIQAvatar.loadFromServer(user)`) so the cache stays
+ * in sync with the database.
+ * ========================================================= */
+(function () {
+  if (typeof window === "undefined") return;
+
+  const AVATAR_PREFIX = "lq_avatar_";
+  const DETAILS_PREFIX = "lq_profile_details_";
+  const MAX_INPUT_BYTES = 8 * 1024 * 1024;
+  const DETAIL_FIELDS = ["bio", "phone", "section", "dob", "address"];
+
+  const avatarCache = new Map(); // key -> dataUrl
+  const detailsCache = new Map(); // key -> { bio, phone, ... }
+
+  function accountKey(user) {
+    if (!user) return "";
+    const idn = String(user.id_number || "").trim();
+    if (idn) return idn;
+    return String(user.email || "").trim().toLowerCase();
+  }
+
+  function emptyDetails() {
+    return DETAIL_FIELDS.reduce((acc, k) => {
+      acc[k] = "";
+      return acc;
+    }, {});
+  }
+
+  function lsGetAvatar(key) {
+    try {
+      return localStorage.getItem(AVATAR_PREFIX + key) || null;
+    } catch {
+      return null;
+    }
+  }
+  function lsSetAvatar(key, dataUrl) {
+    try {
+      if (dataUrl) localStorage.setItem(AVATAR_PREFIX + key, dataUrl);
+      else localStorage.removeItem(AVATAR_PREFIX + key);
+      return true;
+    } catch (e) {
+      console.warn("Avatar local cache save failed:", e);
+      return false;
+    }
+  }
+  function lsGetDetails(key) {
+    try {
+      const raw = localStorage.getItem(DETAILS_PREFIX + key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const out = emptyDetails();
+      for (const f of DETAIL_FIELDS) {
+        if (typeof parsed[f] === "string") out[f] = parsed[f];
+      }
+      return out;
+    } catch {
+      return null;
+    }
+  }
+  function lsSetDetails(key, details) {
+    try {
+      const safe = emptyDetails();
+      for (const f of DETAIL_FIELDS) {
+        safe[f] = details && typeof details[f] === "string" ? details[f].trim() : "";
+      }
+      localStorage.setItem(DETAILS_PREFIX + key, JSON.stringify(safe));
+      return true;
+    } catch (e) {
+      console.warn("Profile details cache save failed:", e);
+      return false;
+    }
+  }
+
+  /* ---------- Sync getters (cache → localStorage → empty) ---------- */
+  function getAvatar(user) {
+    const k = accountKey(user);
+    if (!k) return null;
+    if (avatarCache.has(k)) return avatarCache.get(k);
+    const v = lsGetAvatar(k);
+    if (v) avatarCache.set(k, v);
+    return v || null;
+  }
+  function getDetails(user) {
+    const k = accountKey(user);
+    if (!k) return emptyDetails();
+    if (detailsCache.has(k)) return { ...detailsCache.get(k) };
+    const v = lsGetDetails(k);
+    if (v) {
+      detailsCache.set(k, v);
+      return { ...v };
+    }
+    return emptyDetails();
+  }
+
+  /* ---------- Local-only cache writers ---------- */
+  function setAvatarLocal(user, dataUrl) {
+    const k = accountKey(user);
+    if (!k) return false;
+    if (dataUrl) {
+      avatarCache.set(k, dataUrl);
+      return lsSetAvatar(k, dataUrl);
+    }
+    avatarCache.delete(k);
+    return lsSetAvatar(k, null);
+  }
+  function setDetailsLocal(user, details) {
+    const k = accountKey(user);
+    if (!k) return false;
+    const safe = emptyDetails();
+    for (const f of DETAIL_FIELDS) {
+      safe[f] = details && typeof details[f] === "string" ? details[f].trim() : "";
+    }
+    detailsCache.set(k, safe);
+    return lsSetDetails(k, safe);
+  }
+
+  /* ---------- Absorb /me responses into the cache ---------- */
+  function absorbServerResponse(user, payload) {
+    if (!payload || typeof payload !== "object") return;
+    const k = accountKey(user);
+    if (!k) return;
+    if (typeof payload.avatar_data === "string") {
+      const av = payload.avatar_data;
+      if (av) {
+        avatarCache.set(k, av);
+        lsSetAvatar(k, av);
+      } else {
+        avatarCache.delete(k);
+        lsSetAvatar(k, null);
+      }
+    }
+    let touchedDetails = false;
+    const merged = detailsCache.get(k) || lsGetDetails(k) || emptyDetails();
+    for (const f of DETAIL_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(payload, f)) {
+        merged[f] = typeof payload[f] === "string" ? payload[f] : "";
+        touchedDetails = true;
+      }
+    }
+    if (touchedDetails) {
+      detailsCache.set(k, merged);
+      lsSetDetails(k, merged);
+    }
+  }
+
+  /* ---------- Server sync (authenticated) ---------- */
+  function authHeaders() {
+    const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    const headers = { "Content-Type": "application/json" };
+    if (u && u.access_token) headers.Authorization = `Bearer ${u.access_token}`;
+    return headers;
+  }
+
+  let refreshInFlight = null;
+  /**
+   * Exchange the stored refresh_token for a fresh access_token. Multiple
+   * concurrent callers share the same in-flight promise so we never make
+   * more than one refresh request at a time.
+   */
+  async function tryRefreshSession() {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+      try {
+        const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+        const rt = u && u.refresh_token ? String(u.refresh_token) : "";
+        if (!rt) return false;
+        const res = await fetch(apiUrl("/auth/refresh"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+        if (!res.ok) return false;
+        const body = await res.json().catch(() => null);
+        if (!body || !body.access_token) return false;
+        const next = { ...u, access_token: body.access_token };
+        if (body.refresh_token) next.refresh_token = body.refresh_token;
+        try {
+          const key = typeof authSessionKey === "string" ? authSessionKey : "learniq-current-user";
+          sessionStorage.setItem(key, JSON.stringify(next));
+        } catch (_) { /* storage full */ }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    })();
+    try {
+      return await refreshInFlight;
+    } finally {
+      refreshInFlight = null;
+    }
+  }
+
+  async function fetchWithRefresh(url, init) {
+    const first = await fetch(url, { ...init, headers: authHeaders() });
+    if (first.status !== 401) return first;
+    const refreshed = await tryRefreshSession();
+    if (!refreshed) return first;
+    return fetch(url, { ...init, headers: authHeaders() });
+  }
+
+  async function patchProfile(payload) {
+    const res = await fetchWithRefresh(apiUrl("/me/profile"), {
+      method: "PATCH",
+      body: JSON.stringify(payload || {}),
+    });
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    if (!res.ok) {
+      const reason =
+        body && (body.error || body.message)
+          ? typeof body.error === "string"
+            ? body.error
+            : JSON.stringify(body.error)
+          : `Request failed (${res.status})`;
+      const err = new Error(reason);
+      err.status = res.status;
+      throw err;
+    }
+    return body;
+  }
+
+  async function loadFromServer(user) {
+    if (!user || !user.access_token) return null;
+    try {
+      const res = await fetchWithRefresh(apiUrl("/me"), {});
+      if (!res.ok) return null;
+      const body = await res.json();
+      absorbServerResponse(user, body);
+      return body;
+    } catch (e) {
+      console.warn("Profile load from server failed:", e);
+      return null;
+    }
+  }
+
+  function friendlyAuthError(e) {
+    const m = String((e && e.message) || "").toLowerCase();
+    if (e && e.status === 401) {
+      return "Your session expired. Please sign in again to save changes.";
+    }
+    if (m.includes("sign in required") || m.includes("not signed in")) {
+      return "Your session expired. Please sign in again to save changes.";
+    }
+    return (e && e.message) || "Network error.";
+  }
+
+  async function saveAvatarRemote(user, dataUrl) {
+    if (!user) return { ok: false, reason: "Not signed in." };
+    if (!user.access_token) {
+      // Offline / no auth: keep it local-only so the UI still works.
+      const ok = setAvatarLocal(user, dataUrl);
+      return { ok, reason: ok ? "" : "Could not save locally.", local: true };
+    }
+    try {
+      const body = await patchProfile({ avatar_data: dataUrl || "" });
+      absorbServerResponse(user, body);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: friendlyAuthError(e) };
+    }
+  }
+
+  async function saveDetailsRemote(user, details) {
+    if (!user) return { ok: false, reason: "Not signed in." };
+    const payload = {};
+    for (const f of DETAIL_FIELDS) {
+      payload[f] = details && typeof details[f] === "string" ? details[f].trim() : "";
+    }
+    if (!user.access_token) {
+      const ok = setDetailsLocal(user, payload);
+      return { ok, reason: ok ? "" : "Could not save locally.", local: true };
+    }
+    try {
+      const body = await patchProfile(payload);
+      absorbServerResponse(user, body);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: friendlyAuthError(e) };
+    }
+  }
+
+  /* ---------- Avatar DOM apply + image resize ---------- */
+  function applyAvatarToElement(el, user, fallbackText) {
+    if (!el) return;
+    const data = getAvatar(user);
+    if (data) {
+      el.style.backgroundImage = `url("${data}")`;
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      el.style.backgroundRepeat = "no-repeat";
+      el.classList.add("avatar-has-image");
+      el.textContent = "";
+    } else {
+      el.style.backgroundImage = "";
+      el.classList.remove("avatar-has-image");
+      if (typeof fallbackText === "string") el.textContent = fallbackText;
+    }
+  }
+
+  function resizeImageToDataUrl(file, maxSize) {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject(new Error("No file selected."));
+      if (!String(file.type || "").startsWith("image/")) {
+        return reject(new Error("Please choose an image file."));
+      }
+      if (file.size > MAX_INPUT_BYTES) {
+        return reject(new Error("Image is too large. Choose a file under 8 MB."));
+      }
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxD = maxSize || 256;
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          if (!w || !h) {
+            URL.revokeObjectURL(url);
+            return reject(new Error("Could not read image dimensions."));
+          }
+          if (w > h && w > maxD) { h = Math.round((h * maxD) / w); w = maxD; }
+          else if (h >= w && h > maxD) { w = Math.round((w * maxD) / h); h = maxD; }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          reject(e);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image."));
+      };
+      img.src = url;
+    });
+  }
+
+  window.LearnIQAvatar = {
+    get: getAvatar,
+    /** Save the avatar. Returns Promise<{ ok, reason?, local? }>. */
+    set: saveAvatarRemote,
+    /** Cache-only setter used by `_absorb` and offline fallbacks. */
+    setLocal: setAvatarLocal,
+    clear: (user) => saveAvatarRemote(user, ""),
+    applyToElement: applyAvatarToElement,
+    resizeImageToDataUrl,
+    loadFromServer,
+  };
+
+  window.LearnIQProfileDetails = {
+    FIELDS: DETAIL_FIELDS.slice(),
+    get: getDetails,
+    /** Save the details. Returns Promise<{ ok, reason?, local? }>. */
+    set: saveDetailsRemote,
+    setLocal: setDetailsLocal,
+    loadFromServer,
+  };
+
+  window.LearnIQProfile = {
+    /** Update local caches from a `/me` (or PATCH /me/profile) response. */
+    absorb: absorbServerResponse,
+    loadFromServer,
+  };
+})();
+
 /** User chip in student sidebar (dashboard-shell pages that skip setupStudentDashboard). */
 function hydrateStudentSidebarChip() {
   const nameEl = document.getElementById("student-display-name");
@@ -478,7 +870,18 @@ function hydrateStudentSidebarChip() {
   const roleGuess = user && user.role ? String(user.role).trim().toLowerCase() : "";
   const defaultName = roleGuess === "teacher" ? "Teacher" : "Student";
   if (nameEl) nameEl.textContent = full || (user && user.email) || defaultName;
-  if (initialsEl) initialsEl.textContent = user ? getUserInitials(full || (user.email || "")) : roleGuess === "teacher" ? "TC" : "ST";
+  if (initialsEl) {
+    const fallback = user
+      ? getUserInitials(full || (user.email || ""))
+      : roleGuess === "teacher"
+        ? "TC"
+        : "ST";
+    if (user && window.LearnIQAvatar) {
+      window.LearnIQAvatar.applyToElement(initialsEl, user, fallback);
+    } else {
+      initialsEl.textContent = fallback;
+    }
+  }
   if (trackEl) {
     if (user && user.id_number) {
       trackEl.textContent = `ID ${user.id_number}`;
@@ -504,7 +907,14 @@ function hydrateAdminSidebarFromSession() {
     roleRaw === "admin" ? "Admin / Principal" : roleRaw ? roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1) : "Admin";
   if (nameEl) nameEl.textContent = full || String(user.email || "").trim() || "Admin";
   if (roleEl) roleEl.textContent = roleLabel;
-  if (avatarEl) avatarEl.textContent = getUserInitials(full || String(user.email || "")) || "AD";
+  if (avatarEl) {
+    const fallback = getUserInitials(full || String(user.email || "")) || "AD";
+    if (window.LearnIQAvatar) {
+      window.LearnIQAvatar.applyToElement(avatarEl, user, fallback);
+    } else {
+      avatarEl.textContent = fallback;
+    }
+  }
 }
 
 function learniqPreviewName(fullName) {
@@ -922,8 +1332,24 @@ async function hydrateSidebarProfileFromDatabase() {
     const idn = p && p.id_number ? String(p.id_number).trim() : "";
     const showName = full || email || "User";
 
+    const cacheUser = { id_number: idn, email, full_name: full, access_token: u.access_token };
+
+    // Fold the freshly-fetched profile (incl. avatar_data) into the local
+    // cache so any synchronous `applyToElement` calls on this page (and
+    // future pages, since localStorage persists) render the photo.
+    if (window.LearnIQProfile && typeof window.LearnIQProfile.absorb === "function") {
+      window.LearnIQProfile.absorb(cacheUser, p);
+    }
+
     if (nameEl) nameEl.textContent = showName;
-    if (initialsEl) initialsEl.textContent = getUserInitials(full || email);
+    if (initialsEl) {
+      const fallback = getUserInitials(full || email);
+      if (window.LearnIQAvatar) {
+        window.LearnIQAvatar.applyToElement(initialsEl, cacheUser, fallback);
+      } else {
+        initialsEl.textContent = fallback;
+      }
+    }
     if (trackEl) trackEl.textContent = idn ? `ID ${idn}` : "";
     if (linkEl && idn) linkEl.href = `student-profile.html?id_number=${encodeURIComponent(idn)}`;
   } catch (e) {
@@ -989,7 +1415,14 @@ async function setupImmersionDashboard() {
   const trackEl = document.getElementById("student-display-track");
   const full = (user.full_name && String(user.full_name).trim()) || "";
   if (nameEl && full) nameEl.textContent = full;
-  if (initialsEl) initialsEl.textContent = getUserInitials(full || user.email || "");
+  if (initialsEl) {
+    const fallback = getUserInitials(full || user.email || "");
+    if (window.LearnIQAvatar) {
+      window.LearnIQAvatar.applyToElement(initialsEl, user, fallback);
+    } else {
+      initialsEl.textContent = fallback;
+    }
+  }
   if (trackEl && user.id_number) trackEl.textContent = `ID ${user.id_number}`;
   void hydrateSidebarProfileFromDatabase();
 
@@ -1983,10 +2416,8 @@ async function loadPendingApprovals() {
       .map((user) => {
         const idNum = String(user.id_number || "").trim();
         const encId = encodeURIComponent(idNum);
-        const nameBtn = idNum
-          ? `<button type="button" class="teacher-profile-name-btn" data-profile-id="${encId}" title="View profile from Supabase">${escapeHtml(
-              user.full_name || "N/A"
-            )}</button>`
+        const nameCell = idNum
+          ? `<span class="profile-row-name">${escapeHtml(user.full_name || "N/A")}</span>`
           : escapeHtml(user.full_name || "N/A");
         const stRaw = String(user.approval_status || "pending").toLowerCase();
         const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
@@ -2003,9 +2434,14 @@ async function loadPendingApprovals() {
             )}">Reject</button>
           </div>`
           : '<span class="small-note">—</span>';
+        const rowAttrs = idNum
+          ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
+              user.full_name || "user"
+            )}"`
+          : "";
         return `
-      <tr>
-        <td>${nameBtn}</td>
+      <tr${rowAttrs}>
+        <td>${nameCell}</td>
         <td>${escapeHtml(user.id_number || "N/A")}</td>
         <td>${escapeHtml(user.email || "N/A")}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
@@ -2071,10 +2507,8 @@ async function loadTeacherApprovals() {
       .map((user) => {
         const idNum = String(user.id_number || "").trim();
         const encId = encodeURIComponent(idNum);
-        const nameBtn = idNum
-          ? `<button type="button" class="teacher-profile-name-btn" data-profile-id="${encId}" title="View profile from Supabase">${escapeHtml(
-              user.full_name || "N/A"
-            )}</button>`
+        const nameCell = idNum
+          ? `<span class="profile-row-name">${escapeHtml(user.full_name || "N/A")}</span>`
           : escapeHtml(user.full_name || "N/A");
         const stRaw = String(user.approval_status || "pending").toLowerCase();
         const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
@@ -2091,9 +2525,14 @@ async function loadTeacherApprovals() {
             )}">Reject</button>
           </div>`
           : '<span class="small-note">—</span>';
+        const rowAttrs = idNum
+          ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
+              user.full_name || "user"
+            )}"`
+          : "";
         return `
-      <tr>
-        <td>${nameBtn}</td>
+      <tr${rowAttrs}>
+        <td>${nameCell}</td>
         <td>${escapeHtml(user.id_number || "N/A")}</td>
         <td>${escapeHtml(user.email || "N/A")}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
@@ -2155,6 +2594,24 @@ function formatTeacherProfileModalRow(label, valueHtml) {
   return `<dt>${escapeHtml(label)}</dt><dd>${valueHtml}</dd>`;
 }
 
+function _profileInitials(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function _formatProfileDate(value, withTime = true) {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    return withTime ? d.toLocaleString() : d.toLocaleDateString();
+  } catch {
+    return String(value);
+  }
+}
+
 /** Loads `GET /admin/profile/{id_number}` into the approvals profile modal on this page. */
 async function openAdminProfilePreviewModal(idNumber, titleText) {
   const { backdrop, body, title } = getAdminProfilePreviewModalEls();
@@ -2179,21 +2636,81 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
       return;
     }
     const p = data;
-    const created = p.created_at ? new Date(p.created_at).toLocaleString() : "—";
-    const role = String(p.role || "—").trim() || "—";
-    const roleLabel = role !== "—" ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : "—";
+    const fullName = String(p.full_name || "").trim() || "Unnamed user";
+    const role = String(p.role || "").trim();
+    const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : "—";
     const ap = String(p.approval_status || "pending").toLowerCase();
     const apLabel = ap ? ap.charAt(0).toUpperCase() + ap.slice(1) : "Pending";
+    const initials = _profileInitials(fullName);
+    const avatarUrl = String(
+      p.avatar_data || p.avatar_url || p.profile_picture || p.photo_url || ""
+    ).trim();
+    const avatarHtml = avatarUrl
+      ? `<img src="${escapeHtml(avatarUrl)}" alt="Profile picture" />`
+      : `<span>${escapeHtml(initials)}</span>`;
+
+    const coreRows = [
+      ["ID number", escapeHtml(p.id_number || "—")],
+      ["Email", escapeHtml(p.email || "—")],
+      ["Role", escapeHtml(roleLabel)],
+      ["Approval", formatStatusBadge(apLabel)],
+      ["Created", escapeHtml(_formatProfileDate(p.created_at, true))],
+      ["Profile UUID", `<code class="profile-uuid">${escapeHtml(p.id ? String(p.id) : "—")}</code>`],
+    ];
+
+    // Optional extended fields (only show if present in the profile row)
+    const extraFieldMap = [
+      ["First name", "first_name"],
+      ["Middle name", "middle_name"],
+      ["Last name", "last_name"],
+      ["Phone", "phone"],
+      ["Contact number", "contact_number"],
+      ["Address", "address"],
+      ["Gender", "gender"],
+      ["Date of birth", "dob", { date: true }],
+      ["Date of birth", "birthdate", { date: true }],
+      ["Date of birth", "date_of_birth", { date: true }],
+      ["About", "bio"],
+      ["Adviser ID", "adviser_id_number"],
+      ["Department", "department"],
+      ["Grade level", "grade_level"],
+      ["Section", "section"],
+      ["Track", "track"],
+      ["Strand", "strand"],
+      ["School", "school"],
+      ["Updated", "updated_at", { dateTime: true }],
+    ];
+    const seenKeys = new Set();
+    const extraRows = [];
+    for (const [label, key, opts] of extraFieldMap) {
+      if (seenKeys.has(key)) continue;
+      const raw = p[key];
+      if (raw == null || String(raw).trim() === "") continue;
+      seenKeys.add(key);
+      let valueHtml;
+      if (opts?.date) valueHtml = escapeHtml(_formatProfileDate(raw, false));
+      else if (opts?.dateTime) valueHtml = escapeHtml(_formatProfileDate(raw, true));
+      else valueHtml = escapeHtml(String(raw));
+      extraRows.push([label, valueHtml]);
+    }
+
+    const allRows = [...coreRows, ...extraRows];
+    const dlHtml = allRows.map(([label, html]) => formatTeacherProfileModalRow(label, html)).join("");
+
     body.innerHTML = `
-      <dl class="teacher-profile-modal-dl">
-        ${formatTeacherProfileModalRow("Full name", escapeHtml(p.full_name || "—"))}
-        ${formatTeacherProfileModalRow("ID number", escapeHtml(p.id_number || "—"))}
-        ${formatTeacherProfileModalRow("Email", escapeHtml(p.email || "—"))}
-        ${formatTeacherProfileModalRow("Role", escapeHtml(roleLabel))}
-        ${formatTeacherProfileModalRow("Approval", formatStatusBadge(apLabel))}
-        ${formatTeacherProfileModalRow("Profile UUID", escapeHtml(p.id ? String(p.id) : "—"))}
-        ${formatTeacherProfileModalRow("Created", escapeHtml(created))}
-      </dl>`;
+      <div class="profile-preview-head">
+        <div class="profile-preview-avatar">${avatarHtml}</div>
+        <div class="profile-preview-headline">
+          <h4 class="profile-preview-name">${escapeHtml(fullName)}</h4>
+          <div class="profile-preview-chips">
+            <span class="profile-chip profile-chip-role">
+              <i class="fa-solid fa-id-badge"></i> ${escapeHtml(roleLabel)}
+            </span>
+            <span class="profile-chip-status">${formatStatusBadge(apLabel)}</span>
+          </div>
+        </div>
+      </div>
+      <dl class="teacher-profile-modal-dl">${dlHtml}</dl>`;
   } catch (e) {
     console.error("openAdminProfilePreviewModal:", e);
     body.innerHTML = `<p class="small-note" style="margin:0;color:#fb923c;">${escapeHtml(
@@ -3293,8 +3810,8 @@ async function hydrateTeacherDashboardSubjectHeader() {
   }
 }
 
-async function loadTeacherSubjectOptions() {
-  const select = document.getElementById("upload-subject-select");
+async function loadTeacherSubjectOptions(selectId = "upload-subject-select") {
+  const select = document.getElementById(selectId);
   if (!select) return;
   try {
     const res = await fetch(apiUrl("/subjects"));
@@ -3594,6 +4111,12 @@ function buildTeacherSubjectCardHtml(subject) {
   const myLabel = myCount === 1 ? "1 of your lessons" : `${myCount} of your lessons`;
   const pubLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
   const targetUrl = `teacher-learniq-dashboard.html?subject_id=${encodeURIComponent(subject.id)}`;
+  const uploadBtn =
+    String(subject.id) === "__unassigned__"
+      ? ""
+      : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}">
+          <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload PDF/PPT
+        </button>`;
   return `
     <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
@@ -3607,6 +4130,7 @@ function buildTeacherSubjectCardHtml(subject) {
         <p class="lesson-card-features small-note">Upload • Generate • Publish</p>
       </div>
       <div class="lesson-actions">
+        ${uploadBtn}
         <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
       </div>
     </article>
@@ -3686,11 +4210,106 @@ async function renderTeacherSubjectsPage() {
     emptyEl.hidden = true;
     selectionEl.hidden = false;
     listEl.innerHTML = subjects.map(buildTeacherSubjectCardHtml).join("");
+    void loadTeacherSubjectOptions("teacher-subjects-upload-subject-select");
   } catch (e) {
     console.log("DEBUG: renderTeacherSubjectsPage failed:", e);
     selectionEl.hidden = true;
     emptyEl.hidden = false;
     if (emptyText) emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+  }
+}
+
+function setupTeacherSubjectsUpload() {
+  const form = document.getElementById("teacher-subjects-upload-form");
+  const fileInput = document.getElementById("teacher-subjects-file-input");
+  const fileMeta = document.getElementById("teacher-subjects-file-meta");
+  const fileText = document.getElementById("teacher-subjects-file-input-text");
+  const clearBtn = document.getElementById("teacher-subjects-file-clear-btn");
+  const subjectSelect = document.getElementById("teacher-subjects-upload-subject-select");
+  const quickFileInput = document.getElementById("teacher-subjects-quick-file-input");
+  const listEl = document.getElementById("teacher-subjects-list");
+  let pendingQuickSubjectId = null;
+
+  void loadTeacherSubjectOptions("teacher-subjects-upload-subject-select");
+
+  const resetSelectedFile = () => {
+    if (fileInput) fileInput.value = "";
+    if (fileMeta) fileMeta.textContent = "No file selected yet.";
+    if (fileText) fileText.textContent = "Choose PDF or PPT file";
+    if (clearBtn) clearBtn.hidden = true;
+  };
+
+  fileInput?.addEventListener("change", () => {
+    const selectedFile = fileInput.files?.[0];
+    if (!selectedFile) {
+      resetSelectedFile();
+      return;
+    }
+    if (fileMeta) fileMeta.textContent = `Selected file: ${selectedFile.name}`;
+    if (fileText) fileText.textContent = selectedFile.name;
+    if (clearBtn) clearBtn.hidden = false;
+  });
+
+  clearBtn?.addEventListener("click", (event) => {
+    event.preventDefault();
+    resetSelectedFile();
+  });
+
+  const runUpload = async (selectedFile, subjectId) => {
+    if (!selectedFile) {
+      showToast("Choose a PDF or PPT file first.", "error");
+      return;
+    }
+    if (!subjectId) {
+      showToast("Choose a subject for this lesson.", "error");
+      subjectSelect?.focus();
+      return;
+    }
+
+    if (fileMeta) fileMeta.textContent = `Uploading ${selectedFile.name}…`;
+    try {
+      await uploadFile(selectedFile, subjectId);
+      if (fileMeta) fileMeta.textContent = `Uploaded: ${selectedFile.name}`;
+      if (fileInput) fileInput.value = "";
+      if (fileText) fileText.textContent = "Choose PDF or PPT file";
+      if (clearBtn) clearBtn.hidden = true;
+      await renderTeacherSubjectsPage();
+    } catch (e) {
+      if (fileMeta) fileMeta.textContent = "Upload failed. Try again.";
+      const msg =
+        e && e.message && String(e.message).includes("fetch")
+          ? "Cannot reach API. Start the backend (uvicorn) or check learniq-api-base in localStorage."
+          : e.message || "Upload failed";
+      showToast(msg, "error");
+    }
+  };
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const selectedFile = fileInput?.files?.[0];
+    const subjectId = subjectSelect ? subjectSelect.value : "";
+    await runUpload(selectedFile, subjectId);
+  });
+
+  quickFileInput?.addEventListener("change", async () => {
+    const selectedFile = quickFileInput.files?.[0];
+    const subjectId = pendingQuickSubjectId;
+    pendingQuickSubjectId = null;
+    quickFileInput.value = "";
+    if (!selectedFile || !subjectId) return;
+    await runUpload(selectedFile, subjectId);
+  });
+
+  if (listEl && !listEl.dataset.uploadBound) {
+    listEl.dataset.uploadBound = "1";
+    listEl.addEventListener("click", (event) => {
+      const trigger = event.target.closest(".teacher-subject-upload-trigger");
+      if (!trigger || !quickFileInput) return;
+      event.preventDefault();
+      event.stopPropagation();
+      pendingQuickSubjectId = trigger.getAttribute("data-subject-id") || "";
+      quickFileInput.click();
+    });
   }
 }
 
@@ -3704,6 +4323,7 @@ function setupTeacherSubjectsPage() {
   });
 
   setupTeacherAddSubjectModal();
+  setupTeacherSubjectsUpload();
 
   void renderTeacherSubjectsPage();
 }
@@ -3807,29 +4427,288 @@ function buildAdminSubjectDrillCardHtml(subject, teacherIdNumber, stats) {
   `;
 }
 
+function describeAdminLessonFileType(fileTypeRaw) {
+  const ext = String(fileTypeRaw || "").trim().toLowerCase().replace(/^\./, "");
+  if (ext === "pdf") {
+    return { label: "PDF", icon: "fa-file-pdf", className: "lesson-pill-pdf" };
+  }
+  if (ext === "ppt" || ext === "pptx") {
+    return { label: "PPTX", icon: "fa-file-powerpoint", className: "lesson-pill-ppt" };
+  }
+  if (ext === "doc" || ext === "docx") {
+    return { label: "DOCX", icon: "fa-file-word", className: "lesson-pill-doc" };
+  }
+  if (ext === "txt") {
+    return { label: "TXT", icon: "fa-file-lines", className: "lesson-pill-txt" };
+  }
+  return { label: (ext || "FILE").toUpperCase(), icon: "fa-file", className: "lesson-pill-generic" };
+}
+
+function describeAdminLessonActivities(lessonContent) {
+  const acts = lessonContent && Array.isArray(lessonContent.activities) ? lessonContent.activities : [];
+  if (!acts.length) return { count: 0, label: "None" };
+  const first = acts[0];
+  if (first && first.activity_type === "flashcards" && Array.isArray(first.cards)) {
+    const n = first.cards.length;
+    return { count: n, label: `${n} flashcard${n === 1 ? "" : "s"}` };
+  }
+  if (first && first.activity_type === "essay") {
+    return { count: acts.length, label: `${acts.length} essay prompt${acts.length === 1 ? "" : "s"}` };
+  }
+  return { count: acts.length, label: `${acts.length} item${acts.length === 1 ? "" : "s"}` };
+}
+
+// ============================================================
+// Admin lesson preview modal
+// ------------------------------------------------------------
+// Opens a modal showing a lesson's reviewer (rendered markdown),
+// quiz items, and activities — invoked from clickable lesson
+// cards on admin-subjects.html.
+// ============================================================
+
+let _adminLessonPreviewCache = new Map(); // file_id -> lesson list-item (incl. lesson_content)
+
+function _adminLessonPreviewEls() {
+  return {
+    modal: document.getElementById("admin-lesson-preview-modal"),
+    title: document.getElementById("admin-lesson-preview-title"),
+    summary: document.getElementById("admin-lesson-preview-summary"),
+    paneReviewer: document.getElementById("admin-lesson-preview-pane-reviewer"),
+    paneQuiz: document.getElementById("admin-lesson-preview-pane-quiz"),
+    paneActivities: document.getElementById("admin-lesson-preview-pane-activities"),
+  };
+}
+
+function closeAdminLessonPreviewModal() {
+  const { modal } = _adminLessonPreviewEls();
+  if (!modal) return;
+  modal.setAttribute("hidden", "");
+  document.body.style.overflow = "";
+  document.removeEventListener("keydown", _adminLessonPreviewOnKey);
+}
+
+function _adminLessonPreviewOnKey(e) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeAdminLessonPreviewModal();
+  }
+}
+
+function _adminLessonPreviewSwitchTab(tab) {
+  const wanted = String(tab || "reviewer");
+  document.querySelectorAll("[data-admin-preview-tab]").forEach((btn) => {
+    const on = btn.getAttribute("data-admin-preview-tab") === wanted;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll("[data-admin-preview-pane]").forEach((pane) => {
+    pane.hidden = pane.getAttribute("data-admin-preview-pane") !== wanted;
+  });
+}
+
+function _adminLessonPreviewWireOnce() {
+  if (typeof document === "undefined") return;
+  if (document.body && document.body.dataset.adminLessonPreviewWired === "1") return;
+  const { modal } = _adminLessonPreviewEls();
+  if (!modal) return;
+  if (document.body) document.body.dataset.adminLessonPreviewWired = "1";
+
+  modal.querySelectorAll(".admin-lesson-preview-close").forEach((btn) => {
+    btn.addEventListener("click", closeAdminLessonPreviewModal);
+  });
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) closeAdminLessonPreviewModal();
+  });
+
+  modal.querySelectorAll("[data-admin-preview-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const t = btn.getAttribute("data-admin-preview-tab");
+      if (t) _adminLessonPreviewSwitchTab(t);
+    });
+  });
+}
+
+function _renderAdminLessonReviewer(target, reviewer) {
+  if (!target) return;
+  const text = String(reviewer || "").trim();
+  if (!text) {
+    target.innerHTML = '<p class="small-note">No reviewer generated for this lesson yet.</p>';
+    return;
+  }
+  if (typeof mountReviewerMarkdownInto === "function") {
+    target.innerHTML = '<div class="reviewer-markdown-body reviewer-mount"></div>';
+    const mountPoint = target.querySelector(".reviewer-mount");
+    mountReviewerMarkdownInto(mountPoint, reviewer);
+  } else {
+    target.innerHTML = `<p>${escapeHtml(text)}</p>`;
+  }
+}
+
+function _renderAdminLessonQuiz(target, quiz) {
+  if (!target) return;
+  const items = Array.isArray(quiz) ? quiz : [];
+  if (!items.length) {
+    target.innerHTML = '<p class="small-note">No quiz questions for this lesson yet.</p>';
+    return;
+  }
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  target.innerHTML = `
+    <ol class="admin-lesson-quiz-list">
+      ${items
+        .map((q) => {
+          const question = String(q?.question || "").trim();
+          const choices = Array.isArray(q?.choices) ? q.choices : [];
+          const answer = q?.answer == null ? "" : String(q.answer);
+          const choiceHtml = choices
+            .map(
+              (c, i) =>
+                `<li class="${letters[i] === answer ? "admin-quiz-correct" : ""}">
+                  <span class="admin-quiz-letter">${letters[i] || i + 1}.</span>
+                  ${escapeHtml(String(c))}
+                  ${letters[i] === answer ? '<i class="fa-solid fa-check admin-quiz-check"></i>' : ""}
+                </li>`
+            )
+            .join("");
+          return `
+            <li class="admin-lesson-quiz-item">
+              <p class="admin-lesson-quiz-question">${escapeHtml(question || "(no question text)")}</p>
+              <ul class="admin-lesson-quiz-choices">${choiceHtml || "<li class=\"small-note\">No choices listed</li>"}</ul>
+              <p class="small-note admin-quiz-answer">Correct answer: <strong>${escapeHtml(answer || "—")}</strong></p>
+            </li>`;
+        })
+        .join("")}
+    </ol>`;
+}
+
+function _renderAdminLessonActivities(target, activities) {
+  if (!target) return;
+  if (typeof renderActivitiesInto === "function") {
+    renderActivitiesInto(target, activities);
+  } else {
+    target.innerHTML = '<p class="small-note">Activity renderer unavailable.</p>';
+  }
+}
+
+async function openAdminLessonPreviewModal(lessonId, fallbackData) {
+  _adminLessonPreviewWireOnce();
+  const { modal, title, summary, paneReviewer, paneQuiz, paneActivities } = _adminLessonPreviewEls();
+  if (!modal) return;
+
+  const id = String(lessonId || "").trim();
+  if (!id) return;
+
+  modal.removeAttribute("hidden");
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", _adminLessonPreviewOnKey);
+  _adminLessonPreviewSwitchTab("reviewer");
+
+  if (title) title.textContent = "Lesson preview";
+  if (summary) summary.innerHTML = '<p class="small-note" style="margin:0;">Loading lesson…</p>';
+  if (paneReviewer) paneReviewer.innerHTML = '<p class="small-note">Loading…</p>';
+  if (paneQuiz) paneQuiz.innerHTML = "";
+  if (paneActivities) paneActivities.innerHTML = "";
+
+  // Use cached list-item (already has filename, file_type, is_published, created_at) if available.
+  const cached = _adminLessonPreviewCache.get(id) || fallbackData || {};
+
+  try {
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(id)}`));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = typeof data?.error === "string" ? data.error : res.statusText || "Failed to load lesson";
+      if (summary) summary.innerHTML = `<p class="small-note" style="margin:0;color:#fb923c;">${escapeHtml(msg)}</p>`;
+      if (paneReviewer) paneReviewer.innerHTML = "";
+      return;
+    }
+
+    const filename = String(data.filename || cached.filename || "Untitled lesson");
+    const fileType = cached.file_type || "";
+    const isPublished = !!(cached.is_published || cached.published);
+    const createdAt = cached.created_at ? new Date(cached.created_at).toLocaleString() : "—";
+    const fileMeta = describeAdminLessonFileType(fileType);
+
+    if (title) title.textContent = filename;
+    if (summary) {
+      summary.innerHTML = `
+        <div class="admin-lesson-preview-summary-head">
+          <div class="admin-lesson-preview-icon lesson-card-icon-${fileMeta.className.replace("lesson-pill-", "")}">
+            <i class="fa-solid ${fileMeta.icon}"></i>
+          </div>
+          <div class="admin-lesson-preview-headline">
+            <h4>${escapeHtml(filename)}</h4>
+            <div class="admin-lesson-preview-chips">
+              <span class="lesson-card-pill ${fileMeta.className}">
+                <i class="fa-solid ${fileMeta.icon}"></i> ${escapeHtml(fileMeta.label)}
+              </span>
+              <span class="lesson-card-pill ${isPublished ? "lesson-pill-published" : "lesson-pill-draft"}">
+                <i class="fa-solid ${isPublished ? "fa-circle-check" : "fa-clock"}"></i> ${isPublished ? "Published" : "Draft"}
+              </span>
+              <span class="lesson-card-pill lesson-pill-date">
+                <i class="fa-solid fa-calendar"></i> ${escapeHtml(createdAt)}
+              </span>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    _renderAdminLessonReviewer(paneReviewer, data.reviewer);
+    _renderAdminLessonQuiz(paneQuiz, data.quiz || []);
+    _renderAdminLessonActivities(paneActivities, data.activities || []);
+  } catch (err) {
+    console.error("openAdminLessonPreviewModal:", err);
+    if (summary) summary.innerHTML = `<p class="small-note" style="margin:0;color:#fb923c;">${escapeHtml(err.message || "Could not load lesson.")}</p>`;
+  }
+}
+
 function buildAdminLessonCardHtml(lesson) {
   const filename = lesson.filename || "Untitled lesson";
-  const fileType = (lesson.file_type || "file").toString().toUpperCase();
   const isPublished = !!(lesson.is_published || lesson.published);
   const createdAt = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "—";
   const quizCount = Number(lesson.quiz_count || 0);
   const hasReviewer = !!lesson.has_reviewer;
-  const hasActivities = !!lesson.has_activities;
+  const lessonId = String(lesson.file_id || lesson.id || "").trim();
+  const fileMeta = describeAdminLessonFileType(lesson.file_type);
+  const activityMeta = describeAdminLessonActivities(lesson.lesson_content);
   return `
-    <article class="lesson-card">
-      <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
+    <article
+      class="lesson-card lesson-card-clickable"
+      data-lesson-id="${escapeHtml(lessonId)}"
+      tabindex="0"
+      role="button"
+      aria-label="Open lesson ${escapeHtml(filename)}">
+      <div class="lesson-card-icon lesson-card-icon-${fileMeta.className.replace("lesson-pill-", "")}">
+        <i class="fa-solid ${fileMeta.icon}"></i>
+      </div>
       <div class="lesson-info">
         <h4>${escapeHtml(filename)}</h4>
         <div class="lesson-card-meta-row">
-          <span class="lesson-card-pill"><i class="fa-solid fa-file"></i> ${escapeHtml(fileType)}</span>
+          <span class="lesson-card-pill ${fileMeta.className}">
+            <i class="fa-solid ${fileMeta.icon}"></i> ${escapeHtml(fileMeta.label)}
+          </span>
           <span class="lesson-card-pill ${isPublished ? "lesson-pill-published" : "lesson-pill-draft"}">
             <i class="fa-solid ${isPublished ? "fa-circle-check" : "fa-clock"}"></i> ${isPublished ? "Published" : "Draft"}
           </span>
-          <span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ${escapeHtml(createdAt)}</span>
+          <span class="lesson-card-pill lesson-pill-date">
+            <i class="fa-solid fa-calendar"></i> ${escapeHtml(createdAt)}
+          </span>
         </div>
-        <p class="lesson-card-tagline">
-          Reviewer: ${hasReviewer ? "Yes" : "No"} • Quiz items: ${quizCount} • Activities: ${hasActivities ? "Yes" : "No"}
-        </p>
+        <div class="lesson-card-stats">
+          <span class="lesson-stat ${hasReviewer ? "lesson-stat-on" : "lesson-stat-off"}">
+            <i class="fa-solid fa-book-open"></i>
+            <span>Reviewer: <strong>${hasReviewer ? "Yes" : "No"}</strong></span>
+          </span>
+          <span class="lesson-stat ${quizCount > 0 ? "lesson-stat-on" : "lesson-stat-off"}">
+            <i class="fa-solid fa-list-check"></i>
+            <span>Quiz: <strong>${quizCount}</strong> ${quizCount === 1 ? "item" : "items"}</span>
+          </span>
+          <span class="lesson-stat ${activityMeta.count > 0 ? "lesson-stat-on" : "lesson-stat-off"}">
+            <i class="fa-solid fa-clone"></i>
+            <span>Activities: <strong>${escapeHtml(activityMeta.label)}</strong></span>
+          </span>
+        </div>
+        <span class="lesson-card-cta">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to preview
+        </span>
       </div>
     </article>
   `;
@@ -4194,6 +5073,40 @@ async function renderAdminTeacherLessonsView(teacherIdNumber, subjectId) {
 
   viewEl.hidden = false;
   listEl.innerHTML = filtered.map(buildAdminLessonCardHtml).join("");
+
+  // Cache lessons so the preview modal can use file_type/is_published/created_at
+  // without a second fetch (the /get-content endpoint only returns content).
+  try {
+    if (!_adminLessonPreviewCache) _adminLessonPreviewCache = new Map();
+    filtered.forEach((lesson) => {
+      const id = String(lesson.file_id || lesson.id || "").trim();
+      if (id) _adminLessonPreviewCache.set(id, lesson);
+    });
+  } catch (e) {
+    console.warn("Could not cache admin lessons:", e);
+  }
+
+  // Delegated click + keyboard handler for clickable lesson cards.
+  if (!listEl.dataset.adminLessonClickWired) {
+    listEl.dataset.adminLessonClickWired = "1";
+    const openFromTarget = (target) => {
+      const card = target && target.closest ? target.closest(".lesson-card-clickable[data-lesson-id]") : null;
+      if (!card) return;
+      const lid = card.getAttribute("data-lesson-id");
+      if (!lid) return;
+      openAdminLessonPreviewModal(lid, _adminLessonPreviewCache.get(lid));
+    };
+    listEl.addEventListener("click", (ev) => openFromTarget(ev.target));
+    listEl.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        const card = ev.target && ev.target.closest ? ev.target.closest(".lesson-card-clickable[data-lesson-id]") : null;
+        if (card) {
+          ev.preventDefault();
+          openFromTarget(ev.target);
+        }
+      }
+    });
+  }
 }
 
 async function renderAdminSubjectsPage() {
@@ -6173,6 +7086,789 @@ document.addEventListener("DOMContentLoaded", () => {
   setupProfilePage();
 });
 
+function refreshAvatarsAcrossPage(user) {
+  if (!window.LearnIQAvatar || !user) return;
+  const fullName = String(user.full_name || "").trim();
+  const fallback = getUserInitials(fullName || user.email || "");
+  const sidebar = document.getElementById("student-avatar-initials");
+  if (sidebar) window.LearnIQAvatar.applyToElement(sidebar, user, fallback);
+  const adminAv = document.getElementById("admin-sidebar-avatar");
+  if (adminAv) window.LearnIQAvatar.applyToElement(adminAv, user, fallback || "AD");
+  const profileAv = document.getElementById("profile-photo-avatar");
+  if (profileAv) window.LearnIQAvatar.applyToElement(profileAv, user, fallback || "ST");
+}
+
+/**
+ * Open the photo crop / edit modal. Resolves to a 256x256 JPEG data URL
+ * representing the user's circular crop, or `null` if they cancel.
+ *
+ * The stage is a fixed square frame. The source image is positioned with
+ * `transform: translate(tx, ty) scale(scale)`, drag pans (tx, ty), the
+ * slider scales (anchored to the center). On save, the visible square is
+ * drawn from the source image onto a 256x256 canvas.
+ */
+function openPhotoCropper(file) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("photo-crop-modal");
+    const img = document.getElementById("photo-crop-img");
+    const stage = document.getElementById("photo-crop-stage");
+    const zoom = document.getElementById("photo-crop-zoom");
+    const zoomIn = document.getElementById("photo-crop-zoom-in");
+    const zoomOut = document.getElementById("photo-crop-zoom-out");
+    const saveBtn = document.getElementById("photo-crop-save");
+    const cancelBtn = document.getElementById("photo-crop-cancel");
+    const closeBtn = document.getElementById("photo-crop-modal-close");
+    const backdrop = document.getElementById("photo-crop-modal-backdrop");
+    if (!modal || !img || !stage || !zoom || !saveBtn || !cancelBtn || !closeBtn || !backdrop) {
+      resolve(null);
+      return;
+    }
+
+    const blobUrl = URL.createObjectURL(file);
+    const state = {
+      tx: 0,
+      ty: 0,
+      sMin: 1,
+      scale: 1,
+      naturalW: 0,
+      naturalH: 0,
+      frameSize: 300,
+      dragging: false,
+      dragStart: null,
+    };
+
+    function clamp(v, lo, hi) {
+      if (hi < lo) return (lo + hi) / 2;
+      return Math.min(Math.max(v, lo), hi);
+    }
+
+    function applyTransform() {
+      const w = state.naturalW * state.scale;
+      const h = state.naturalH * state.scale;
+      state.tx = clamp(state.tx, state.frameSize - w, 0);
+      state.ty = clamp(state.ty, state.frameSize - h, 0);
+      img.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
+    }
+
+    function fitInitial() {
+      state.frameSize = stage.clientWidth || 300;
+      const F = state.frameSize;
+      state.sMin = Math.max(F / state.naturalW, F / state.naturalH);
+      state.scale = state.sMin;
+      state.tx = (F - state.naturalW * state.scale) / 2;
+      state.ty = (F - state.naturalH * state.scale) / 2;
+      zoom.value = "1";
+      applyTransform();
+    }
+
+    function setZoom(zoomValue) {
+      const v = Math.max(1, Math.min(parseFloat(zoom.max) || 4, parseFloat(zoomValue) || 1));
+      zoom.value = String(v);
+      const F = state.frameSize;
+      const cx = F / 2;
+      const cy = F / 2;
+      const newScale = state.sMin * v;
+      if (state.scale > 0) {
+        state.tx = cx - ((cx - state.tx) / state.scale) * newScale;
+        state.ty = cy - ((cy - state.ty) / state.scale) * newScale;
+      }
+      state.scale = newScale;
+      applyTransform();
+    }
+
+    function onPointerDown(e) {
+      state.dragging = true;
+      state.dragStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
+      try { stage.setPointerCapture(e.pointerId); } catch {}
+      stage.classList.add("is-grabbing");
+    }
+    function onPointerMove(e) {
+      if (!state.dragging) return;
+      state.tx = state.dragStart.tx + (e.clientX - state.dragStart.x);
+      state.ty = state.dragStart.ty + (e.clientY - state.dragStart.y);
+      applyTransform();
+    }
+    function onPointerUp(e) {
+      if (!state.dragging) return;
+      state.dragging = false;
+      try { stage.releasePointerCapture(e.pointerId); } catch {}
+      stage.classList.remove("is-grabbing");
+    }
+    function onZoomInput() {
+      setZoom(zoom.value);
+    }
+    function onZoomIn() {
+      const step = 0.25;
+      setZoom((parseFloat(zoom.value) || 1) + step);
+    }
+    function onZoomOut() {
+      const step = 0.25;
+      setZoom((parseFloat(zoom.value) || 1) - step);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") finish(null);
+    }
+    function onWheel(e) {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? -1 : 1;
+      setZoom((parseFloat(zoom.value) || 1) + dir * 0.1);
+    }
+
+    function cleanup() {
+      stage.removeEventListener("pointerdown", onPointerDown);
+      stage.removeEventListener("pointermove", onPointerMove);
+      stage.removeEventListener("pointerup", onPointerUp);
+      stage.removeEventListener("pointercancel", onPointerUp);
+      stage.removeEventListener("wheel", onWheel);
+      zoom.removeEventListener("input", onZoomInput);
+      if (zoomIn) zoomIn.removeEventListener("click", onZoomIn);
+      if (zoomOut) zoomOut.removeEventListener("click", onZoomOut);
+      saveBtn.removeEventListener("click", onSave);
+      cancelBtn.removeEventListener("click", onCancel);
+      closeBtn.removeEventListener("click", onCancel);
+      backdrop.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+      try { URL.revokeObjectURL(blobUrl); } catch {}
+      img.removeAttribute("src");
+      img.style.transform = "";
+      modal.hidden = true;
+      document.body.classList.remove("lq-modal-open");
+    }
+
+    function finish(result) {
+      cleanup();
+      resolve(result);
+    }
+    function onCancel() { finish(null); }
+
+    function onSave() {
+      try {
+        const F = state.frameSize;
+        const srcX = -state.tx / state.scale;
+        const srcY = -state.ty / state.scale;
+        const srcSize = F / state.scale;
+        const OUT = 256;
+        const canvas = document.createElement("canvas");
+        canvas.width = OUT;
+        canvas.height = OUT;
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, OUT, OUT);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+        finish(dataUrl);
+      } catch (err) {
+        console.warn("Crop save failed:", err);
+        finish(null);
+      }
+    }
+
+    img.onload = () => {
+      state.naturalW = img.naturalWidth || img.width || 0;
+      state.naturalH = img.naturalHeight || img.height || 0;
+      if (!state.naturalW || !state.naturalH) {
+        finish(null);
+        return;
+      }
+      fitInitial();
+    };
+    img.onerror = () => finish(null);
+
+    stage.addEventListener("pointerdown", onPointerDown);
+    stage.addEventListener("pointermove", onPointerMove);
+    stage.addEventListener("pointerup", onPointerUp);
+    stage.addEventListener("pointercancel", onPointerUp);
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    zoom.addEventListener("input", onZoomInput);
+    if (zoomIn) zoomIn.addEventListener("click", onZoomIn);
+    if (zoomOut) zoomOut.addEventListener("click", onZoomOut);
+    saveBtn.addEventListener("click", onSave);
+    cancelBtn.addEventListener("click", onCancel);
+    closeBtn.addEventListener("click", onCancel);
+    backdrop.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+
+    modal.hidden = false;
+    document.body.classList.add("lq-modal-open");
+    img.src = blobUrl;
+  });
+}
+
+function setupProfilePhotoEditor(user) {
+  const wrap = document.getElementById("profile-photo-card");
+  const input = document.getElementById("profile-photo-input");
+  const chooseBtn = document.getElementById("profile-photo-choose-btn");
+  const removeBtn = document.getElementById("profile-photo-remove-btn");
+  const avatarEl = document.getElementById("profile-photo-avatar");
+  const chooseLabel = document.getElementById("profile-photo-choose-label");
+  const hintEl = document.getElementById("profile-photo-hint");
+  if (!wrap || !input || !chooseBtn || !avatarEl) return;
+  if (wrap.dataset.lqWired === "1") return;
+  wrap.dataset.lqWired = "1";
+
+  if (!user || !(user.id_number || user.email)) {
+    chooseBtn.disabled = true;
+    if (removeBtn) removeBtn.hidden = true;
+    if (hintEl) hintEl.textContent = "Sign in first to add or change your profile photo.";
+    return;
+  }
+
+  function refresh() {
+    const fullName = String(user.full_name || "").trim();
+    const fallback = getUserInitials(fullName || user.email || "") || "ST";
+    if (window.LearnIQAvatar) {
+      window.LearnIQAvatar.applyToElement(avatarEl, user, fallback);
+    } else {
+      avatarEl.textContent = fallback;
+    }
+    const has = !!(window.LearnIQAvatar && window.LearnIQAvatar.get(user));
+    if (chooseLabel) chooseLabel.textContent = has ? "Change photo" : "Add photo";
+    if (removeBtn) removeBtn.hidden = !has;
+  }
+
+  function setStatus(msg, isError) {
+    if (!hintEl) return;
+    hintEl.textContent = msg || "PNG, JPG, or WEBP. Saved on this device for your profile.";
+    hintEl.style.color = isError ? "var(--danger, #ef4444)" : "";
+  }
+
+  chooseBtn.addEventListener("click", () => input.click());
+
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (!String(file.type || "").startsWith("image/")) {
+      setStatus("Please choose an image file.", true);
+      input.value = "";
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setStatus("Image is too large. Choose a file under 8 MB.", true);
+      input.value = "";
+      return;
+    }
+    setStatus("Opening editor…", false);
+    try {
+      const dataUrl = await openPhotoCropper(file);
+      if (!dataUrl) {
+        setStatus("");
+        input.value = "";
+        return;
+      }
+      setStatus("Uploading…", false);
+      chooseBtn.disabled = true;
+      if (removeBtn) removeBtn.disabled = true;
+      const result = await window.LearnIQAvatar.set(user, dataUrl);
+      chooseBtn.disabled = false;
+      if (removeBtn) removeBtn.disabled = false;
+      if (!result.ok) {
+        setStatus(result.reason || "Could not save photo.", true);
+      } else {
+        setStatus(result.local ? "Photo saved locally." : "Photo updated.", false);
+        refresh();
+        refreshAvatarsAcrossPage(user);
+      }
+    } catch (e) {
+      chooseBtn.disabled = false;
+      if (removeBtn) removeBtn.disabled = false;
+      console.warn("Profile photo upload failed:", e);
+      setStatus(e && e.message ? e.message : "Could not read that image.", true);
+    } finally {
+      input.value = "";
+    }
+  });
+
+  if (removeBtn) {
+    removeBtn.addEventListener("click", async () => {
+      if (!window.confirm("Remove your profile photo?")) return;
+      setStatus("Removing…", false);
+      chooseBtn.disabled = true;
+      removeBtn.disabled = true;
+      const result = await window.LearnIQAvatar.clear(user);
+      chooseBtn.disabled = false;
+      removeBtn.disabled = false;
+      if (!result.ok) {
+        setStatus(result.reason || "Could not remove photo.", true);
+        return;
+      }
+      setStatus("Photo removed.", false);
+      refresh();
+      refreshAvatarsAcrossPage(user);
+    });
+  }
+
+  refresh();
+}
+
+/* ============================================================
+ * PSGC cascading address picker
+ *
+ * Loads Region → Province → City/Municipality → Barangay using the
+ * free https://psgc.gitlab.io/api/ service. Final address is composed
+ * as a single human-readable string and written into the existing
+ * `address` profile column (no DB schema changes needed). The picked
+ * components are also cached in localStorage so re-opening the edit
+ * form on the same device pre-fills the dropdowns.
+ * ============================================================ */
+const PSGC_BASE = "https://psgc.gitlab.io/api";
+const psgcCache = new Map();
+
+/* ---- Generic full-screen loader (reference-counted) ---- */
+let lqLoaderCount = 0;
+let lqLoaderEl = null;
+
+function lqEnsureLoader() {
+  if (lqLoaderEl) return lqLoaderEl;
+  const overlay = document.createElement("div");
+  overlay.className = "lq-loader-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.setAttribute("aria-label", "Loading");
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="lq-loader-card">
+      <div class="lq-loader-spinner" aria-hidden="true"></div>
+      <span class="lq-loader-text">Loading…</span>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lqLoaderEl = overlay;
+  return overlay;
+}
+
+function lqShowLoader(message) {
+  const el = lqEnsureLoader();
+  const txt = el.querySelector(".lq-loader-text");
+  if (txt) txt.textContent = message || "Loading…";
+  lqLoaderCount += 1;
+  el.hidden = false;
+}
+
+function lqHideLoader() {
+  lqLoaderCount = Math.max(0, lqLoaderCount - 1);
+  if (lqLoaderCount === 0 && lqLoaderEl) {
+    lqLoaderEl.hidden = true;
+  }
+}
+
+async function psgcFetchJson(path, loaderMessage) {
+  if (psgcCache.has(path)) return psgcCache.get(path);
+  const url = `${PSGC_BASE}${path}`;
+  const showSpinner = !!loaderMessage;
+  if (showSpinner) lqShowLoader(loaderMessage);
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`PSGC ${res.status}`);
+    const data = await res.json();
+    const arr = Array.isArray(data) ? data : [];
+    arr.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    psgcCache.set(path, arr);
+    return arr;
+  } finally {
+    if (showSpinner) lqHideLoader();
+  }
+}
+
+function setupAddressPicker() {
+  const root = document.getElementById("profile-address-editor");
+  const regionSel = document.getElementById("profile-address-region");
+  const provinceSel = document.getElementById("profile-address-province");
+  const citySel = document.getElementById("profile-address-city");
+  const brgySel = document.getElementById("profile-address-barangay");
+  const streetInp = document.getElementById("profile-address-street");
+  const hiddenInp = document.getElementById("profile-detail-address-input");
+  const preview = document.getElementById("profile-address-preview");
+  if (!root || !regionSel || !provinceSel || !citySel || !brgySel) return null;
+
+  const COMP_PREFIX = "lq_addr_components_";
+
+  function compKey(user) {
+    if (!user) return "";
+    const idn = (user.id_number || "").trim();
+    if (idn) return COMP_PREFIX + idn;
+    const em = (user.email || "").trim().toLowerCase();
+    return em ? COMP_PREFIX + em : "";
+  }
+
+  function readCachedComponents(user) {
+    try {
+      const k = compKey(user);
+      if (!k) return null;
+      const raw = localStorage.getItem(k);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === "object" ? obj : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedComponents(user, comp) {
+    try {
+      const k = compKey(user);
+      if (!k) return;
+      localStorage.setItem(k, JSON.stringify(comp || {}));
+    } catch (_) { /* ignore quota errors */ }
+  }
+
+  function selectedText(sel) {
+    if (!sel) return "";
+    const v = String(sel.value || "").trim();
+    if (!v || v === "__NONE__") return "";
+    const opt = sel.options[sel.selectedIndex];
+    return opt ? String(opt.textContent || "").trim() : "";
+  }
+
+  function composedValue() {
+    const region = selectedText(regionSel);
+    const province = selectedText(provinceSel);
+    const city = selectedText(citySel);
+    const brgy = selectedText(brgySel);
+    const street = String((streetInp && streetInp.value) || "").trim();
+    const parts = [];
+    if (street) parts.push(street);
+    if (brgy) parts.push(`Brgy. ${brgy}`);
+    if (city) parts.push(city);
+    if (province) parts.push(province);
+    if (region) parts.push(region);
+    return parts.filter(Boolean).join(", ");
+  }
+
+  function updatePreview() {
+    if (!preview) return;
+    const v = composedValue();
+    preview.textContent = v ? `Will save as: ${v}` : "";
+  }
+
+  function fillSelect(sel, items, placeholder, valueKey = "code") {
+    sel.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = placeholder;
+    sel.appendChild(opt0);
+    for (const it of items) {
+      const o = document.createElement("option");
+      o.value = it[valueKey] || it.code || "";
+      o.textContent = it.name || "";
+      sel.appendChild(o);
+    }
+  }
+
+  function resetSelect(sel, placeholder) {
+    sel.innerHTML = `<option value="">${placeholder}</option>`;
+    sel.disabled = true;
+  }
+
+  async function loadProvinces(regionCode, preselectCode) {
+    if (!regionCode) {
+      resetSelect(provinceSel, "Select region first");
+      resetSelect(citySel, "Select province first");
+      resetSelect(brgySel, "Select city first");
+      updatePreview();
+      return;
+    }
+    provinceSel.disabled = true;
+    provinceSel.innerHTML = `<option value="">Loading…</option>`;
+    try {
+      const list = await psgcFetchJson(`/regions/${regionCode}/provinces/`, "Loading provinces…");
+      if (list.length === 0) {
+        // NCR has no provinces — load cities directly under the region.
+        fillSelect(provinceSel, [{ code: "__NONE__", name: "— (no province)" }], "Select province");
+        provinceSel.value = "__NONE__";
+        provinceSel.disabled = false;
+        await loadCities(regionCode, preselectCode, /*fromRegion*/ true);
+      } else {
+        fillSelect(provinceSel, list, "Select province");
+        provinceSel.disabled = false;
+        if (preselectCode) {
+          provinceSel.value = preselectCode;
+          if (provinceSel.value) await loadCities(provinceSel.value, null, false);
+        } else {
+          resetSelect(citySel, "Select province first");
+          resetSelect(brgySel, "Select city first");
+        }
+      }
+    } catch (e) {
+      provinceSel.innerHTML = `<option value="">Could not load provinces</option>`;
+    }
+    updatePreview();
+  }
+
+  async function loadCities(parentCode, preselectCode, fromRegion) {
+    if (!parentCode || parentCode === "__NONE__") {
+      // If province selection is "(no province)" we need region for cities.
+      if (!fromRegion) {
+        resetSelect(citySel, "Select province first");
+        resetSelect(brgySel, "Select city first");
+        updatePreview();
+        return;
+      }
+    }
+    citySel.disabled = true;
+    citySel.innerHTML = `<option value="">Loading…</option>`;
+    try {
+      const path = fromRegion
+        ? `/regions/${parentCode}/cities-municipalities/`
+        : `/provinces/${parentCode}/cities-municipalities/`;
+      const list = await psgcFetchJson(path, "Loading cities…");
+      fillSelect(citySel, list, "Select city / municipality");
+      citySel.disabled = false;
+      if (preselectCode) {
+        citySel.value = preselectCode;
+        if (citySel.value) await loadBarangays(citySel.value, null);
+      } else {
+        resetSelect(brgySel, "Select city first");
+      }
+    } catch (e) {
+      citySel.innerHTML = `<option value="">Could not load cities</option>`;
+    }
+    updatePreview();
+  }
+
+  async function loadBarangays(cityCode, preselectCode) {
+    if (!cityCode) {
+      resetSelect(brgySel, "Select city first");
+      updatePreview();
+      return;
+    }
+    brgySel.disabled = true;
+    brgySel.innerHTML = `<option value="">Loading…</option>`;
+    try {
+      const list = await psgcFetchJson(`/cities-municipalities/${cityCode}/barangays/`, "Loading barangays…");
+      fillSelect(brgySel, list, "Select barangay");
+      brgySel.disabled = false;
+      if (preselectCode) brgySel.value = preselectCode;
+    } catch (e) {
+      brgySel.innerHTML = `<option value="">Could not load barangays</option>`;
+    }
+    updatePreview();
+  }
+
+  let regionsReady = null;
+  async function ensureRegions() {
+    if (regionsReady) return regionsReady;
+    regionsReady = (async () => {
+      try {
+        const list = await psgcFetchJson(`/regions/`, "Loading regions…");
+        fillSelect(regionSel, list, "Select region");
+        regionSel.disabled = false;
+      } catch (e) {
+        regionSel.innerHTML = `<option value="">Could not load regions</option>`;
+      }
+    })();
+    return regionsReady;
+  }
+
+  regionSel.addEventListener("change", async () => {
+    await loadProvinces(regionSel.value, null);
+  });
+  provinceSel.addEventListener("change", async () => {
+    const code = provinceSel.value;
+    if (code === "__NONE__") {
+      // No province — use region for city list.
+      await loadCities(regionSel.value, null, true);
+    } else {
+      await loadCities(code, null, false);
+    }
+  });
+  citySel.addEventListener("change", async () => {
+    await loadBarangays(citySel.value, null);
+  });
+  brgySel.addEventListener("change", updatePreview);
+  if (streetInp) streetInp.addEventListener("input", updatePreview);
+
+  async function loadFor(user, existingAddress) {
+    await ensureRegions();
+    const cached = readCachedComponents(user);
+    if (cached && cached.regionCode) {
+      regionSel.value = cached.regionCode;
+      await loadProvinces(cached.regionCode, cached.provinceCode || null);
+      if (cached.provinceCode === "__NONE__") {
+        provinceSel.value = "__NONE__";
+        await loadCities(cached.regionCode, cached.cityCode || null, true);
+      } else if (cached.cityCode) {
+        await loadCities(cached.provinceCode || cached.regionCode, cached.cityCode, !cached.provinceCode);
+      }
+      if (cached.barangayCode && !brgySel.disabled) {
+        brgySel.value = cached.barangayCode;
+      }
+      if (streetInp) streetInp.value = cached.street || "";
+    } else if (streetInp) {
+      // No cached components — drop existing address into the street field as a fallback
+      streetInp.value = existingAddress || "";
+    }
+    updatePreview();
+  }
+
+  function rememberComponents(user) {
+    writeCachedComponents(user, {
+      regionCode: regionSel.value,
+      provinceCode: provinceSel.value,
+      cityCode: citySel.value,
+      barangayCode: brgySel.value,
+      street: (streetInp && streetInp.value) || "",
+    });
+    if (hiddenInp) hiddenInp.value = composedValue();
+  }
+
+  return {
+    root,
+    composedValue,
+    loadFor,
+    rememberComponents,
+  };
+}
+
+function setupProfileDetailsEditor(user) {
+  const card = document.getElementById("profile-details-card");
+  const grid = document.getElementById("profile-details-grid");
+  const editBtn = document.getElementById("profile-details-edit-btn");
+  const saveBtn = document.getElementById("profile-details-save-btn-bottom");
+  const cancelBtn = document.getElementById("profile-details-cancel-btn-bottom");
+  const footer = document.getElementById("profile-details-footer");
+  const hintEl = document.getElementById("profile-details-hint");
+  if (!card || !grid || !editBtn || !saveBtn || !cancelBtn) return;
+  if (card.dataset.lqWired === "1") return;
+  card.dataset.lqWired = "1";
+
+  const FIELDS = ["bio", "phone", "section", "dob", "address"];
+
+  const addressPicker = setupAddressPicker();
+
+  function setStatus(msg, isError) {
+    if (!hintEl) return;
+    hintEl.textContent = msg || "";
+    hintEl.style.color = isError ? "var(--danger, #ef4444)" : "";
+  }
+
+  function formatDob(raw) {
+    if (!raw) return "—";
+    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return raw;
+    try {
+      const d = new Date(`${raw}T00:00:00`);
+      if (Number.isNaN(d.getTime())) return raw;
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    } catch {
+      return raw;
+    }
+  }
+
+  function renderView(details) {
+    for (const f of FIELDS) {
+      const disp = document.getElementById(`profile-detail-${f}-display`);
+      if (!disp) continue;
+      const val = details && details[f] ? String(details[f]).trim() : "";
+      if (!val) {
+        disp.textContent = "";
+        disp.classList.add("is-empty");
+      } else if (f === "dob") {
+        disp.textContent = formatDob(val);
+        disp.classList.remove("is-empty");
+      } else {
+        disp.textContent = val;
+        disp.classList.remove("is-empty");
+      }
+    }
+  }
+
+  function setMode(mode, details) {
+    grid.dataset.mode = mode;
+    const editing = mode === "edit";
+    for (const f of FIELDS) {
+      const disp = document.getElementById(`profile-detail-${f}-display`);
+      const inp = document.getElementById(`profile-detail-${f}-input`);
+      if (disp) disp.hidden = editing;
+      if (f === "address") {
+        if (addressPicker && addressPicker.root) addressPicker.root.hidden = !editing;
+        if (editing && addressPicker) {
+          addressPicker.loadFor(user, (details && details.address) || "");
+        }
+        continue;
+      }
+      if (inp) {
+        inp.hidden = !editing;
+        if (editing) inp.value = (details && details[f]) || "";
+      }
+    }
+    editBtn.hidden = editing;
+    if (footer) footer.hidden = !editing;
+  }
+
+  if (!user || !(user.id_number || user.email)) {
+    editBtn.disabled = true;
+    setStatus("Sign in first to add personal details.", false);
+    return;
+  }
+
+  let current = (window.LearnIQProfileDetails && window.LearnIQProfileDetails.get(user)) || {};
+  renderView(current);
+
+  function enterEditMode() {
+    current = (window.LearnIQProfileDetails && window.LearnIQProfileDetails.get(user)) || {};
+    setStatus("");
+    setMode("edit", current);
+    const bioInp = document.getElementById("profile-detail-bio-input");
+    if (bioInp) bioInp.focus();
+  }
+
+  function cancelEdit() {
+    setStatus("");
+    setMode("view");
+    renderView(current);
+  }
+
+  function setSaving(saving) {
+    if (saveBtn) saveBtn.disabled = saving;
+    if (cancelBtn) cancelBtn.disabled = saving;
+  }
+
+  async function saveEdit() {
+    const next = {};
+    for (const f of FIELDS) {
+      if (f === "address") {
+        next.address = addressPicker ? addressPicker.composedValue() : "";
+        continue;
+      }
+      const inp = document.getElementById(`profile-detail-${f}-input`);
+      next[f] = inp ? String(inp.value || "").trim() : "";
+    }
+    if (!window.LearnIQProfileDetails) {
+      setStatus("Profile module not loaded.", true);
+      return;
+    }
+    setStatus("Saving…", false);
+    setSaving(true);
+    const result = await window.LearnIQProfileDetails.set(user, next);
+    setSaving(false);
+    if (!result.ok) {
+      setStatus(result.reason || "Could not save details.", true);
+      return;
+    }
+    if (addressPicker) addressPicker.rememberComponents(user);
+    current = next;
+    renderView(current);
+    setMode("view");
+    setStatus(result.local ? "Details saved locally." : "Details saved.", false);
+  }
+
+  /** Re-render the view (used after async load from server). */
+  card._lqRefresh = () => {
+    if (grid.dataset.mode === "edit") return;
+    current = (window.LearnIQProfileDetails && window.LearnIQProfileDetails.get(user)) || emptyLocal();
+    renderView(current);
+  };
+  function emptyLocal() {
+    const empty = {};
+    for (const f of FIELDS) empty[f] = "";
+    return empty;
+  }
+
+  editBtn.addEventListener("click", enterEditMode);
+  cancelBtn.addEventListener("click", cancelEdit);
+  saveBtn.addEventListener("click", saveEdit);
+}
+
 function setupProfilePage() {
   const path = (window.location.pathname || "").replace(/\\/g, "/").toLowerCase();
 
@@ -6228,6 +7924,8 @@ function setupProfilePage() {
     if (roleBadge) roleBadge.textContent = "Signed out";
     if (brandSub) brandSub.textContent = "Sign in required";
     if (hint) hint.textContent = "Sign in first, then open this page again.";
+    setupProfilePhotoEditor(null);
+    setupProfileDetailsEditor(null);
     return;
   }
 
@@ -6246,5 +7944,22 @@ function setupProfilePage() {
     hint.textContent = idn && u.id_number && idn !== String(u.id_number)
       ? "Note: This profile page currently shows the signed-in user only."
       : "";
+  }
+
+  setupProfilePhotoEditor(u);
+  setupProfileDetailsEditor(u);
+
+  // Fetch latest profile from the database (source of truth) and re-render
+  // once the cache is updated. Running in the background so the initial
+  // localStorage-cached values render instantly.
+  if (u && u.access_token && window.LearnIQProfile && window.LearnIQProfile.loadFromServer) {
+    window.LearnIQProfile.loadFromServer(u)
+      .then((payload) => {
+        if (!payload) return;
+        refreshAvatarsAcrossPage(u);
+        const card = document.getElementById("profile-details-card");
+        if (card && typeof card._lqRefresh === "function") card._lqRefresh();
+      })
+      .catch((err) => console.warn("Profile load failed:", err));
   }
 }

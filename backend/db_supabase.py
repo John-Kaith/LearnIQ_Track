@@ -132,6 +132,40 @@ def update_profile_status(id_number: str, approval_status: str) -> None:
     _sb().table("profiles").update({"approval_status": approval_status}).eq("id_number", id_number).execute()
 
 
+# Fields the signed-in user can edit on their own profile page.
+PROFILE_EXTRA_FIELDS = ("bio", "phone", "section", "dob", "address", "avatar_data")
+
+
+def update_profile_extras(id_number: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    """Update the editable profile fields on a profile row.
+
+    Only the keys in `PROFILE_EXTRA_FIELDS` are accepted. Empty strings are
+    stored as NULL so the row stays clean. Returns the updated row or None.
+    """
+    cleaned: dict[str, Any] = {}
+    for key in PROFILE_EXTRA_FIELDS:
+        if not fields or key not in fields:
+            continue
+        value = fields[key]
+        if value is None:
+            cleaned[key] = None
+        elif isinstance(value, str):
+            stripped = value.strip()
+            cleaned[key] = stripped if stripped else None
+        else:
+            cleaned[key] = value
+    if not cleaned:
+        return get_profile_by_id_number(id_number)
+    res = (
+        _sb()
+        .table("profiles")
+        .update(cleaned)
+        .eq("id_number", id_number.strip())
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
 def insert_lesson(
     filename: str,
     file_type: str,
@@ -1702,3 +1736,785 @@ def lesson_to_api_list_item(row: dict[str, Any]) -> dict[str, Any]:
             "activities": lc.get("activities"),
         },
     }
+
+
+# ============================================================
+# Student Gradecard helpers
+# ------------------------------------------------------------
+# Backed by the tables: grading_periods, enrollments,
+# activity_attempts, student_grades, gradecards. See the
+# migration SQL provided in chat for the table definitions.
+# ============================================================
+
+
+def list_grading_periods() -> list[dict[str, Any]]:
+    try:
+        res = (
+            _sb()
+            .table("grading_periods")
+            .select("*")
+            .order("start_date", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        print(f"list_grading_periods: {e}")
+        return []
+
+
+def get_current_grading_period() -> dict[str, Any] | None:
+    """Return the row flagged is_current=true, or the most recent one as fallback."""
+    try:
+        res = (
+            _sb()
+            .table("grading_periods")
+            .select("*")
+            .eq("is_current", True)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except Exception as e:
+        print(f"get_current_grading_period (is_current): {e}")
+    # Fallback: most recent by start_date
+    try:
+        res = (
+            _sb()
+            .table("grading_periods")
+            .select("*")
+            .order("start_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"get_current_grading_period (fallback): {e}")
+        return None
+
+
+def get_grading_period(period_id: str | None) -> dict[str, Any] | None:
+    if not period_id:
+        return get_current_grading_period()
+    try:
+        res = (
+            _sb()
+            .table("grading_periods")
+            .select("*")
+            .eq("id", period_id)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except Exception as e:
+        print(f"get_grading_period: {e}")
+    return get_current_grading_period()
+
+
+def _period_date_range(period: dict[str, Any] | None) -> tuple[str | None, str | None]:
+    """Return (start_iso, end_iso_exclusive) ISO strings for filtering by submitted_at."""
+    if not period:
+        return None, None
+    start = period.get("start_date")
+    end = period.get("end_date")
+    if not start or not end:
+        return None, None
+    # end_date is the last valid day → make exclusive upper bound by appending +1 day
+    try:
+        end_dt = datetime.fromisoformat(str(end)) + timedelta(days=1)
+        end_iso = end_dt.date().isoformat()
+    except Exception:
+        end_iso = str(end)
+    return f"{start}T00:00:00", f"{end_iso}T00:00:00"
+
+
+# ---------- Enrollments ----------
+
+def list_enrollments_for_student(
+    student_uuid: str,
+    period_id: str | None = None,
+) -> list[dict[str, Any]]:
+    if not student_uuid:
+        return []
+    try:
+        q = (
+            _sb()
+            .table("enrollments")
+            .select("*, subjects(id, name, color), profiles!enrollments_student_id_fkey(full_name)")
+            .eq("student_id", student_uuid)
+        )
+        # Some PostgREST versions don't accept the inverse FK alias above; fallback below.
+        if period_id:
+            q = q.eq("grading_period_id", period_id)
+        res = q.execute()
+        return res.data or []
+    except Exception:
+        # Fallback: plain select without joins
+        try:
+            q = _sb().table("enrollments").select("*").eq("student_id", student_uuid)
+            if period_id:
+                q = q.eq("grading_period_id", period_id)
+            res = q.execute()
+            rows = res.data or []
+            subject_ids = list({r.get("subject_id") for r in rows if r.get("subject_id")})
+            subjects_map: dict[str, dict[str, Any]] = {}
+            if subject_ids:
+                try:
+                    sres = (
+                        _sb()
+                        .table("subjects")
+                        .select("id, name, color")
+                        .in_("id", subject_ids)
+                        .execute()
+                    )
+                    for s in sres.data or []:
+                        subjects_map[str(s["id"])] = s
+                except Exception as e:
+                    print(f"list_enrollments_for_student subjects fetch: {e}")
+            for r in rows:
+                sid = r.get("subject_id")
+                if sid and str(sid) in subjects_map:
+                    r["subjects"] = subjects_map[str(sid)]
+            return rows
+        except Exception as e:
+            print(f"list_enrollments_for_student fallback: {e}")
+            return []
+
+
+def upsert_enrollment(
+    student_uuid: str,
+    subject_id: str,
+    teacher_id_number: str | None,
+    grading_period_id: str | None,
+) -> dict[str, Any] | None:
+    if not student_uuid or not subject_id:
+        return None
+    row = {
+        "student_id": student_uuid,
+        "subject_id": str(subject_id),
+        "teacher_id_number": teacher_id_number,
+        "grading_period_id": grading_period_id,
+    }
+    try:
+        res = (
+            _sb()
+            .table("enrollments")
+            .upsert(row, on_conflict="student_id,subject_id,grading_period_id")
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"upsert_enrollment: {e}")
+        return None
+
+
+# ---------- Quiz / activity / attendance aggregations ----------
+
+def _lesson_ids_for_subject(subject_id: str) -> list[str]:
+    try:
+        res = (
+            _sb()
+            .table("lessons")
+            .select("id")
+            .eq("subject_id", subject_id)
+            .execute()
+        )
+        return [str(r["id"]) for r in (res.data or []) if r.get("id")]
+    except Exception as e:
+        print(f"_lesson_ids_for_subject: {e}")
+        return []
+
+
+def compute_quiz_average_for_subject(
+    student_uuid: str,
+    subject_id: str,
+    period: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return {average: float|None, attempts: int} — average normalized to 0–100."""
+    out = {"average": None, "attempts": 0}
+    lesson_ids = _lesson_ids_for_subject(subject_id)
+    if not lesson_ids or not student_uuid:
+        return out
+    try:
+        q = (
+            _sb()
+            .table("quiz_attempts")
+            .select("score, total_questions, submitted_at")
+            .eq("student_id", student_uuid)
+            .in_("lesson_id", lesson_ids)
+        )
+        start, end = _period_date_range(period)
+        if start and end:
+            q = q.gte("submitted_at", start).lt("submitted_at", end)
+        res = q.execute()
+        rows = res.data or []
+        if not rows:
+            return out
+        pct_values: list[float] = []
+        for r in rows:
+            try:
+                score = float(r.get("score") or 0)
+                total = int(r.get("total_questions") or 0)
+                if total > 0:
+                    pct_values.append(max(0.0, min(100.0, (score / total) * 100.0)))
+                else:
+                    # If no total_questions stored, assume score is already a percentage.
+                    pct_values.append(max(0.0, min(100.0, score)))
+            except Exception:
+                continue
+        if pct_values:
+            out["average"] = round(sum(pct_values) / len(pct_values), 2)
+            out["attempts"] = len(pct_values)
+        return out
+    except Exception as e:
+        print(f"compute_quiz_average_for_subject: {e}")
+        return out
+
+
+def compute_activity_average_for_subject(
+    student_uuid: str,
+    subject_id: str,
+    period: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return {average: float|None, attempts: int} from activity_attempts."""
+    out = {"average": None, "attempts": 0}
+    lesson_ids = _lesson_ids_for_subject(subject_id)
+    if not lesson_ids or not student_uuid:
+        return out
+    try:
+        q = (
+            _sb()
+            .table("activity_attempts")
+            .select("score, submitted_at")
+            .eq("student_id", student_uuid)
+            .in_("lesson_id", lesson_ids)
+        )
+        start, end = _period_date_range(period)
+        if start and end:
+            q = q.gte("submitted_at", start).lt("submitted_at", end)
+        res = q.execute()
+        rows = res.data or []
+        if not rows:
+            return out
+        scored = [float(r["score"]) for r in rows if r.get("score") is not None]
+        out["attempts"] = len(rows)
+        if scored:
+            out["average"] = round(sum(scored) / len(scored), 2)
+        return out
+    except Exception as e:
+        print(f"compute_activity_average_for_subject: {e}")
+        return out
+
+
+def _attendance_status_bucket(status_raw: Any) -> str:
+    s = str(status_raw or "").strip().lower()
+    if s in {"absent"}:
+        return "absent"
+    if s in {"late", "tardy"}:
+        return "tardy"
+    if s in {"present", "in_progress", "active", "completed", "clocked_in", "clocked_out", "open", "closed"}:
+        return "present"
+    return "other"
+
+
+def compute_attendance_stats(
+    student_uuid: str,
+    student_id_number: str | None,
+    period: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return {present, absent, tardy, total, percent} for the period."""
+    out = {"present": 0, "absent": 0, "tardy": 0, "total": 0, "percent": None}
+    if not student_uuid and not student_id_number:
+        return out
+
+    start_iso, end_iso = _period_date_range(period)
+    rows: list[dict[str, Any]] = []
+
+    for col, val in (("student_id", student_uuid), ("student_id_number", student_id_number)):
+        if not val:
+            continue
+        try:
+            q = _sb().table("attendance_logs").select("status, date, time_in").eq(col, val)
+            if start_iso and end_iso:
+                # attendance_logs may use date or time_in for the day; try time_in first
+                q = q.gte("time_in", start_iso).lt("time_in", end_iso)
+            res = q.execute()
+            rows.extend(res.data or [])
+        except Exception as e:
+            print(f"compute_attendance_stats ({col}): {e}")
+
+    seen_days: set[str] = set()
+    for r in rows:
+        bucket = _attendance_status_bucket(r.get("status"))
+        if bucket == "other":
+            continue
+        # Dedup by day so multiple logs on the same day count once
+        day = str(r.get("date") or (r.get("time_in") or "")[:10])
+        if not day or day in seen_days:
+            continue
+        seen_days.add(day)
+        out[bucket] += 1
+
+    out["total"] = out["present"] + out["absent"] + out["tardy"]
+    if out["total"] > 0:
+        out["percent"] = round((out["present"] / out["total"]) * 100.0, 2)
+    return out
+
+
+# ---------- student_grades (per-subject rows) ----------
+
+def get_student_grade(
+    student_uuid: str,
+    subject_id: str,
+    grading_period_id: str | None,
+) -> dict[str, Any] | None:
+    if not student_uuid or not subject_id:
+        return None
+    try:
+        q = (
+            _sb()
+            .table("student_grades")
+            .select("*")
+            .eq("student_id", student_uuid)
+            .eq("subject_id", subject_id)
+        )
+        if grading_period_id:
+            q = q.eq("grading_period_id", grading_period_id)
+        res = q.limit(1).execute()
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"get_student_grade: {e}")
+        return None
+
+
+def upsert_student_grade(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Insert or update a per-subject grade row.
+    Required: student_id, subject_id, grading_period_id.
+    Optional: quiz_average, activity_average, attendance_percent, final_grade,
+              remarks, teacher_comments, teacher_id_number, finalized_at.
+    """
+    sid = payload.get("student_id")
+    sub = payload.get("subject_id")
+    per = payload.get("grading_period_id")
+    if not sid or not sub:
+        raise RuntimeError("student_id and subject_id are required")
+
+    row = {
+        "student_id": sid,
+        "subject_id": sub,
+        "grading_period_id": per,
+        "teacher_id_number": payload.get("teacher_id_number"),
+        "quiz_average": payload.get("quiz_average"),
+        "activity_average": payload.get("activity_average"),
+        "attendance_percent": payload.get("attendance_percent"),
+        "final_grade": payload.get("final_grade"),
+        "remarks": payload.get("remarks"),
+        "teacher_comments": payload.get("teacher_comments"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.get("finalized_at"):
+        row["finalized_at"] = payload["finalized_at"]
+
+    try:
+        res = (
+            _sb()
+            .table("student_grades")
+            .upsert(row, on_conflict="student_id,subject_id,grading_period_id")
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"upsert_student_grade: {e}")
+        raise
+
+
+# ---------- gradecards (top-level summary) ----------
+
+def get_gradecard_row(
+    student_uuid: str,
+    grading_period_id: str | None,
+) -> dict[str, Any] | None:
+    if not student_uuid:
+        return None
+    try:
+        q = _sb().table("gradecards").select("*").eq("student_id", student_uuid)
+        if grading_period_id:
+            q = q.eq("grading_period_id", grading_period_id)
+        res = q.limit(1).execute()
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"get_gradecard_row: {e}")
+        return None
+
+
+def _classify_standing(avg: float | None) -> str:
+    if avg is None:
+        return "—"
+    if avg >= 95:
+        return "With Highest Honors"
+    if avg >= 90:
+        return "With High Honors"
+    if avg >= 85:
+        return "With Honors"
+    if avg >= 75:
+        return "Passed"
+    return "Failed"
+
+
+def _generate_reference_no(student_id_number: str | None, period: dict[str, Any] | None) -> str:
+    if not period or not student_id_number:
+        return "GR-XXXX-XXXX"
+    sy = str(period.get("school_year") or "").replace(" ", "")
+    name = str(period.get("name") or "").replace(" ", "")
+    return f"GR-{sy}-{name}-{student_id_number}"
+
+
+def upsert_gradecard(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Insert or update the top-level gradecard summary row."""
+    sid = payload.get("student_id")
+    per = payload.get("grading_period_id")
+    if not sid or not per:
+        raise RuntimeError("student_id and grading_period_id are required")
+
+    row = {
+        "student_id": sid,
+        "grading_period_id": per,
+        "general_average": payload.get("general_average"),
+        "standing": payload.get("standing"),
+        "conduct": payload.get("conduct"),
+        "days_present": payload.get("days_present"),
+        "days_absent": payload.get("days_absent"),
+        "times_tardy": payload.get("times_tardy"),
+        "adviser_comments": payload.get("adviser_comments"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.get("reference_no"):
+        row["reference_no"] = payload["reference_no"]
+    if payload.get("finalized_at"):
+        row["finalized_at"] = payload["finalized_at"]
+
+    try:
+        res = (
+            _sb()
+            .table("gradecards")
+            .upsert(row, on_conflict="student_id,grading_period_id")
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"upsert_gradecard: {e}")
+        raise
+
+
+# ---------- activity_attempts ----------
+
+def insert_activity_attempt(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record a student's activity submission (essay / flashcards review)."""
+    student_uuid = payload.get("student_id")
+    if not student_uuid:
+        raise RuntimeError("student_id (profile UUID) is required")
+    lesson_id = payload.get("lesson_id")
+    if not lesson_id:
+        raise RuntimeError("lesson_id is required")
+
+    row = {
+        "student_id": student_uuid,
+        "lesson_id": str(lesson_id),
+        "activity_index": int(payload.get("activity_index") or 0),
+        "activity_type": str(payload.get("activity_type") or "essay"),
+        "response": payload.get("response"),
+        "score": payload.get("score"),
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        res = _sb().table("activity_attempts").insert(row).execute()
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"insert_activity_attempt: {e}")
+        raise
+
+
+# ---------- Aggregating gradecard (the big one) ----------
+
+def _collect_subject_ids_for_student(
+    student_uuid: str,
+    period: dict[str, Any] | None,
+) -> list[str]:
+    """Find subjects this student is associated with for the period.
+    Considers enrollments + quiz_attempts + activity_attempts (within the period).
+    """
+    subject_ids: set[str] = set()
+
+    # 1) From enrollments
+    try:
+        q = _sb().table("enrollments").select("subject_id, grading_period_id").eq("student_id", student_uuid)
+        res = q.execute()
+        for r in res.data or []:
+            sid = r.get("subject_id")
+            if not sid:
+                continue
+            # If row has no period, include it; if it has a period, match it
+            row_period = r.get("grading_period_id")
+            if not row_period or not period or str(row_period) == str(period.get("id")):
+                subject_ids.add(str(sid))
+    except Exception as e:
+        print(f"_collect_subject_ids_for_student enrollments: {e}")
+
+    start, end = _period_date_range(period)
+
+    # 2) From quiz_attempts → lessons.subject_id
+    try:
+        q = _sb().table("quiz_attempts").select("lesson_id, submitted_at").eq("student_id", student_uuid)
+        if start and end:
+            q = q.gte("submitted_at", start).lt("submitted_at", end)
+        qa = q.execute()
+        lesson_ids = list({str(r["lesson_id"]) for r in (qa.data or []) if r.get("lesson_id")})
+        if lesson_ids:
+            lres = (
+                _sb()
+                .table("lessons")
+                .select("id, subject_id")
+                .in_("id", lesson_ids)
+                .execute()
+            )
+            for r in lres.data or []:
+                if r.get("subject_id"):
+                    subject_ids.add(str(r["subject_id"]))
+    except Exception as e:
+        print(f"_collect_subject_ids_for_student quiz_attempts: {e}")
+
+    # 3) From activity_attempts → lessons.subject_id
+    try:
+        q = _sb().table("activity_attempts").select("lesson_id, submitted_at").eq("student_id", student_uuid)
+        if start and end:
+            q = q.gte("submitted_at", start).lt("submitted_at", end)
+        aa = q.execute()
+        lesson_ids = list({str(r["lesson_id"]) for r in (aa.data or []) if r.get("lesson_id")})
+        if lesson_ids:
+            lres = (
+                _sb()
+                .table("lessons")
+                .select("id, subject_id")
+                .in_("id", lesson_ids)
+                .execute()
+            )
+            for r in lres.data or []:
+                if r.get("subject_id"):
+                    subject_ids.add(str(r["subject_id"]))
+    except Exception as e:
+        print(f"_collect_subject_ids_for_student activity_attempts: {e}")
+
+    return sorted(subject_ids)
+
+
+def _fetch_subjects_map(subject_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not subject_ids:
+        return {}
+    try:
+        res = (
+            _sb()
+            .table("subjects")
+            .select("id, name, color, description")
+            .in_("id", subject_ids)
+            .execute()
+        )
+        return {str(r["id"]): r for r in (res.data or [])}
+    except Exception as e:
+        print(f"_fetch_subjects_map: {e}")
+        return {}
+
+
+def _fetch_teacher_for_subject(student_uuid: str, subject_id: str) -> str | None:
+    """Pick a representative teacher_id_number for the given subject (prefer enrollment row)."""
+    try:
+        res = (
+            _sb()
+            .table("enrollments")
+            .select("teacher_id_number")
+            .eq("student_id", student_uuid)
+            .eq("subject_id", subject_id)
+            .not_.is_("teacher_id_number", "null")
+            .limit(1)
+            .execute()
+        )
+        if res.data and res.data[0].get("teacher_id_number"):
+            return str(res.data[0]["teacher_id_number"])
+    except Exception:
+        pass
+    try:
+        res = (
+            _sb()
+            .table("lessons")
+            .select("teacher_id_number")
+            .eq("subject_id", subject_id)
+            .not_.is_("teacher_id_number", "null")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if res.data and res.data[0].get("teacher_id_number"):
+            return str(res.data[0]["teacher_id_number"])
+    except Exception as e:
+        print(f"_fetch_teacher_for_subject: {e}")
+    return None
+
+
+def _profile_lookup_by_id_numbers(idns: list[str]) -> dict[str, dict[str, Any]]:
+    cleaned = list({str(x).strip() for x in idns if x})
+    if not cleaned:
+        return {}
+    try:
+        res = (
+            _sb()
+            .table("profiles")
+            .select("id, id_number, full_name, role")
+            .in_("id_number", cleaned)
+            .execute()
+        )
+        return {str(r["id_number"]): r for r in (res.data or [])}
+    except Exception as e:
+        print(f"_profile_lookup_by_id_numbers: {e}")
+        return {}
+
+
+def build_full_gradecard(
+    student_id_number: str,
+    grading_period_id: str | None = None,
+) -> dict[str, Any]:
+    """Return a complete gradecard JSON ready for the frontend."""
+    student = get_profile_by_id_number(student_id_number)
+    if not student:
+        raise RuntimeError(f"Student profile not found for id_number={student_id_number}")
+    student_uuid = str(student["id"])
+
+    period = get_grading_period(grading_period_id)
+
+    # Subjects derived from enrollments + activity
+    subject_ids = _collect_subject_ids_for_student(student_uuid, period)
+    subjects_map = _fetch_subjects_map(subject_ids)
+
+    # Pull any existing student_grades rows so teacher overrides win
+    grade_rows_by_subject: dict[str, dict[str, Any]] = {}
+    if subject_ids and period:
+        try:
+            res = (
+                _sb()
+                .table("student_grades")
+                .select("*")
+                .eq("student_id", student_uuid)
+                .eq("grading_period_id", period["id"])
+                .in_("subject_id", subject_ids)
+                .execute()
+            )
+            for r in res.data or []:
+                grade_rows_by_subject[str(r["subject_id"])] = r
+        except Exception as e:
+            print(f"build_full_gradecard student_grades: {e}")
+
+    # Build subject rows
+    subjects_out: list[dict[str, Any]] = []
+    teacher_idns_needed: set[str] = set()
+
+    for sid in subject_ids:
+        subj = subjects_map.get(sid, {"id": sid, "name": "Unknown subject"})
+        existing = grade_rows_by_subject.get(sid) or {}
+
+        q = compute_quiz_average_for_subject(student_uuid, sid, period)
+        a = compute_activity_average_for_subject(student_uuid, sid, period)
+        att = compute_attendance_stats(student_uuid, student_id_number, period)
+
+        teacher_idn = existing.get("teacher_id_number") or _fetch_teacher_for_subject(student_uuid, sid)
+        if teacher_idn:
+            teacher_idns_needed.add(teacher_idn)
+
+        # Auto-compute a suggested "final" from averages if no teacher override yet
+        components: list[float] = []
+        for val in (q["average"], a["average"], att["percent"]):
+            if val is not None:
+                components.append(float(val))
+        computed_final = round(sum(components) / len(components), 2) if components else None
+
+        subjects_out.append({
+            "subject_id": sid,
+            "subject_name": subj.get("name"),
+            "subject_color": subj.get("color"),
+            "teacher_id_number": teacher_idn,
+            "teacher_name": None,  # filled below
+            "quiz_average": q["average"],
+            "quiz_attempts": q["attempts"],
+            "activity_average": a["average"],
+            "activity_attempts": a["attempts"],
+            "attendance_percent": att["percent"],
+            "attendance_present": att["present"],
+            "attendance_absent": att["absent"],
+            "attendance_tardy": att["tardy"],
+            "final_grade": existing.get("final_grade") if existing.get("final_grade") is not None else computed_final,
+            "final_is_override": existing.get("final_grade") is not None,
+            "remarks": existing.get("remarks"),
+            "teacher_comments": existing.get("teacher_comments"),
+            "finalized_at": existing.get("finalized_at"),
+        })
+
+    # Resolve teacher names + adviser
+    adviser_idn = (student.get("adviser_id_number") or "").strip() if student.get("adviser_id_number") else ""
+    if adviser_idn:
+        teacher_idns_needed.add(adviser_idn)
+    profile_map = _profile_lookup_by_id_numbers(list(teacher_idns_needed))
+    for row in subjects_out:
+        tidn = row.get("teacher_id_number")
+        if tidn and tidn in profile_map:
+            row["teacher_name"] = profile_map[tidn].get("full_name")
+
+    adviser_profile = profile_map.get(adviser_idn) if adviser_idn else None
+
+    # Top-level summary
+    finals = [s["final_grade"] for s in subjects_out if s.get("final_grade") is not None]
+    auto_general = round(sum(finals) / len(finals), 2) if finals else None
+
+    auto_att = compute_attendance_stats(student_uuid, student_id_number, period)
+
+    summary_row = get_gradecard_row(student_uuid, period["id"] if period else None) or {}
+    summary_out = {
+        "id": summary_row.get("id"),
+        "reference_no": summary_row.get("reference_no")
+            or _generate_reference_no(student.get("id_number"), period),
+        "general_average": summary_row.get("general_average")
+            if summary_row.get("general_average") is not None else auto_general,
+        "general_average_auto": auto_general,
+        "standing": summary_row.get("standing")
+            or _classify_standing(summary_row.get("general_average")
+                                  if summary_row.get("general_average") is not None else auto_general),
+        "conduct": summary_row.get("conduct"),
+        "days_present": summary_row.get("days_present")
+            if summary_row.get("days_present") is not None else auto_att["present"],
+        "days_absent": summary_row.get("days_absent")
+            if summary_row.get("days_absent") is not None else auto_att["absent"],
+        "times_tardy": summary_row.get("times_tardy")
+            if summary_row.get("times_tardy") is not None else auto_att["tardy"],
+        "adviser_comments": summary_row.get("adviser_comments"),
+        "finalized_at": summary_row.get("finalized_at"),
+    }
+
+    return {
+        "student": {
+            "id": student_uuid,
+            "id_number": student.get("id_number"),
+            "full_name": student.get("full_name"),
+            "email": student.get("email"),
+            "role": student.get("role"),
+            "grade_level": student.get("grade_level"),
+            "section": student.get("section"),
+            "track": student.get("track"),
+            "strand": student.get("strand"),
+            "adviser_id_number": adviser_idn or None,
+        },
+        "adviser": ({
+            "id_number": adviser_profile.get("id_number"),
+            "full_name": adviser_profile.get("full_name"),
+        } if adviser_profile else None),
+        "period": period,
+        "subjects": subjects_out,
+        "summary": summary_out,
+    }
+

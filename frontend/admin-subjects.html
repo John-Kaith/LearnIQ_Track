@@ -8,10 +8,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026051301" />
   <script src="js/shared/theme-toggle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="js/shared/reviewer-markdown.js" defer></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026051301" defer></script>
 </head>
 <body class="admin-subjects-page">
   <main class="page-shell container">
@@ -37,6 +40,7 @@
           <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
           <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
           <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
+          <a href="admin-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
           <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
           <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
           <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
@@ -142,6 +146,98 @@
           <button id="admin-subject-cancel" type="button" class="btn btn-secondary">Cancel</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Admin lesson preview modal -->
+  <div id="admin-lesson-preview-modal" class="action-modal-backdrop admin-lesson-preview-modal" hidden>
+    <div class="action-modal glass-card admin-lesson-preview-panel" role="dialog" aria-modal="true" aria-labelledby="admin-lesson-preview-title">
+      <div class="action-modal-head">
+        <h3 id="admin-lesson-preview-title">Lesson preview</h3>
+        <button type="button" class="btn btn-ghost admin-lesson-preview-close" aria-label="Close lesson preview">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Lesson header (file type, status, date, teacher) -->
+      <div id="admin-lesson-preview-summary" class="admin-lesson-preview-summary"></div>
+
+      <!-- Tabs -->
+      <div class="admin-lesson-preview-tabs" role="tablist">
+        <button type="button" class="workspace-tab is-active" data-admin-preview-tab="reviewer" role="tab" aria-selected="true">
+          <i class="fa-solid fa-book-open"></i> Reviewer
+        </button>
+        <button type="button" class="workspace-tab" data-admin-preview-tab="quiz" role="tab" aria-selected="false">
+          <i class="fa-solid fa-list-check"></i> Quiz
+        </button>
+        <button type="button" class="workspace-tab" data-admin-preview-tab="activities" role="tab" aria-selected="false">
+          <i class="fa-solid fa-clone"></i> Activities
+        </button>
+      </div>
+
+      <!-- Tab panels -->
+      <div id="admin-lesson-preview-body" class="admin-lesson-preview-body">
+        <div id="admin-lesson-preview-pane-reviewer" class="admin-lesson-preview-pane" data-admin-preview-pane="reviewer"></div>
+        <div id="admin-lesson-preview-pane-quiz" class="admin-lesson-preview-pane" data-admin-preview-pane="quiz" hidden></div>
+        <div id="admin-lesson-preview-pane-activities" class="admin-lesson-preview-pane" data-admin-preview-pane="activities" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flashcards study modal (shared component used by activities) -->
+  <div id="flashcards-modal" class="fc-modal-backdrop" hidden>
+    <div class="fc-modal" role="dialog" aria-modal="true" aria-labelledby="fc-modal-title">
+      <div class="fc-modal-head">
+        <div class="fc-modal-title-wrap">
+          <h3 id="fc-modal-title"><i class="fa-solid fa-clone"></i> Flashcards</h3>
+          <span class="fc-modal-counter" id="fc-modal-counter">1 / 1</span>
+        </div>
+        <button id="fc-modal-close" type="button" class="btn btn-ghost" aria-label="Close flashcards">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="fc-modal-body">
+        <div id="fc-card-view" class="fc-card-view">
+          <div class="fc-card" id="fc-card" role="button" tabindex="0" aria-label="Click to flip card">
+            <div class="fc-card-inner">
+              <div class="fc-card-face fc-card-front">
+                <span class="fc-card-label">Question</span>
+                <div class="fc-card-text" id="fc-card-front-text">—</div>
+                <span class="fc-card-hint"><i class="fa-solid fa-arrows-rotate"></i> Click to flip</span>
+              </div>
+              <div class="fc-card-face fc-card-back">
+                <span class="fc-card-label">Answer</span>
+                <div class="fc-card-text" id="fc-card-back-text">—</div>
+                <span class="fc-card-hint"><i class="fa-solid fa-arrows-rotate"></i> Click to flip back</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fc-modal-controls">
+            <button id="fc-prev-btn" type="button" class="btn btn-secondary" aria-label="Previous card">
+              <i class="fa-solid fa-chevron-left"></i> Prev
+            </button>
+            <button id="fc-next-btn" type="button" class="btn btn-primary" aria-label="Next card">
+              Next <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="fc-complete-view" class="fc-complete-view" hidden>
+          <div class="fc-complete-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <h4>Deck complete!</h4>
+          <p class="small-note">You reviewed all <span id="fc-complete-count">0</span> cards. Want to go through them again?</p>
+          <div class="fc-complete-actions">
+            <button id="fc-review-again" type="button" class="btn btn-primary">
+              <i class="fa-solid fa-rotate-right"></i> Review again
+            </button>
+            <button id="fc-close-deck" type="button" class="btn btn-secondary">
+              <i class="fa-solid fa-xmark"></i> Close
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </body>

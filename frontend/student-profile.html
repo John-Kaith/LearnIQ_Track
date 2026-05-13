@@ -57,30 +57,225 @@
         </div>
       </section>
 
-      <article class="glass-card content-card">
-        <h3>Account details</h3>
-        <div class="profile-kv-grid" id="profile-kv-grid">
-          <div class="profile-kv">
-            <span class="small-note">Full name</span>
-            <strong id="profile-full-name">—</strong>
+      <div class="profile-top-grid">
+        <article class="glass-card content-card profile-photo-card" id="profile-photo-card">
+          <h3>Profile photo</h3>
+          <div class="profile-photo-row">
+            <div class="avatar profile-photo-avatar" id="profile-photo-avatar" aria-hidden="true">ST</div>
+            <div class="profile-photo-actions">
+              <input
+                type="file"
+                id="profile-photo-input"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                class="file-input-sr-only"
+              />
+              <div class="button-group">
+                <button type="button" class="btn btn-primary" id="profile-photo-choose-btn">
+                  <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                  <span id="profile-photo-choose-label">Add photo</span>
+                </button>
+                <button type="button" class="btn btn-ghost" id="profile-photo-remove-btn" hidden>
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i> Remove
+                </button>
+              </div>
+              <p class="small-note" id="profile-photo-hint">
+                PNG, JPG, or WEBP. Saved on this device for your profile.
+              </p>
+            </div>
           </div>
-          <div class="profile-kv">
-            <span class="small-note">Role</span>
-            <strong id="profile-role">—</strong>
+        </article>
+
+        <article class="glass-card content-card">
+          <h3>Account details</h3>
+          <div class="profile-kv-grid profile-kv-grid--stack" id="profile-kv-grid">
+            <div class="profile-kv">
+              <span class="small-note">Full name</span>
+              <strong id="profile-full-name">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Role</span>
+              <strong id="profile-role">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">ID number</span>
+              <strong id="profile-id-number">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Email</span>
+              <strong id="profile-email">—</strong>
+            </div>
           </div>
-          <div class="profile-kv">
-            <span class="small-note">ID number</span>
-            <strong id="profile-id-number">—</strong>
+
+          <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
+        </article>
+      </div>
+
+      <article class="glass-card content-card profile-details-card" id="profile-details-card">
+        <div class="profile-details-head">
+          <div>
+            <h3>Personal details</h3>
+            <p class="small-note">Add your bio, contact info, and more. Saved on this device.</p>
           </div>
-          <div class="profile-kv">
-            <span class="small-note">Email</span>
-            <strong id="profile-email">—</strong>
+          <div class="profile-details-actions">
+            <button type="button" class="btn btn-secondary" id="profile-details-edit-btn">
+              <i class="fa-solid fa-pen" aria-hidden="true"></i> Edit
+            </button>
           </div>
         </div>
 
-        <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
+        <div class="profile-details-grid" id="profile-details-grid" data-mode="view">
+          <div class="profile-detail-field profile-detail-bio" data-field="bio">
+            <span class="small-note">About me</span>
+            <strong class="profile-detail-display" id="profile-detail-bio-display">—</strong>
+            <textarea
+              class="profile-detail-input"
+              id="profile-detail-bio-input"
+              rows="3"
+              placeholder="A short bio about yourself"
+              maxlength="500"
+              hidden
+            ></textarea>
+          </div>
+
+          <div class="profile-detail-field" data-field="phone">
+            <span class="small-note">Phone number</span>
+            <strong class="profile-detail-display" id="profile-detail-phone-display">—</strong>
+            <input
+              type="tel"
+              class="profile-detail-input"
+              id="profile-detail-phone-input"
+              placeholder="+63 912 345 6789"
+              maxlength="40"
+              hidden
+            />
+          </div>
+
+          <div class="profile-detail-field" data-field="section">
+            <span class="small-note">Section / Year level</span>
+            <strong class="profile-detail-display" id="profile-detail-section-display">—</strong>
+            <input
+              type="text"
+              class="profile-detail-input"
+              id="profile-detail-section-input"
+              placeholder="e.g. STEM 12-A"
+              maxlength="80"
+              hidden
+            />
+          </div>
+
+          <div class="profile-detail-field" data-field="dob">
+            <span class="small-note">Date of birth</span>
+            <strong class="profile-detail-display" id="profile-detail-dob-display">—</strong>
+            <input
+              type="date"
+              class="profile-detail-input"
+              id="profile-detail-dob-input"
+              hidden
+            />
+          </div>
+
+          <div class="profile-detail-field profile-detail-address" data-field="address">
+            <span class="small-note">Address</span>
+            <strong class="profile-detail-display" id="profile-detail-address-display">—</strong>
+            <div class="profile-address-editor" id="profile-address-editor" hidden>
+              <div class="profile-address-grid">
+                <label class="profile-address-cell">
+                  <span class="small-note">Region</span>
+                  <select id="profile-address-region" class="profile-detail-input">
+                    <option value="">Loading regions…</option>
+                  </select>
+                </label>
+                <label class="profile-address-cell">
+                  <span class="small-note">Province</span>
+                  <select id="profile-address-province" class="profile-detail-input" disabled>
+                    <option value="">Select region first</option>
+                  </select>
+                </label>
+                <label class="profile-address-cell">
+                  <span class="small-note">City / Municipality</span>
+                  <select id="profile-address-city" class="profile-detail-input" disabled>
+                    <option value="">Select province first</option>
+                  </select>
+                </label>
+                <label class="profile-address-cell">
+                  <span class="small-note">Barangay</span>
+                  <select id="profile-address-barangay" class="profile-detail-input" disabled>
+                    <option value="">Select city first</option>
+                  </select>
+                </label>
+              </div>
+              <label class="profile-address-cell profile-address-cell-wide">
+                <span class="small-note">Street / House number (optional)</span>
+                <input
+                  type="text"
+                  class="profile-detail-input"
+                  id="profile-address-street"
+                  placeholder="e.g. Blk 5 Lot 3, Sampaguita St."
+                  maxlength="120"
+                />
+              </label>
+              <p class="small-note profile-address-preview" id="profile-address-preview"></p>
+            </div>
+            <input type="hidden" id="profile-detail-address-input" />
+          </div>
+        </div>
+
+        <div class="profile-details-footer" id="profile-details-footer" hidden>
+          <button type="button" class="btn btn-ghost" id="profile-details-cancel-btn-bottom">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" id="profile-details-save-btn-bottom">
+            <i class="fa-solid fa-check" aria-hidden="true"></i> Save changes
+          </button>
+        </div>
+
+        <p class="small-note profile-details-hint" id="profile-details-hint"></p>
       </article>
     </main>
+  </div>
+
+  <div
+    class="photo-crop-modal"
+    id="photo-crop-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="photo-crop-modal-title"
+    hidden
+  >
+    <div class="photo-crop-modal-backdrop" id="photo-crop-modal-backdrop"></div>
+    <div class="photo-crop-modal-card glass-card">
+      <header class="photo-crop-modal-head">
+        <div>
+          <h3 id="photo-crop-modal-title">Edit your photo</h3>
+          <p class="small-note">Drag to position. Use the slider to zoom.</p>
+        </div>
+        <button type="button" class="photo-crop-modal-close" id="photo-crop-modal-close" aria-label="Close editor">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </header>
+
+      <div class="photo-crop-stage" id="photo-crop-stage">
+        <img id="photo-crop-img" alt="" draggable="false" />
+        <div class="photo-crop-mask" aria-hidden="true"></div>
+      </div>
+
+      <div class="photo-crop-controls">
+        <button type="button" class="photo-crop-zoom-btn" id="photo-crop-zoom-out" aria-label="Zoom out">
+          <i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i>
+        </button>
+        <input type="range" id="photo-crop-zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom" />
+        <button type="button" class="photo-crop-zoom-btn" id="photo-crop-zoom-in" aria-label="Zoom in">
+          <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <footer class="photo-crop-modal-actions">
+        <button type="button" class="btn btn-ghost" id="photo-crop-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="photo-crop-save">
+          <i class="fa-solid fa-check" aria-hidden="true"></i> Save photo
+        </button>
+      </footer>
+    </div>
   </div>
 </body>
 </html>

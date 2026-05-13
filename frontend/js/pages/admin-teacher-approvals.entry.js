@@ -48,9 +48,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof loadTeacherApprovals === "function") loadTeacherApprovals();
   });
 
-  document.getElementById("teacher-approval-table-body")?.addEventListener("click", (event) => {
+  function handleTeacherApprovalRowInteraction(event) {
     const target = event.target;
-    const profileEl = target && typeof target.closest === "function" ? target.closest("[data-profile-id]") : null;
+    if (!target || typeof target.closest !== "function") return;
+
+    // Action buttons take priority — opening the profile would block them otherwise.
+    const actionEl = target.closest("[data-action]");
+    if (actionEl && actionEl.dataset.action && actionEl.dataset.id) {
+      const action = actionEl.dataset.action;
+      const idNumber = actionEl.dataset.id;
+      if (action === "approve" && typeof updateAdminUserStatus === "function") {
+        updateAdminUserStatus(idNumber, "approved");
+      }
+      if (action === "reject" && typeof updateAdminUserStatus === "function") {
+        updateAdminUserStatus(idNumber, "rejected");
+      }
+      return;
+    }
+
+    const profileEl = target.closest("[data-profile-id]");
     if (profileEl && profileEl.dataset.profileId != null && profileEl.dataset.profileId !== "") {
       event.preventDefault();
       const raw = String(profileEl.dataset.profileId || "").trim();
@@ -58,18 +74,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (idNumber && typeof openAdminProfilePreviewModal === "function") {
         openAdminProfilePreviewModal(idNumber, "Teacher profile");
       }
-      return;
     }
+  }
 
-    const action = target?.dataset?.action;
-    const idNumber = target?.dataset?.id;
-    if (!action || !idNumber) return;
-    if (action === "approve" && typeof updateAdminUserStatus === "function") {
-      updateAdminUserStatus(idNumber, "approved");
-    }
-    if (action === "reject" && typeof updateAdminUserStatus === "function") {
-      updateAdminUserStatus(idNumber, "rejected");
-    }
+  const teacherTableBody = document.getElementById("teacher-approval-table-body");
+  teacherTableBody?.addEventListener("click", handleTeacherApprovalRowInteraction);
+  teacherTableBody?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target && typeof event.target.closest === "function"
+      ? event.target.closest("[data-profile-id]")
+      : null;
+    if (!row || event.target.closest("[data-action]")) return;
+    event.preventDefault();
+    handleTeacherApprovalRowInteraction({ target: row, preventDefault: () => {} });
   });
 
   const profileModal = document.getElementById("teacher-profile-modal");
