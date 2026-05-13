@@ -981,6 +981,22 @@ async def update_subject_endpoint(subject_id: str, body: dict):
         return JSONResponse({"error": msg}, status_code=502)
 
 
+@app.delete("/lessons/{lesson_id}")
+async def delete_lesson_endpoint(lesson_id: str):
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not lesson_id:
+        return JSONResponse({"error": "lesson_id is required."}, status_code=400)
+    try:
+        if not db_supabase.get_lesson_row(str(lesson_id)):
+            return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        db_supabase.delete_lesson(str(lesson_id))
+        return {"deleted_lesson_id": lesson_id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.delete("/subjects/{subject_id}")
 async def delete_subject_endpoint(subject_id: str):
     """Delete a subject. Any lesson referencing it will have its subject_id set

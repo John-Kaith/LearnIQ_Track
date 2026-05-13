@@ -3326,6 +3326,7 @@ async function loadTeacherDashboardLessons() {
                   : `<button type="button" class="btn btn-sm btn-secondary" onclick="generateAIContent('${lid}')">Generate AI</button>
                  <button type="button" class="btn btn-sm btn-primary" onclick="publishLesson('${lid}')">Publish</button>`
               }
+              <button type="button" class="btn btn-sm btn-danger" onclick="deleteTeacherLesson('${lid}')">Delete</button>
             </div>
           </div>
         `;
@@ -3343,6 +3344,7 @@ async function loadTeacherDashboardLessons() {
           : '<p class="small-note">No published lessons yet.</p>';
       } else {
         publishedLessonsList.innerHTML = publishedLessons.map((lesson) => {
+          const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
           const fname = escapeHtml(lesson.filename || "Untitled Lesson");
           const ftRaw = lesson && lesson.file_type != null ? String(lesson.file_type).trim() : "";
           const ft = escapeHtml(ftRaw ? ftRaw.toUpperCase() : "FILE");
@@ -3358,6 +3360,10 @@ async function loadTeacherDashboardLessons() {
             <div class="lesson-stats">
               <span><i class="fa-solid fa-file"></i> ${ft}</span>
               <span><i class="fa-solid fa-calendar"></i> ${cal}</span>
+            </div>
+            <div class="lesson-actions">
+              <button type="button" class="btn btn-sm btn-primary" onclick="unpublishLesson('${lid}')">Unpublish</button>
+              <button type="button" class="btn btn-sm btn-danger" onclick="deleteTeacherLesson('${lid}')">Delete</button>
             </div>
           </div>
         `;
@@ -3379,6 +3385,7 @@ async function loadTeacherDashboardLessons() {
           : '<p class="small-note">No lessons waiting for AI generation.</p>';
       } else {
         aiQueueList.innerHTML = queuedLessons.map((lesson) => {
+          const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
           const fname = escapeHtml(lesson.filename || "Untitled Lesson");
           return `
           <div class="queue-item">
@@ -3388,6 +3395,9 @@ async function loadTeacherDashboardLessons() {
             </div>
             <div class="queue-status">
               <span class="status-badge warning">Pending</span>
+            </div>
+            <div class="lesson-actions">
+              <button type="button" class="btn btn-sm btn-danger" onclick="deleteTeacherLesson('${lid}')">Delete</button>
             </div>
           </div>
         `;
@@ -3484,6 +3494,48 @@ function generateAIContent(lessonId) {
   // Could redirect to ai-result.html with lesson ID
   window.location.href = `ai-result.html?file_id=${lessonId}`;
 }
+
+async function deleteTeacherLesson(lessonId) {
+  const id = String(lessonId || "").trim();
+  if (!id) {
+    showToast("Missing lesson id.", "error");
+    return;
+  }
+
+  let ok = false;
+  if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+    ok = await window.LearnIQConfirm.show({
+      title: "Delete lesson?",
+      message: "This permanently removes the lesson file, AI content, and quiz attempts. This cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      danger: true,
+    });
+  } else {
+    ok = window.confirm("Delete this lesson permanently? This cannot be undone.");
+  }
+  if (!ok) return;
+
+  try {
+    const res = await fetch(apiUrl(`/lessons/${encodeURIComponent(id)}`), { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Delete failed (status ${res.status}).`);
+    }
+    if (String(currentFileId || "") === id) {
+      currentFileId = null;
+      localStorage.removeItem(TEACHER_FILE_STORAGE_KEY);
+    }
+    showToast("Lesson deleted.", "success");
+    await refreshTeacherLessons();
+    await loadTeacherDashboardLessons();
+    void initTeacherLearniqDashboardStatsIfPresent();
+  } catch (e) {
+    showToast(e?.message || "Could not delete lesson.", "error");
+  }
+}
+
+window.deleteTeacherLesson = deleteTeacherLesson;
 
 function renderTeacherLessonsTable(lessons, selectedId) {
   const tbody = document.getElementById("teacher-lessons-tbody");
@@ -3831,6 +3883,14 @@ async function loadTeacherSubjectOptions(selectId = "upload-subject-select") {
   }
 }
 
+function getTeacherDashboardUploadSubjectId() {
+  const subjectFilter = getTeacherDashboardSubjectFilter();
+  if (subjectFilter && subjectFilter !== "__unassigned__") {
+    return subjectFilter;
+  }
+  return null;
+}
+
 function setupTeacherDashboard() {
   const fileInput = document.querySelector("#file-input");
   const fileMeta = document.querySelector("#file-meta");
@@ -3838,15 +3898,9 @@ function setupTeacherDashboard() {
   const tbody = document.getElementById("teacher-lessons-tbody");
   const uploadBtn = document.getElementById("upload-btn");
   const clearBtn = document.getElementById("file-clear-btn");
-  const subjectSelect = document.getElementById("upload-subject-select");
 
   hydrateStudentSidebarChip();
   void initTeacherLearniqDashboardStatsIfPresent();
-
-  // Load subjects into the dropdown (Teacher LearnIQ page only).
-  if (subjectSelect) {
-    void loadTeacherSubjectOptions();
-  }
 
   // If a subject filter is present in the URL, reveal the back link and tweak
   // the header copy. Also try to swap the title to the subject name.
@@ -3897,12 +3951,7 @@ function setupTeacherDashboard() {
         return;
       }
 
-      const subjectId = subjectSelect ? subjectSelect.value : "";
-      if (subjectSelect && !subjectId) {
-        showToast("Please choose a subject for this lesson.", "error");
-        subjectSelect.focus();
-        return;
-      }
+      const subjectId = getTeacherDashboardUploadSubjectId();
 
       if (fileMeta) fileMeta.textContent = `Uploading ${selectedFile.name}…`;
       currentFileId = null;
@@ -4117,6 +4166,12 @@ function buildTeacherSubjectCardHtml(subject) {
       : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}">
           <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload PDF/PPT
         </button>`;
+  const deleteBtn =
+    String(subject.id) === "__unassigned__"
+      ? ""
+      : `<button type="button" class="btn btn-danger btn-small teacher-subject-delete-trigger" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}" data-lesson-count="${myCount}">
+          <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+        </button>`;
   return `
     <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
@@ -4132,6 +4187,7 @@ function buildTeacherSubjectCardHtml(subject) {
       <div class="lesson-actions">
         ${uploadBtn}
         <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
+        ${deleteBtn}
       </div>
     </article>
   `;
@@ -4210,7 +4266,6 @@ async function renderTeacherSubjectsPage() {
     emptyEl.hidden = true;
     selectionEl.hidden = false;
     listEl.innerHTML = subjects.map(buildTeacherSubjectCardHtml).join("");
-    void loadTeacherSubjectOptions("teacher-subjects-upload-subject-select");
   } catch (e) {
     console.log("DEBUG: renderTeacherSubjectsPage failed:", e);
     selectionEl.hidden = true;
@@ -4219,41 +4274,48 @@ async function renderTeacherSubjectsPage() {
   }
 }
 
-function setupTeacherSubjectsUpload() {
-  const form = document.getElementById("teacher-subjects-upload-form");
-  const fileInput = document.getElementById("teacher-subjects-file-input");
-  const fileMeta = document.getElementById("teacher-subjects-file-meta");
-  const fileText = document.getElementById("teacher-subjects-file-input-text");
-  const clearBtn = document.getElementById("teacher-subjects-file-clear-btn");
-  const subjectSelect = document.getElementById("teacher-subjects-upload-subject-select");
+async function teacherDeleteSubject(subjectId, subjectName, lessonCount = 0) {
+  const id = String(subjectId || "").trim();
+  if (!id || id === "__unassigned__") return;
+
+  const name = String(subjectName || "this subject").trim() || "this subject";
+  const total = Number(lessonCount || 0);
+
+  let ok = false;
+  if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+    ok = await window.LearnIQConfirm.show({
+      title: `Delete "${name}"?`,
+      message: total > 0
+        ? `${total} of your lesson${total === 1 ? "" : "s"} will become Unassigned after this subject is deleted. Continue?`
+        : "This subject has no lessons tagged to it. Continue?",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      danger: true,
+    });
+  } else {
+    ok = window.confirm(`Delete "${name}"? This cannot be undone.`);
+  }
+  if (!ok) return;
+
+  try {
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(id)}`), { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Delete failed (status ${res.status}).`);
+    }
+    showToast(`Subject "${name}" deleted.`, "success");
+    await renderTeacherSubjectsPage();
+  } catch (e) {
+    showToast(e?.message || "Could not delete subject.", "error");
+  }
+}
+
+window.teacherDeleteSubject = teacherDeleteSubject;
+
+function setupTeacherSubjectsQuickUpload() {
   const quickFileInput = document.getElementById("teacher-subjects-quick-file-input");
   const listEl = document.getElementById("teacher-subjects-list");
   let pendingQuickSubjectId = null;
-
-  void loadTeacherSubjectOptions("teacher-subjects-upload-subject-select");
-
-  const resetSelectedFile = () => {
-    if (fileInput) fileInput.value = "";
-    if (fileMeta) fileMeta.textContent = "No file selected yet.";
-    if (fileText) fileText.textContent = "Choose PDF or PPT file";
-    if (clearBtn) clearBtn.hidden = true;
-  };
-
-  fileInput?.addEventListener("change", () => {
-    const selectedFile = fileInput.files?.[0];
-    if (!selectedFile) {
-      resetSelectedFile();
-      return;
-    }
-    if (fileMeta) fileMeta.textContent = `Selected file: ${selectedFile.name}`;
-    if (fileText) fileText.textContent = selectedFile.name;
-    if (clearBtn) clearBtn.hidden = false;
-  });
-
-  clearBtn?.addEventListener("click", (event) => {
-    event.preventDefault();
-    resetSelectedFile();
-  });
 
   const runUpload = async (selectedFile, subjectId) => {
     if (!selectedFile) {
@@ -4262,20 +4324,13 @@ function setupTeacherSubjectsUpload() {
     }
     if (!subjectId) {
       showToast("Choose a subject for this lesson.", "error");
-      subjectSelect?.focus();
       return;
     }
 
-    if (fileMeta) fileMeta.textContent = `Uploading ${selectedFile.name}…`;
     try {
       await uploadFile(selectedFile, subjectId);
-      if (fileMeta) fileMeta.textContent = `Uploaded: ${selectedFile.name}`;
-      if (fileInput) fileInput.value = "";
-      if (fileText) fileText.textContent = "Choose PDF or PPT file";
-      if (clearBtn) clearBtn.hidden = true;
       await renderTeacherSubjectsPage();
     } catch (e) {
-      if (fileMeta) fileMeta.textContent = "Upload failed. Try again.";
       const msg =
         e && e.message && String(e.message).includes("fetch")
           ? "Cannot reach API. Start the backend (uvicorn) or check learniq-api-base in localStorage."
@@ -4283,13 +4338,6 @@ function setupTeacherSubjectsUpload() {
       showToast(msg, "error");
     }
   };
-
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const selectedFile = fileInput?.files?.[0];
-    const subjectId = subjectSelect ? subjectSelect.value : "";
-    await runUpload(selectedFile, subjectId);
-  });
 
   quickFileInput?.addEventListener("change", async () => {
     const selectedFile = quickFileInput.files?.[0];
@@ -4303,6 +4351,18 @@ function setupTeacherSubjectsUpload() {
   if (listEl && !listEl.dataset.uploadBound) {
     listEl.dataset.uploadBound = "1";
     listEl.addEventListener("click", (event) => {
+      const deleteTrigger = event.target.closest(".teacher-subject-delete-trigger");
+      if (deleteTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        void teacherDeleteSubject(
+          deleteTrigger.getAttribute("data-subject-id") || "",
+          deleteTrigger.getAttribute("data-subject-name") || "",
+          deleteTrigger.getAttribute("data-lesson-count") || "0",
+        );
+        return;
+      }
+
       const trigger = event.target.closest(".teacher-subject-upload-trigger");
       if (!trigger || !quickFileInput) return;
       event.preventDefault();
@@ -4322,8 +4382,8 @@ function setupTeacherSubjectsPage() {
     renderTeacherSubjectsPage();
   });
 
-  setupTeacherAddSubjectModal();
-  setupTeacherSubjectsUpload();
+  setupTeacherAddSubjectForm();
+  setupTeacherSubjectsQuickUpload();
 
   void renderTeacherSubjectsPage();
 }
@@ -5327,49 +5387,36 @@ function setupAdminSubjectsPage() {
   void renderAdminSubjectsPage();
 }
 
-function setupTeacherAddSubjectModal() {
-  const modal = document.getElementById("teacher-add-subject-modal");
-  const openBtn = document.getElementById("teacher-add-subject-btn");
-  const closeBtn = document.getElementById("teacher-add-subject-close");
-  const cancelBtn = document.getElementById("teacher-add-subject-cancel");
+function setupTeacherAddSubjectForm() {
   const form = document.getElementById("teacher-add-subject-form");
   const nameInput = document.getElementById("teacher-add-subject-name");
   const descInput = document.getElementById("teacher-add-subject-description");
   const submitBtn = document.getElementById("teacher-add-subject-submit");
+  const resetBtn = document.getElementById("teacher-add-subject-reset");
   const errorEl = document.getElementById("teacher-add-subject-error");
 
-  if (!modal || !openBtn || !form) return;
+  if (!form) return;
 
-  const open = () => {
+  const clearError = () => {
     if (errorEl) {
       errorEl.hidden = true;
       errorEl.textContent = "";
     }
-    if (nameInput) nameInput.value = "";
-    if (descInput) descInput.value = "";
-    // Reset color to the first swatch.
-    const first = form.querySelector('input[name="subject-color"]');
-    if (first) first.checked = true;
-    modal.removeAttribute("hidden");
-    nameInput?.focus();
-  };
-  const close = () => {
-    modal.setAttribute("hidden", "");
   };
 
-  openBtn.addEventListener("click", open);
-  closeBtn?.addEventListener("click", close);
-  cancelBtn?.addEventListener("click", close);
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) close();
-  });
+  const resetForm = () => {
+    clearError();
+    if (nameInput) nameInput.value = "";
+    if (descInput) descInput.value = "";
+    const first = form.querySelector('input[name="subject-color"]');
+    if (first) first.checked = true;
+  };
+
+  resetBtn?.addEventListener("click", clearError);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (errorEl) {
-      errorEl.hidden = true;
-      errorEl.textContent = "";
-    }
+    clearError();
     const name = (nameInput?.value || "").trim();
     const description = (descInput?.value || "").trim();
     const colorInput = form.querySelector('input[name="subject-color"]:checked');
@@ -5401,7 +5448,7 @@ function setupTeacherAddSubjectModal() {
         throw new Error(err.error || `Failed to add subject (status ${res.status}).`);
       }
       const created = await res.json().catch(() => ({}));
-      close();
+      resetForm();
       showToast(`Subject "${created.name || name}" added.`, "success");
       await renderTeacherSubjectsPage();
     } catch (e) {

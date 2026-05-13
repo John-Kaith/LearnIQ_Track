@@ -839,6 +839,15 @@ def update_subject(subject_id: str, name: str | None = None, description: str | 
         raise
 
 
+def delete_lesson(lesson_id: str) -> None:
+    """Delete a lesson row (lesson_content and quiz_attempts cascade)."""
+    try:
+        _sb().table("lessons").delete().eq("id", lesson_id).execute()
+    except Exception as e:
+        print(f"delete_lesson: {e}")
+        raise
+
+
 def delete_subject(subject_id: str) -> None:
     """Delete a subject row. Caller should ensure no lessons reference it.
 

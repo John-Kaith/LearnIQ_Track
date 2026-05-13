@@ -60,39 +60,52 @@
 
       <section class="dashboard-grid">
         <div class="content-stack lesson-workspace-main">
-          <article class="glass-card content-card upload-box" id="teacher-subjects-upload-panel" data-upload-role="teacher" aria-label="Lesson upload form">
+          <article class="glass-card content-card" id="teacher-add-subject-panel" aria-label="Add subject form">
             <div>
-              <h3>Upload lesson file</h3>
-              <p class="content-subtitle">Supports PDF and PowerPoint-based lesson materials. PDF gives the best text for AI.</p>
+              <h3>Add subject</h3>
+              <p class="content-subtitle">Create a new subject to group your uploaded lessons under it.</p>
             </div>
-            <form id="teacher-subjects-upload-form" class="upload-form" autocomplete="off">
-              <label class="upload-subject-field form-field" for="teacher-subjects-upload-subject-select">
-                <span class="small-note">Subject <span class="required-mark">*</span></span>
-                <select id="teacher-subjects-upload-subject-select" class="form-input" required>
-                  <option value="" disabled selected>Choose subject…</option>
-                </select>
+
+            <form id="teacher-add-subject-form" class="add-subject-form" autocomplete="off">
+              <label class="form-field">
+                <span class="small-note">Subject name <span class="required-mark">*</span></span>
+                <input type="text" id="teacher-add-subject-name" class="form-input" required maxlength="80" placeholder="e.g. Mathematics" />
               </label>
-              <div class="file-input-wrapper">
-                <input type="file" id="teacher-subjects-file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file" />
-                <label for="teacher-subjects-file-input" class="file-input-label">
-                  <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-                  <span id="teacher-subjects-file-input-text">Choose PDF or PPT file</span>
-                </label>
-                <button type="button" class="file-clear-btn" id="teacher-subjects-file-clear-btn" hidden aria-label="Clear selected file">
-                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+
+              <label class="form-field">
+                <span class="small-note">Description (optional)</span>
+                <textarea id="teacher-add-subject-description" class="form-input" rows="2" maxlength="240" placeholder="Short description shown on the subject card."></textarea>
+              </label>
+
+              <fieldset class="form-field add-subject-color-field">
+                <legend class="small-note">Card color</legend>
+                <div class="add-subject-swatches" id="teacher-add-subject-swatches" role="radiogroup" aria-label="Subject color">
+                  <label class="swatch" style="--swatch:#60a5fa"><input type="radio" name="subject-color" value="#60a5fa" checked /></label>
+                  <label class="swatch" style="--swatch:#34d399"><input type="radio" name="subject-color" value="#34d399" /></label>
+                  <label class="swatch" style="--swatch:#f472b6"><input type="radio" name="subject-color" value="#f472b6" /></label>
+                  <label class="swatch" style="--swatch:#facc15"><input type="radio" name="subject-color" value="#facc15" /></label>
+                  <label class="swatch" style="--swatch:#fb923c"><input type="radio" name="subject-color" value="#fb923c" /></label>
+                  <label class="swatch" style="--swatch:#a78bfa"><input type="radio" name="subject-color" value="#a78bfa" /></label>
+                  <label class="swatch" style="--swatch:#22d3ee"><input type="radio" name="subject-color" value="#22d3ee" /></label>
+                  <label class="swatch" style="--swatch:#f87171"><input type="radio" name="subject-color" value="#f87171" /></label>
+                </div>
+              </fieldset>
+
+              <p id="teacher-add-subject-error" class="small-note add-subject-error" hidden></p>
+
+              <div class="button-group">
+                <button id="teacher-add-subject-submit" type="submit" class="btn btn-primary">
+                  <i class="fa-solid fa-circle-plus"></i> Create Subject
                 </button>
+                <button id="teacher-add-subject-reset" type="reset" class="btn btn-secondary">Clear</button>
               </div>
-              <button type="submit" class="btn btn-primary" id="teacher-subjects-upload-btn">
-                <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload PDF/PPT
-              </button>
-              <p class="file-meta small-note" id="teacher-subjects-file-meta">No file selected yet.</p>
             </form>
           </article>
 
           <article id="teacher-subjects-empty" class="glass-card content-card" hidden>
             <h3>No subjects yet</h3>
             <p class="content-subtitle" id="teacher-subjects-empty-text">
-              Your school has not set up any subjects yet. Please ask an administrator to add subjects in the database.
+              No subjects yet. Use the form above to create your first subject.
             </p>
           </article>
 
@@ -107,53 +120,5 @@
   </div>
 
   <input type="file" id="teacher-subjects-quick-file-input" class="file-input-sr-only" accept=".pdf,.ppt,.pptx" hidden aria-hidden="true" tabindex="-1" />
-
-  <!-- Add Subject modal -->
-  <div id="teacher-add-subject-modal" class="action-modal-backdrop" hidden>
-    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="teacher-add-subject-title">
-      <div class="action-modal-head">
-        <h3 id="teacher-add-subject-title">Add a new subject</h3>
-        <button id="teacher-add-subject-close" class="btn btn-ghost" type="button" aria-label="Close add subject dialog">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <p class="small-note">Create a new subject so you can group your uploaded lessons under it.</p>
-
-      <form id="teacher-add-subject-form" class="add-subject-form" autocomplete="off">
-        <label class="form-field">
-          <span class="small-note">Subject name <span class="required-mark">*</span></span>
-          <input type="text" id="teacher-add-subject-name" class="form-input" required maxlength="80" placeholder="e.g. Mathematics" />
-        </label>
-
-        <label class="form-field">
-          <span class="small-note">Description (optional)</span>
-          <textarea id="teacher-add-subject-description" class="form-input" rows="2" maxlength="240" placeholder="Short description shown on the subject card."></textarea>
-        </label>
-
-        <fieldset class="form-field add-subject-color-field">
-          <legend class="small-note">Card color</legend>
-          <div class="add-subject-swatches" id="teacher-add-subject-swatches" role="radiogroup" aria-label="Subject color">
-            <label class="swatch" style="--swatch:#60a5fa"><input type="radio" name="subject-color" value="#60a5fa" checked /></label>
-            <label class="swatch" style="--swatch:#34d399"><input type="radio" name="subject-color" value="#34d399" /></label>
-            <label class="swatch" style="--swatch:#f472b6"><input type="radio" name="subject-color" value="#f472b6" /></label>
-            <label class="swatch" style="--swatch:#facc15"><input type="radio" name="subject-color" value="#facc15" /></label>
-            <label class="swatch" style="--swatch:#fb923c"><input type="radio" name="subject-color" value="#fb923c" /></label>
-            <label class="swatch" style="--swatch:#a78bfa"><input type="radio" name="subject-color" value="#a78bfa" /></label>
-            <label class="swatch" style="--swatch:#22d3ee"><input type="radio" name="subject-color" value="#22d3ee" /></label>
-            <label class="swatch" style="--swatch:#f87171"><input type="radio" name="subject-color" value="#f87171" /></label>
-          </div>
-        </fieldset>
-
-        <p id="teacher-add-subject-error" class="small-note add-subject-error" hidden></p>
-
-        <div class="button-group">
-          <button id="teacher-add-subject-submit" type="submit" class="btn btn-primary">
-            <i class="fa-solid fa-circle-plus"></i> Create Subject
-          </button>
-          <button id="teacher-add-subject-cancel" type="button" class="btn btn-secondary">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
 </body>
 </html>

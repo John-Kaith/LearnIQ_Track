@@ -87,6 +87,29 @@
 
       <section class="dashboard-grid">
         <div class="content-stack">
+          <article class="glass-card content-card upload-box" id="teacher-dashboard-upload-panel" data-upload-role="teacher" aria-label="Add lesson form">
+            <div>
+              <h3>Add lesson</h3>
+              <p class="content-subtitle">Upload a PDF or PowerPoint lesson file. PDF gives the best text for AI.</p>
+            </div>
+            <form id="upload-form" class="upload-form" autocomplete="off">
+              <div class="file-input-wrapper">
+                <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file" />
+                <label for="file-input" class="file-input-label">
+                  <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                  <span id="file-input-text">Choose PDF or PPT file</span>
+                </label>
+                <button type="button" class="file-clear-btn" id="file-clear-btn" hidden aria-label="Clear selected file">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+              <button type="submit" class="btn btn-primary" id="upload-btn">
+                <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload lesson
+              </button>
+              <p class="file-meta small-note" id="file-meta">No file selected yet.</p>
+            </form>
+          </article>
+
           <article class="glass-card content-card">
             <h3 class="teacher-card-heading">Recent Lessons</h3>
             <div class="lesson-list teacher-lesson-grid" id="recent-lessons-list">
