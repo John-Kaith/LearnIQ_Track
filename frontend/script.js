@@ -1133,6 +1133,8 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
   const attDetail = document.getElementById("teacher-perf-attention-detail");
   const compPct = document.getElementById("teacher-perf-completion-pct");
   const compDetail = document.getElementById("teacher-perf-completion-detail");
+  const scopeCount = document.getElementById("teacher-perf-scope-count");
+  const scopeDetail = document.getElementById("teacher-perf-scope-detail");
   if (!topEl || !topDetail || !attCount || !compPct || !compDetail || !attDetail) return;
 
   const showHint = (msg) => {
@@ -1153,6 +1155,8 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
     attCount.textContent = "—";
     compPct.textContent = "—";
     compDetail.textContent = "This month";
+    if (scopeCount) scopeCount.textContent = "—";
+    if (scopeDetail) scopeDetail.textContent = "With quiz attempts";
     return;
   }
 
@@ -1163,6 +1167,8 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
     attCount.textContent = "—";
     compPct.textContent = "—";
     compDetail.textContent = "This month";
+    if (scopeCount) scopeCount.textContent = "—";
+    if (scopeDetail) scopeDetail.textContent = "With quiz attempts";
     return;
   }
 
@@ -1172,10 +1178,12 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
   if (!sp || !sp.scope_student_count) {
     topEl.textContent = "—";
     topDetail.textContent = "No student quiz data on your lessons yet";
-    attCount.textContent = "0 students";
+    attCount.textContent = "0";
     attDetail.textContent = "Below 70% avg";
     compPct.textContent = "—";
     compDetail.textContent = "No cohort yet";
+    if (scopeCount) scopeCount.textContent = "0";
+    if (scopeDetail) scopeDetail.textContent = "No quiz attempts yet";
     return;
   }
 
@@ -1201,8 +1209,15 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
   }
 
   const na = Number(sp.needs_attention_count || 0);
-  attCount.textContent = `${na} student${na === 1 ? "" : "s"}`;
+  attCount.textContent = String(na);
   attDetail.textContent = "Below 70% avg";
+
+  const scoped = Number(sp.scope_student_count || 0);
+  if (scopeCount) scopeCount.textContent = String(scoped);
+  if (scopeDetail) {
+    scopeDetail.textContent =
+      scoped === 1 ? "Student with quiz attempts" : "Students with quiz attempts";
+  }
 
   const part = sp.participation_pct;
   if (part != null && Number.isFinite(Number(part))) {
@@ -1214,10 +1229,95 @@ function hydrateTeacherDashboardStudentPerformance(d, opts) {
   }
 }
 
-/** Teacher LearnIQ dashboard stat cards (Bearer + role teacher). */
+function setTeacherOverviewPublishProgress(pct) {
+  const label = document.getElementById("teacher-overview-publish-pct-label");
+  const span = document.getElementById("teacher-overview-publish-progress");
+  const n = pct != null && Number.isFinite(Number(pct)) ? Math.max(0, Math.min(100, Number(pct))) : null;
+  if (label) label.textContent = n != null ? `${n.toFixed(0)}%` : "—";
+  if (span) {
+    const w = n != null ? `${n}%` : "0%";
+    span.dataset.progress = w;
+    span.style.width = w;
+  }
+}
+
+function hydrateTeacherOverviewInsights(d) {
+  const ul = document.getElementById("teacher-overview-insights");
+  if (!ul) return;
+  if (!d || typeof d !== "object") {
+    ul.innerHTML = '<li class="small-note">Sign in to see teaching insights.</li>';
+    return;
+  }
+
+  const items = [];
+  const sp = d.student_performance || {};
+  const atRisk = Number(sp.needs_attention_count || 0);
+  if (atRisk > 0) {
+    items.push({
+      html: `<strong>${atRisk}</strong> student${atRisk === 1 ? "" : "s"} below 70% quiz average — review in <a href="teacher-student-gradecard.html">Student gradecard</a>.`,
+      tone: "warn",
+    });
+  }
+
+  const drafts = Number(d.draft_lessons != null ? d.draft_lessons : 0);
+  if (drafts > 0) {
+    items.push({
+      html: `<strong>${drafts}</strong> draft lesson${drafts === 1 ? "" : "s"} not published — open <a href="teacher-subjects.html">My Subjects</a> to publish.`,
+      tone: "info",
+    });
+  }
+
+  const ai = Number(d.lessons_with_ai != null ? d.lessons_with_ai : 0);
+  const total = Number(d.lessons_uploaded != null ? d.lessons_uploaded : 0);
+  if (total > 0 && ai < total) {
+    items.push({
+      html: `<strong>${total - ai}</strong> lesson${total - ai === 1 ? "" : "s"} still need an AI pack (reviewer/quiz).`,
+      tone: "info",
+    });
+  }
+
+  const enrolled = Number(d.enrolled_students != null ? d.enrolled_students : 0);
+  if (enrolled === 0 && Number(d.subjects_count || 0) > 0) {
+    items.push({
+      html: "No students enrolled yet — share your subject join codes from My Subjects.",
+      tone: "info",
+    });
+  }
+
+  const attempts = Number(d.quiz_attempts_total || 0);
+  if (attempts === 0 && total > 0 && Number(d.lessons_published || 0) > 0) {
+    items.push({
+      html: "Published lessons have no quiz attempts yet — remind students to practice in My lesson.",
+      tone: "info",
+    });
+  }
+
+  if (sp.top_name && sp.top_pct != null && !atRisk) {
+    items.push({
+      html: `Strongest quiz average: <strong>${escapeHtml(String(sp.top_name))}</strong> (${Number(sp.top_pct).toFixed(1)}%). See <a href="leaderboard.html">Leaderboard</a> for full rankings.`,
+      tone: "ok",
+    });
+  }
+
+  if (!items.length) {
+    ul.innerHTML =
+      '<li class="teacher-overview-insight teacher-overview-insight-ok">You are set up — create a subject, upload a lesson, and invite students when ready.</li>';
+    return;
+  }
+
+  ul.innerHTML = items
+    .map(
+      (item) =>
+        `<li class="teacher-overview-insight teacher-overview-insight-${escapeHtml(item.tone || "info")}">${item.html}</li>`,
+    )
+    .join("");
+}
+
+/** Teacher LearnIQ overview dashboard (Bearer + role teacher). */
 async function initTeacherLearniqDashboardStatsIfPresent() {
-  const lessonsEl = document.getElementById("teacher-stat-lessons");
-  if (!lessonsEl) return;
+  if (document.body?.classList?.contains("teacher-subject-lessons-page")) return;
+  const root = document.getElementById("teacher-overview-enrolled");
+  if (!root) return;
 
   const setText = (id, text) => {
     const el = document.getElementById(id);
@@ -1226,39 +1326,71 @@ async function initTeacherLearniqDashboardStatsIfPresent() {
 
   const u = getCurrentUserSession();
   if (!u?.access_token) {
-    setText("teacher-stat-lessons", "—");
-    setText("teacher-stat-lessons-note", "Sign in to load stats");
-    setText("teacher-stat-students", "—");
-    setText("teacher-stat-students-note", "—");
-    setText("teacher-stat-avg", "—");
-    setText("teacher-stat-avg-note", "—");
-    hydrateTeacherDashboardStudentPerformance(null, { signedOut: true });
+    setText("teacher-overview-enrolled", "—");
+    setText("teacher-overview-enrolled-note", "Sign in to load");
+    hydrateTeacherOverviewInsights(null);
     return;
   }
 
   try {
     const res = await fetch(apiUrl("/teacher/dashboard-stats"), { headers: immersionAuthHeaders() });
     const d = await readApiJson(res);
-    setText("teacher-stat-lessons", String(d.lessons_uploaded != null ? d.lessons_uploaded : "0"));
-    setText("teacher-stat-lessons-note", d.lessons_uploaded_note || "");
-    setText("teacher-stat-students", String(d.active_students != null ? d.active_students : "0"));
-    setText("teacher-stat-students-note", d.active_students_note || "");
-    const pct = d.avg_quiz_score_pct;
+
+    setText("teacher-overview-enrolled", String(d.enrolled_students != null ? d.enrolled_students : "0"));
+    setText("teacher-overview-enrolled-note", d.enrolled_students_note || "");
+    setText("teacher-overview-quiz-attempts", String(d.quiz_attempts_total != null ? d.quiz_attempts_total : "0"));
+    setText("teacher-overview-quiz-note", d.quiz_attempts_note || "");
+    const avg = d.avg_quiz_score_pct;
     setText(
-      "teacher-stat-avg",
-      pct != null && Number.isFinite(Number(pct)) ? `${Number(pct).toFixed(1)}%` : "—",
+      "teacher-overview-avg",
+      avg != null && Number.isFinite(Number(avg)) ? `${Number(avg).toFixed(1)}%` : "—",
     );
-    setText("teacher-stat-avg-note", d.avg_quiz_note || "");
-    hydrateTeacherDashboardStudentPerformance(d);
+    setText("teacher-overview-avg-note", d.avg_quiz_note || "");
+
+    const sp = d.student_performance || {};
+    const part = sp.participation_pct;
+    setText(
+      "teacher-overview-participation",
+      part != null && Number.isFinite(Number(part)) ? `${Number(part).toFixed(0)}%` : "—",
+    );
+    setText(
+      "teacher-overview-participation-note",
+      sp.scope_student_count
+        ? `${sp.scope_student_count} student${sp.scope_student_count === 1 ? "" : "s"} with quiz data`
+        : "No quiz takers yet",
+    );
+
+    setText("teacher-overview-drafts", String(d.draft_lessons != null ? d.draft_lessons : "0"));
+    setText("teacher-overview-drafts-note", d.draft_lessons_note || "");
+    setText("teacher-overview-published", String(d.lessons_published != null ? d.lessons_published : "0"));
+    setText("teacher-overview-published-note", d.lessons_published_note || "");
+    setText("teacher-overview-ai", String(d.lessons_with_ai != null ? d.lessons_with_ai : "0"));
+    setText("teacher-overview-ai-note", d.lessons_with_ai_note || "");
+    const rate = d.publish_rate_pct;
+    setText(
+      "teacher-overview-publish-rate",
+      rate != null && Number.isFinite(Number(rate)) ? `${Number(rate).toFixed(0)}%` : "—",
+    );
+    setText("teacher-overview-publish-rate-note", d.publish_rate_note || "");
+    setTeacherOverviewPublishProgress(rate);
+
+    const updatedEl = document.getElementById("teacher-stats-updated");
+    if (updatedEl && d.updated_at) {
+      try {
+        updatedEl.hidden = false;
+        updatedEl.textContent = `Updated ${new Date(d.updated_at).toLocaleString()}`;
+      } catch {
+        updatedEl.hidden = true;
+      }
+    }
+
+    hydrateTeacherOverviewInsights(d);
+    animateProgressBars();
   } catch (e) {
     console.error("teacher/dashboard-stats:", e);
-    setText("teacher-stat-lessons", "—");
-    setText("teacher-stat-lessons-note", "Could not load stats");
-    setText("teacher-stat-students", "—");
-    setText("teacher-stat-students-note", "—");
-    setText("teacher-stat-avg", "—");
-    setText("teacher-stat-avg-note", "Try refreshing the page");
-    hydrateTeacherDashboardStudentPerformance(null, { error: true });
+    setText("teacher-overview-enrolled", "—");
+    setText("teacher-overview-enrolled-note", "Could not load stats");
+    hydrateTeacherOverviewInsights(null);
   }
 }
 
@@ -3822,39 +3954,229 @@ function getTeacherDashboardSubjectFilter() {
   }
 }
 
+function teacherLessonMatchesSubject(lesson, subjectId) {
+  if (!subjectId || subjectId === "__unassigned__") return false;
+  const lid = String(lesson?.subject_id || "").trim().toLowerCase();
+  const sid = String(subjectId).trim().toLowerCase();
+  return Boolean(lid && sid && lid === sid);
+}
+
+async function linkLessonToSubject(lessonId, subjectId) {
+  const lid = String(lessonId || "").trim();
+  const sid = String(subjectId || "").trim();
+  if (!lid || !sid || sid === "__unassigned__") return;
+  const res = await fetch(apiUrl("/lesson/subject"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lesson_id: lid, file_id: lid, subject_id: sid }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Could not link lesson to this subject.");
+  }
+  await readApiJson(res);
+}
+
+function sortTeacherLessonsNewestFirst(lessonList) {
+  return [...lessonList].sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+function isTeacherLessonPublished(lesson) {
+  return Boolean(lesson?.is_published || lesson?.published);
+}
+
+function getTeacherSubjectUnpublishedLessons(lessonList) {
+  return (lessonList || []).filter((l) => !isTeacherLessonPublished(l));
+}
+
+function getTeacherSubjectYourLessons(allLessons, subjectFilter) {
+  if (!subjectFilter || subjectFilter === "__unassigned__") {
+    return subjectFilter === "__unassigned__"
+      ? allLessons.filter((l) => !l.subject_id)
+      : allLessons;
+  }
+  // Only lessons explicitly linked to this subject (never show unlinked files on every subject).
+  return allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter));
+}
+
+function teacherLessonFileViewUrl(lessonId) {
+  const u = getCurrentUserSession();
+  const lid = encodeURIComponent(String(lessonId || "").trim());
+  const tid = encodeURIComponent(String(u?.id_number || "").trim());
+  return apiUrl(`/lessons/${lid}/file?teacher_id_number=${tid}`);
+}
+
+function viewTeacherLessonFile(lessonId) {
+  const u = getCurrentUserSession();
+  if (!u?.id_number) {
+    showToast("Sign in again to view lessons.", "error");
+    return;
+  }
+  const id = String(lessonId || "").trim();
+  if (!id) {
+    showToast("Missing lesson id.", "error");
+    return;
+  }
+  window.open(teacherLessonFileViewUrl(id), "_blank", "noopener,noreferrer");
+}
+
+function teacherSubjectYourLessonActionsHtml(lesson) {
+  const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
+  const isPub = Boolean(lesson.is_published || lesson.published);
+  const publishBtn = isPub
+    ? `<button type="button" class="btn btn-sm btn-secondary" onclick="unpublishLessonFromSubjectPage('${lid}')">Unpublish</button>`
+    : `<button type="button" class="btn btn-sm btn-primary" onclick="publishLessonFromSubjectPage('${lid}')">Publish</button>`;
+  return `<button type="button" class="btn btn-sm btn-secondary" onclick="viewTeacherLessonFile('${lid}')">View</button>
+    ${publishBtn}
+    <button type="button" class="btn btn-sm btn-danger" onclick="removeTeacherLesson('${lid}')">Remove</button>`;
+}
+
+function renderTeacherSubjectYourLessonRow(lesson) {
+  return renderTeacherSubjectLessonRow(lesson, teacherSubjectYourLessonActionsHtml(lesson));
+}
+
+function teacherSubjectPublishedLessonActionsHtml(lesson) {
+  const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
+  return `<button type="button" class="btn btn-sm btn-secondary" onclick="viewTeacherLessonFile('${lid}')">View</button>
+    <button type="button" class="btn btn-sm btn-secondary" onclick="unpublishLessonFromSubjectPage('${lid}')">Unpublish</button>
+    <button type="button" class="btn btn-sm btn-danger" onclick="removeTeacherLesson('${lid}')">Remove</button>`;
+}
+
+function renderTeacherSubjectLessonRow(lesson, actionsHtml) {
+  const fname = escapeHtml(lesson.filename || "Untitled Lesson");
+  const meta = escapeHtml(teacherLessonFileMetaLine(lesson));
+  return `
+          <div class="lesson-item">
+            <div class="lesson-info">
+              <h4>${fname}</h4>
+              <span class="small-note">${meta}</span>
+            </div>
+            <div class="lesson-actions">
+              ${actionsHtml}
+            </div>
+          </div>`;
+}
+
+function renderTeacherSubjectPublishedLessonRow(lesson) {
+  return renderTeacherSubjectLessonRow(lesson, teacherSubjectPublishedLessonActionsHtml(lesson));
+}
+
+async function ensureLessonLinkedToCurrentSubject(lessonId) {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  if (!subjectId || subjectId === "__unassigned__") return;
+  const all = await fetchTeacherLessonsList();
+  const lesson = all.find((l) => String(l.id || l.file_id || "") === String(lessonId));
+  if (lesson && !teacherLessonMatchesSubject(lesson, subjectId)) {
+    await linkLessonToSubject(lessonId, subjectId);
+  }
+}
+
+async function publishLessonFromSubjectPage(lessonId) {
+  try {
+    await ensureLessonLinkedToCurrentSubject(lessonId);
+    await publishLesson(lessonId);
+  } catch (e) {
+    showToast(e?.message || "Could not publish lesson.", "error");
+  }
+}
+
+async function unpublishLessonFromSubjectPage(lessonId) {
+  await unpublishLesson(lessonId);
+}
+
+async function removeTeacherLesson(lessonId) {
+  let ok = false;
+  if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+    ok = await window.LearnIQConfirm.show({
+      title: "Remove lesson?",
+      message: "This permanently removes the lesson file and related content. This cannot be undone.",
+      confirmText: "Remove",
+      cancelText: "Cancel",
+      danger: true,
+    });
+  } else {
+    ok = window.confirm("Remove this lesson permanently?");
+  }
+  if (!ok) return;
+
+  const id = String(lessonId || "").trim();
+  try {
+    const res = await fetch(apiUrl(`/lessons/${encodeURIComponent(id)}`), { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Remove failed (status ${res.status}).`);
+    }
+    if (String(currentFileId || "") === id) {
+      currentFileId = null;
+      localStorage.removeItem(TEACHER_FILE_STORAGE_KEY);
+    }
+    showToast("Lesson removed.", "success");
+    await refreshTeacherLessons();
+    await loadTeacherDashboardLessons();
+    void initTeacherLearniqDashboardStatsIfPresent();
+  } catch (e) {
+    showToast(e?.message || "Could not remove lesson.", "error");
+  }
+}
+
+window.publishLessonFromSubjectPage = publishLessonFromSubjectPage;
+window.unpublishLessonFromSubjectPage = unpublishLessonFromSubjectPage;
+window.removeTeacherLesson = removeTeacherLesson;
+window.viewTeacherLessonFile = viewTeacherLessonFile;
+
 async function loadTeacherDashboardLessons() {
   try {
     const allLessons = await fetchTeacherLessonsList();
 
-    // Optional subject filter coming from teacher-subjects.html.
     const subjectFilter = getTeacherDashboardSubjectFilter();
+    const isSubjectPage = document.body?.classList?.contains("teacher-subject-lessons-page");
     let lessons = allLessons;
+    let yourLessons = allLessons;
+
     if (subjectFilter) {
       if (subjectFilter === "__unassigned__") {
         lessons = allLessons.filter((l) => !l.subject_id);
+        yourLessons = lessons;
       } else {
-        lessons = allLessons.filter((l) => String(l.subject_id || "") === subjectFilter);
+        yourLessons = getTeacherSubjectYourLessons(allLessons, subjectFilter);
+        lessons = isSubjectPage
+          ? yourLessons
+          : allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter));
       }
     }
 
-    // Recent Lessons - all lessons sorted by created_at desc
-    const recentLessonsList = document.getElementById('recent-lessons-list');
+    const linkedForSubject =
+      subjectFilter && subjectFilter !== "__unassigned__"
+        ? allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter))
+        : lessons;
+
+    const recentLessonsList = document.getElementById("recent-lessons-list");
     if (recentLessonsList) {
-      if (lessons.length === 0) {
-        recentLessonsList.innerHTML = subjectFilter
-          ? '<p class="small-note">No uploaded lessons for this subject yet.</p>'
-          : '<p class="small-note">No uploaded lessons yet.</p>';
+      const displayLessons =
+        isSubjectPage && subjectFilter ? getTeacherSubjectUnpublishedLessons(yourLessons) : lessons;
+      const sortedLessons = sortTeacherLessonsNewestFirst(displayLessons);
+      if (sortedLessons.length === 0) {
+        recentLessonsList.innerHTML =
+          isSubjectPage && subjectFilter
+            ? '<p class="small-note">No unpublished lessons for this subject yet.</p>'
+            : subjectFilter
+              ? '<p class="small-note">No uploaded lessons for this subject yet.</p>'
+              : '<p class="small-note">No uploaded lessons yet.</p>';
+      } else if (isSubjectPage && subjectFilter) {
+        recentLessonsList.innerHTML = sortedLessons
+          .map((lesson) => renderTeacherSubjectYourLessonRow(lesson))
+          .join("");
       } else {
-        const sortedLessons = [...lessons].sort((a, b) => {
-          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return tb - ta;
-        });
-        recentLessonsList.innerHTML = sortedLessons.map((lesson) => {
-          const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
-          const fname = escapeHtml(lesson.filename || "Untitled Lesson");
-          const meta = escapeHtml(teacherLessonFileMetaLine(lesson));
-          return `
+        recentLessonsList.innerHTML = sortedLessons
+          .map((lesson) => {
+            const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
+            const fname = escapeHtml(lesson.filename || "Untitled Lesson");
+            const meta = escapeHtml(teacherLessonFileMetaLine(lesson));
+            return `
           <div class="lesson-item">
             <div class="lesson-info">
               <h4>${fname}</h4>
@@ -3871,18 +4193,23 @@ async function loadTeacherDashboardLessons() {
             </div>
           </div>
         `;
-        }).join('');
+          })
+          .join("");
       }
     }
     
     // Published Lessons - only lessons with is_published = true
     const publishedLessonsList = document.getElementById('published-lessons-list');
     if (publishedLessonsList) {
-      const publishedLessons = lessons.filter((lesson) => lesson.is_published || lesson.published);
+      const publishedLessons = linkedForSubject.filter((lesson) => lesson.is_published || lesson.published);
       if (publishedLessons.length === 0) {
         publishedLessonsList.innerHTML = subjectFilter
           ? '<p class="small-note">No published lessons for this subject yet.</p>'
           : '<p class="small-note">No published lessons yet.</p>';
+      } else if (isSubjectPage && subjectFilter) {
+        publishedLessonsList.innerHTML = publishedLessons
+          .map((lesson) => renderTeacherSubjectPublishedLessonRow(lesson))
+          .join("");
       } else {
         publishedLessonsList.innerHTML = publishedLessons.map((lesson) => {
           const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
@@ -3908,10 +4235,13 @@ async function loadTeacherDashboardLessons() {
             </div>
           </div>
         `;
-        }).join('');
+        }).join("");
       }
     }
-    
+
+    if (isSubjectPage && subjectFilter) {
+      updateTeacherSubjectPageStats(yourLessons, linkedForSubject);
+    }
   } catch (error) {
     console.error('Failed to load teacher dashboard lessons:', error);
     
@@ -4150,10 +4480,28 @@ async function uploadFile(file, subjectId = null) {
   const result = await readApiJson(response);
   currentFileId = result.file_id;
   localStorage.setItem(TEACHER_FILE_STORAGE_KEY, result.file_id);
+  if (subjectId && result.file_id) {
+    try {
+      await linkLessonToSubject(result.file_id, subjectId);
+    } catch (linkErr) {
+      console.warn("linkLessonToSubject after upload:", linkErr);
+      throw linkErr;
+    }
+  }
   showToast(`File uploaded: ${result.filename}`, "success");
   await refreshTeacherLessons();
-  await loadTeacherDashboardLessons(); // Refresh dashboard
-  void initTeacherLearniqDashboardStatsIfPresent();
+  await loadTeacherDashboardLessons();
+  if (document.body?.classList?.contains("teacher-subject-lessons-page")) {
+    const sid = getTeacherDashboardUploadSubjectId();
+    if (sid) {
+      const lessons = await fetchTeacherLessonsList();
+      const your = getTeacherSubjectYourLessons(lessons, sid);
+      const linked = lessons.filter((l) => teacherLessonMatchesSubject(l, sid));
+      updateTeacherSubjectPageStats(your, linked);
+    }
+  } else {
+    void initTeacherLearniqDashboardStatsIfPresent();
+  }
   return result;
 }
 
@@ -4371,8 +4719,13 @@ async function hydrateTeacherDashboardSubjectHeader() {
 async function loadTeacherSubjectOptions(selectId = "upload-subject-select") {
   const select = document.getElementById(selectId);
   if (!select) return;
+  const currentUser = getCurrentUserSession();
+  const teacherId = currentUser?.id_number ? encodeURIComponent(currentUser.id_number) : "";
+  const subjectsUrl = teacherId
+    ? apiUrl(`/subjects?owner_teacher_id_number=${teacherId}`)
+    : apiUrl("/subjects");
   try {
-    const res = await fetch(apiUrl("/subjects"));
+    const res = await fetch(subjectsUrl);
     if (!res.ok) return;
     const data = await res.json();
     const subjects = Array.isArray(data.subjects) ? data.subjects : [];
@@ -4398,21 +4751,38 @@ function getTeacherDashboardUploadSubjectId() {
 }
 
 function setupTeacherDashboard() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  if (
+    subjectId &&
+    subjectId !== "__unassigned__" &&
+    window.location.pathname.includes("teacher-learniq-dashboard.html")
+  ) {
+    window.location.replace(
+      `teacher-subject-lessons.html?subject_id=${encodeURIComponent(subjectId)}`
+    );
+    return;
+  }
+
   const fileInput = document.querySelector("#file-input");
   const fileMeta = document.querySelector("#file-meta");
   const previewBody = document.querySelector("#ai-preview-body");
   const tbody = document.getElementById("teacher-lessons-tbody");
-  const uploadBtn = document.getElementById("upload-btn");
   const clearBtn = document.getElementById("file-clear-btn");
 
   hydrateStudentSidebarChip();
   void initTeacherLearniqDashboardStatsIfPresent();
 
-  // If a subject filter is present in the URL, reveal the back link and tweak
-  // the header copy. Also try to swap the title to the subject name.
+  const isStatsDashboard = document.body?.classList?.contains("teacher-stats-dashboard-page");
+  if (isStatsDashboard) {
+    document.getElementById("teacher-stats-refresh-btn")?.addEventListener("click", () => {
+      void initTeacherLearniqDashboardStatsIfPresent();
+    });
+    return;
+  }
+
   void hydrateTeacherDashboardSubjectHeader();
 
-  // Load dashboard lessons on page load
+  // Load dashboard lessons on page load (legacy teacher-dashboard.html)
   loadTeacherDashboardLessons();
 
   if (fileMeta) {
@@ -4440,16 +4810,10 @@ function setupTeacherDashboard() {
     fileInput?.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
-  uploadBtn?.addEventListener("click", () => {
-    console.log("Upload button clicked");
-    fileInput?.click();
-  });
-
   const uploadForm = document.querySelector("#upload-form");
   if (uploadForm) {
     uploadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      console.log("Form submitted");
 
       const selectedFile = fileInput?.files?.[0];
       if (!selectedFile) {
@@ -4544,6 +4908,110 @@ function answersMatch(studentPick, correctAnswer) {
 // Clicking a card navigates to my-lesson.html?subject_id=<uuid>.
 // ───────────────────────────────────────────────────────────────────────────
 
+function getStudentIdNumberForApi() {
+  const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  return String(u?.id_number || "").trim() || "";
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function joinSubjectWithCode(joinCode) {
+  const studentId = getStudentIdNumberForApi();
+  if (!studentId) {
+    showToast("Please sign in as a student.", "error");
+    return false;
+  }
+  const code = String(joinCode || "").trim().toUpperCase();
+  if (!code) {
+    showToast("Enter a subject code.", "error");
+    return false;
+  }
+  const res = await fetch(apiUrl("/subjects/join"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ join_code: code, student_id_number: studentId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Could not join subject.");
+  }
+  return data;
+}
+
+async function regenerateSubjectJoinCode(subjectId) {
+  const teacher = getCurrentUserSession();
+  const teacherId = String(teacher?.id_number || "").trim();
+  if (!teacherId) {
+    showToast("Please sign in as a teacher.", "error");
+    return null;
+  }
+  const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/regenerate-code`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ teacher_id_number: teacherId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Could not regenerate code.");
+  }
+  return data;
+}
+
+function buildTeacherJoinCodeBlockHtml(subject) {
+  const safeId = String(subject.id || "").replace(/'/g, "\\'");
+  const code = String(subject.join_code || "").trim();
+  if (!code) {
+    return `
+      <div class="subject-join-code-block teacher-subject-join-code">
+        <span class="subject-join-code-label">Join code</span>
+        <span class="subject-join-code-empty">Not set</span>
+        <div class="subject-join-code-actions">
+          <button type="button" class="btn btn-secondary btn-small teacher-subject-regen-code" data-subject-id="${safeId}">
+            <i class="fa-solid fa-rotate" aria-hidden="true"></i> Generate code
+          </button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="subject-join-code-block teacher-subject-join-code">
+      <span class="subject-join-code-label">Join code</span>
+      <code class="subject-join-code-value" title="Class join code">${escapeHtml(code)}</code>
+      <div class="subject-join-code-actions">
+        <button type="button" class="btn btn-secondary btn-small teacher-subject-copy-code" data-join-code="${escapeHtml(code)}" title="Copy join code">
+          <i class="fa-solid fa-copy" aria-hidden="true"></i> Copy
+        </button>
+        <button type="button" class="btn btn-secondary btn-small teacher-subject-regen-code" data-subject-id="${safeId}" title="Regenerate code (enrolled students stay)">
+          <i class="fa-solid fa-rotate" aria-hidden="true"></i> Regenerate
+        </button>
+      </div>
+    </div>`;
+}
+
 function buildSubjectCardHtml(subject) {
   const safeId = String(subject.id).replace(/'/g, "\\'");
   const color = subject.color || "#60a5fa";
@@ -4575,12 +5043,30 @@ async function renderSubjectsPage() {
   const listEl = document.getElementById("subjects-list");
   const selectionEl = document.getElementById("subjects-selection");
   const emptyEl = document.getElementById("subjects-empty");
+  const emptyText = document.getElementById("subjects-empty-text");
+  const joinPanel = document.getElementById("student-join-subject-panel");
   if (!listEl || !selectionEl || !emptyEl) return;
 
+  if (joinPanel) joinPanel.hidden = false;
+
+  const studentId = getStudentIdNumberForApi();
+  if (!studentId) {
+    selectionEl.hidden = true;
+    emptyEl.hidden = false;
+    if (emptyText) emptyText.textContent = "Please sign in as a student to view your subjects.";
+    return;
+  }
+
   try {
+    const subjectsUrl = apiUrl(
+      `/student/subjects?student_id_number=${encodeURIComponent(studentId)}`
+    );
+    const lessonsUrl = apiUrl(
+      `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
+    );
     const [subjectsRes, lessonsRes] = await Promise.all([
-      fetch(apiUrl("/subjects")),
-      fetch(apiUrl("/student/lessons")),
+      fetch(subjectsUrl),
+      fetch(lessonsUrl),
     ]);
 
     let subjects = [];
@@ -4595,12 +5081,9 @@ async function renderSubjectsPage() {
       lessons = Array.isArray(data.lessons) ? data.lessons : [];
     }
 
-    // Recompute counts from the freshly fetched published lessons (in case
-    // /subjects count is stale) and inject an "Unassigned" virtual subject
-    // for legacy lessons without subject_id.
     const liveCounts = lessons.reduce((acc, l) => {
-      const sid = l.subject_id ? String(l.subject_id) : "__unassigned__";
-      acc[sid] = (acc[sid] || 0) + 1;
+      const sid = l.subject_id ? String(l.subject_id) : "";
+      if (sid) acc[sid] = (acc[sid] || 0) + 1;
       return acc;
     }, {});
     subjects = subjects.map((s) => ({
@@ -4610,19 +5093,14 @@ async function renderSubjectsPage() {
           ? liveCounts[String(s.id)]
           : (s.published_lesson_count || 0),
     }));
-    if (liveCounts["__unassigned__"]) {
-      subjects.push({
-        id: "__unassigned__",
-        name: "Unassigned",
-        description: "Published lessons that don't have a subject yet.",
-        color: "#94a3b8",
-        published_lesson_count: liveCounts["__unassigned__"],
-      });
-    }
 
     if (subjects.length === 0) {
       selectionEl.hidden = true;
       emptyEl.hidden = false;
+      if (emptyText) {
+        emptyText.textContent =
+          "You have not joined any subjects yet. Enter your teacher's class code in the form above.";
+      }
       return;
     }
 
@@ -4633,8 +5111,9 @@ async function renderSubjectsPage() {
     console.log("DEBUG: renderSubjectsPage failed:", e);
     selectionEl.hidden = true;
     emptyEl.hidden = false;
-    const text = document.getElementById("subjects-empty-text");
-    if (text) text.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+    if (emptyText) {
+      emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+    }
   }
 }
 
@@ -4642,6 +5121,41 @@ function setupSubjectsPage() {
   console.log("PAGE INIT RUNNING: setupSubjectsPage() called");
   hydrateStudentSidebarChip();
   void hydrateSidebarProfileFromDatabase();
+
+  const joinForm = document.getElementById("student-join-subject-form");
+  const joinInput = document.getElementById("student-join-code-input");
+  const joinError = document.getElementById("student-join-code-error");
+
+  joinInput?.addEventListener("input", () => {
+    const v = String(joinInput.value || "").toUpperCase().replace(/\s+/g, "");
+    if (joinInput.value !== v) joinInput.value = v;
+  });
+
+  joinForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (joinError) {
+      joinError.hidden = true;
+      joinError.textContent = "";
+    }
+    const submitBtn = joinForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const data = await joinSubjectWithCode(joinInput?.value || "");
+      const name = data?.subject?.name || "Subject";
+      showToast(`Joined "${name}" successfully.`, "success");
+      if (joinInput) joinInput.value = "";
+      await renderSubjectsPage();
+    } catch (e) {
+      const msg = e?.message || "Could not join subject.";
+      if (joinError) {
+        joinError.textContent = msg;
+        joinError.hidden = false;
+      }
+      showToast(msg, "error");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
 
   document.getElementById("subjects-refresh-btn")?.addEventListener("click", () => {
     renderSubjectsPage();
@@ -4665,18 +5179,18 @@ function buildTeacherSubjectCardHtml(subject) {
   const publishedCount = Number(subject.my_published_count || 0);
   const myLabel = myCount === 1 ? "1 of your lessons" : `${myCount} of your lessons`;
   const pubLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
-  const targetUrl = `teacher-learniq-dashboard.html?subject_id=${encodeURIComponent(subject.id)}`;
+  const targetUrl = `teacher-subject-lessons.html?subject_id=${encodeURIComponent(subject.id)}`;
   const uploadBtn =
     String(subject.id) === "__unassigned__"
       ? ""
       : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}">
-          <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload PDF/PPT
+          <i class="fa-solid fa-upload" aria-hidden="true"></i><span class="btn-label">Upload</span>
         </button>`;
   const deleteBtn =
     String(subject.id) === "__unassigned__"
       ? ""
-      : `<button type="button" class="btn btn-danger btn-small teacher-subject-delete-trigger" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}" data-lesson-count="${myCount}">
-          <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+      : `<button type="button" class="btn btn-danger btn-small teacher-subject-delete-trigger" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}" data-lesson-count="${myCount}" title="Delete subject">
+          <i class="fa-solid fa-trash" aria-hidden="true"></i><span class="btn-label">Delete</span>
         </button>`;
   return `
     <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
@@ -4688,12 +5202,14 @@ function buildTeacherSubjectCardHtml(subject) {
           <span class="lesson-card-pill"><i class="fa-solid fa-eye"></i> ${pubLabel}</span>
         </div>
         <p class="lesson-card-tagline">${escapeHtml(description)}</p>
-        <p class="lesson-card-features small-note">Upload • Generate • Publish</p>
+        ${String(subject.id) === "__unassigned__" ? "" : buildTeacherJoinCodeBlockHtml(subject)}
       </div>
-      <div class="lesson-actions">
-        ${uploadBtn}
-        <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
-        ${deleteBtn}
+      <div class="lesson-actions teacher-subject-card-actions">
+        <a class="btn btn-primary btn-small teacher-subject-open-btn" href="${targetUrl}">Open Subject</a>
+        <div class="teacher-subject-secondary-actions">
+          ${uploadBtn}
+          ${deleteBtn}
+        </div>
       </div>
     </article>
   `;
@@ -4715,9 +5231,10 @@ async function renderTeacherSubjectsPage() {
   }
 
   try {
+    const ownerParam = encodeURIComponent(currentUser.id_number);
     const [subjectsRes, lessonsRes] = await Promise.all([
-      fetch(apiUrl("/subjects")),
-      fetch(apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(currentUser.id_number)}`)),
+      fetch(apiUrl(`/subjects?owner_teacher_id_number=${ownerParam}`)),
+      fetch(apiUrl(`/teacher/lessons?teacher_id_number=${ownerParam}`)),
     ]);
 
     let subjects = [];
@@ -4736,7 +5253,8 @@ async function renderTeacherSubjectsPage() {
     const totals = {};
     const published = {};
     for (const lesson of myLessons) {
-      const sid = lesson.subject_id ? String(lesson.subject_id) : "__unassigned__";
+      const sid = lesson.subject_id ? String(lesson.subject_id).trim() : "";
+      if (!sid) continue;
       totals[sid] = (totals[sid] || 0) + 1;
       if (lesson.is_published || lesson.published) {
         published[sid] = (published[sid] || 0) + 1;
@@ -4751,17 +5269,6 @@ async function renderTeacherSubjectsPage() {
         my_published_count: published[key] || 0,
       };
     });
-
-    if (totals["__unassigned__"]) {
-      subjects.push({
-        id: "__unassigned__",
-        name: "Unassigned",
-        description: "Your lessons that don't have a subject yet. Edit them to assign one.",
-        color: "#94a3b8",
-        my_lesson_count: totals["__unassigned__"],
-        my_published_count: published["__unassigned__"] || 0,
-      });
-    }
 
     if (subjects.length === 0) {
       selectionEl.hidden = true;
@@ -4792,7 +5299,7 @@ async function teacherDeleteSubject(subjectId, subjectName, lessonCount = 0) {
     ok = await window.LearnIQConfirm.show({
       title: `Delete "${name}"?`,
       message: total > 0
-        ? `${total} of your lesson${total === 1 ? "" : "s"} will become Unassigned after this subject is deleted. Continue?`
+        ? `${total} of your lesson${total === 1 ? "" : "s"} will no longer be linked to this subject. Continue?`
         : "This subject has no lessons tagged to it. Continue?",
       confirmText: "Delete",
       cancelText: "Cancel",
@@ -4857,6 +5364,55 @@ function setupTeacherSubjectsQuickUpload() {
   if (listEl && !listEl.dataset.uploadBound) {
     listEl.dataset.uploadBound = "1";
     listEl.addEventListener("click", (event) => {
+      const copyBtn = event.target.closest(".teacher-subject-copy-code");
+      if (copyBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const code = copyBtn.getAttribute("data-join-code") || "";
+        void copyTextToClipboard(code).then((ok) => {
+          showToast(ok ? "Join code copied." : "Could not copy code.", ok ? "success" : "error");
+        });
+        return;
+      }
+
+      const regenBtn = event.target.closest(".teacher-subject-regen-code");
+      if (regenBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = regenBtn.getAttribute("data-subject-id") || "";
+        if (!subjectId) return;
+        const runRegen = async () => {
+          try {
+            const updated = await regenerateSubjectJoinCode(subjectId);
+            showToast(
+              updated?.join_code
+                ? `New join code: ${updated.join_code}`
+                : "Join code regenerated.",
+              "success"
+            );
+            await renderTeacherSubjectsPage();
+          } catch (e) {
+            showToast(e?.message || "Could not regenerate code.", "error");
+          }
+        };
+        if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+          void window.LearnIQConfirm.show({
+            title: "Regenerate join code?",
+            message:
+              "Students who have not joined yet will need the new code. Students already enrolled stay in this subject.",
+            confirmText: "Regenerate",
+            cancelText: "Cancel",
+          }).then((ok) => {
+            if (ok) void runRegen();
+          });
+        } else {
+          if (window.confirm("Regenerate join code? Existing enrollments are kept.")) {
+            void runRegen();
+          }
+        }
+        return;
+      }
+
       const deleteTrigger = event.target.closest(".teacher-subject-delete-trigger");
       if (deleteTrigger) {
         event.preventDefault();
@@ -4877,6 +5433,200 @@ function setupTeacherSubjectsQuickUpload() {
       quickFileInput.click();
     });
   }
+}
+
+function updateTeacherSubjectPageStats(yourLessons, publishedSource) {
+  const total = (yourLessons || []).length;
+  const unpublished = getTeacherSubjectUnpublishedLessons(yourLessons);
+  const pubList = publishedSource || yourLessons || [];
+  const published = pubList.filter((l) => isTeacherLessonPublished(l)).length;
+  const setText = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  setText("teacher-stat-lessons", String(total));
+  setText(
+    "teacher-stat-lessons-note",
+    total === 0
+      ? "Upload your first lesson in the Upload tab"
+      : total === 1
+        ? "1 lesson file"
+        : `${total} lesson files`,
+  );
+  setText("teacher-stat-published", String(published));
+  setText(
+    "teacher-stat-published-note",
+    published === 0 ? "Nothing published yet" : `${published} visible to students`,
+  );
+  setText("teacher-subject-tab-count-lessons", String(unpublished.length));
+  setText("teacher-subject-tab-count-published", String(published));
+}
+
+let activeTeacherSubjectTab = "upload";
+
+function setTeacherSubjectActiveTab(tab) {
+  const valid = ["upload", "lessons", "published"];
+  const next = valid.includes(tab) ? tab : "upload";
+  activeTeacherSubjectTab = next;
+
+  document.querySelectorAll(".workspace-tab[data-teacher-subject-tab]").forEach((btn) => {
+    const key = btn.getAttribute("data-teacher-subject-tab");
+    const isActive = key === next;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  const panels = {
+    upload: document.getElementById("teacher-subject-panel-upload"),
+    lessons: document.getElementById("teacher-subject-panel-lessons"),
+    published: document.getElementById("teacher-subject-panel-published"),
+  };
+  Object.entries(panels).forEach(([key, el]) => {
+    if (!el) return;
+    el.hidden = key !== next;
+  });
+}
+
+function setupTeacherSubjectLessonsTabs() {
+  if (!document.body?.classList?.contains("teacher-subject-lessons-page")) return;
+  document.querySelectorAll(".workspace-tab[data-teacher-subject-tab]").forEach((btn) => {
+    if (btn.dataset.subjectTabBound === "1") return;
+    btn.dataset.subjectTabBound = "1";
+    btn.addEventListener("click", () => {
+      setTeacherSubjectActiveTab(btn.getAttribute("data-teacher-subject-tab"));
+    });
+  });
+  setTeacherSubjectActiveTab(activeTeacherSubjectTab);
+}
+
+async function hydrateTeacherSubjectLessonsPage() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  if (!subjectId) return;
+
+  const titleEl = document.getElementById("teacher-subject-page-title");
+  const subtitleEl = document.getElementById("teacher-subject-page-subtitle");
+  const uploadLabel = document.getElementById("teacher-subject-upload-label");
+  const joinWrap = document.getElementById("teacher-subject-page-join");
+  const codeStat = document.getElementById("teacher-stat-join-code");
+
+  try {
+    const res = await fetch(apiUrl("/subjects"));
+    if (!res.ok) return;
+    const data = await res.json();
+    const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    const match = subjects.find((s) => String(s.id) === String(subjectId));
+    if (!match) {
+      if (titleEl) titleEl.textContent = "Subject not found";
+      if (subtitleEl) subtitleEl.textContent = "This subject may have been removed. Go back to My Subjects.";
+      return;
+    }
+
+    const name = match.name || "Subject";
+    if (titleEl) titleEl.textContent = name;
+    if (subtitleEl) {
+      subtitleEl.textContent =
+        match.description || "Upload lessons here. They are tagged to this subject automatically.";
+    }
+    if (uploadLabel) uploadLabel.textContent = name;
+
+    const code = String(match.join_code || "").trim();
+    if (codeStat) codeStat.textContent = code || "—";
+
+    if (joinWrap && code) {
+      joinWrap.hidden = false;
+      joinWrap.innerHTML = `
+        <div class="teacher-subject-page-join-inner">
+          <span class="small-note">Students join with</span>
+          <code class="subject-join-code-value">${escapeHtml(code)}</code>
+          <button type="button" class="btn btn-secondary btn-small teacher-subject-page-copy-code" data-join-code="${escapeHtml(code)}">
+            <i class="fa-solid fa-copy"></i> Copy code
+          </button>
+        </div>`;
+      const copyBtn = joinWrap.querySelector(".teacher-subject-page-copy-code");
+      copyBtn?.addEventListener("click", () => {
+        void copyTextToClipboard(code).then((ok) => {
+          showToast(ok ? "Join code copied." : "Could not copy.", ok ? "success" : "error");
+        });
+      });
+    }
+  } catch (e) {
+    console.log("hydrateTeacherSubjectLessonsPage:", e);
+  }
+}
+
+function bindTeacherSubjectLessonUploadForm() {
+  const fileInput = document.querySelector("#file-input");
+  const fileMeta = document.querySelector("#file-meta");
+  const clearBtn = document.getElementById("file-clear-btn");
+  const uploadForm = document.querySelector("#upload-form");
+  const subjectId = getTeacherDashboardUploadSubjectId();
+
+  if (!subjectId) return;
+
+  if (fileMeta) fileMeta.textContent = "No file selected yet.";
+
+  fileInput?.addEventListener("change", () => {
+    const selectedFile = fileInput?.files?.[0];
+    if (!fileMeta) return;
+    if (!selectedFile) {
+      fileMeta.textContent = "No file selected yet.";
+      if (clearBtn) clearBtn.hidden = true;
+      return;
+    }
+    fileMeta.textContent = `Selected: ${selectedFile.name}`;
+    if (clearBtn) clearBtn.hidden = false;
+  });
+
+  clearBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (fileInput) fileInput.value = "";
+    if (fileMeta) fileMeta.textContent = "No file selected yet.";
+    clearBtn.hidden = true;
+  });
+
+  uploadForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const selectedFile = fileInput?.files?.[0];
+    if (!selectedFile) {
+      if (fileMeta) fileMeta.textContent = "Choose a PDF or PPT file first.";
+      return;
+    }
+    if (fileMeta) fileMeta.textContent = `Uploading ${selectedFile.name}…`;
+    try {
+      await uploadFile(selectedFile, subjectId);
+      if (fileMeta) fileMeta.textContent = `Uploaded to this subject: ${selectedFile.name}`;
+      if (fileInput) fileInput.value = "";
+      if (clearBtn) clearBtn.hidden = true;
+      await loadTeacherDashboardLessons();
+      setTeacherSubjectActiveTab("lessons");
+    } catch (e) {
+      if (fileMeta) fileMeta.textContent = "Upload failed. Try again.";
+      showToast(e?.message || "Upload failed", "error");
+    }
+  });
+}
+
+async function loadTeacherSubjectLessonsPage() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  if (!subjectId) return;
+  await loadTeacherDashboardLessons();
+}
+
+function setupTeacherSubjectLessonsPage() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  if (!subjectId || subjectId === "__unassigned__") {
+    window.location.replace("teacher-subjects.html");
+    return;
+  }
+
+  hydrateStudentSidebarChip();
+  void hydrateSidebarProfileFromDatabase();
+  initRoleAwareDashboardSidebar();
+
+  void hydrateTeacherSubjectLessonsPage();
+  setupTeacherSubjectLessonsTabs();
+  bindTeacherSubjectLessonUploadForm();
+  void loadTeacherSubjectLessonsPage();
 }
 
 function setupTeacherSubjectsPage() {
@@ -5944,10 +6694,17 @@ function setupTeacherAddSubjectForm() {
     }
 
     try {
+      const teacher = getCurrentUserSession();
+      const teacherId = String(teacher?.id_number || "").trim();
       const res = await fetch(apiUrl("/subjects"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, description, color }),
+        body: JSON.stringify({
+          name,
+          description,
+          color,
+          created_by_teacher_id_number: teacherId || undefined,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -5955,7 +6712,8 @@ function setupTeacherAddSubjectForm() {
       }
       const created = await res.json().catch(() => ({}));
       resetForm();
-      showToast(`Subject "${created.name || name}" added.`, "success");
+      const codeNote = created.join_code ? ` Join code: ${created.join_code}` : "";
+      showToast(`Subject "${created.name || name}" added.${codeNote}`, "success");
       await renderTeacherSubjectsPage();
     } catch (e) {
       console.log("DEBUG: create subject failed:", e);
@@ -6394,31 +7152,30 @@ function showEmpty(message) {
 
     const choices = Array.isArray(q.choices) ? q.choices : [];
     const letters = ["A", "B", "C", "D"];
-    const radios = choices
-      .map(
-        (c, i) => `
-      <label class="small-note" style="display:block;margin:0.35rem 0;">
-        <input type="radio" name="student-quiz-opt" value="${letters[i] || i}" />
-        ${escapeHtml(c)}
-      </label>`
-      )
-      .join("");
-
     const saved = studentAnswers[quizIndex];
     const checkedAttr = (val) => (saved === val ? "checked" : "");
+    const formatChoiceText = (choice, letter) => {
+      const raw = String(choice || "").trim();
+      const stripped = raw.replace(new RegExp(`^${letter}[.)\\s]+`, "i"), "").trim();
+      return stripped || raw;
+    };
 
     quizBody.innerHTML = `
-      <p><strong>${escapeHtml(q.question)}</strong></p>
+      <p class="student-quiz-question"><strong>${escapeHtml(q.question)}</strong></p>
+      <div class="student-quiz-choices">
       ${choices
-        .map(
-          (c, i) => `
-        <label class="small-note" style="display:block;margin:0.35rem 0;">
-          <input type="radio" name="student-quiz-opt" value="${letters[i] || i}" ${checkedAttr(letters[i])} />
-          ${escapeHtml(c)}
-        </label>`
-        )
+        .map((c, i) => {
+          const letter = letters[i] || String(i);
+          const choiceText = formatChoiceText(c, letter);
+          return `
+        <label class="student-quiz-choice">
+          <input type="radio" name="student-quiz-opt" value="${letter}" ${checkedAttr(letter)} />
+          <span class="student-quiz-choice-text"><span class="student-quiz-choice-letter">${letter}.</span> ${escapeHtml(choiceText)}</span>
+        </label>`;
+        })
         .join("")}
-      <div class="button-group" style="margin-top:0.75rem;">
+      </div>
+      <div class="button-group student-quiz-nav" style="margin-top:0.75rem;">
         <button type="button" class="btn btn-secondary" id="student-quiz-prev-btn" ${quizIndex === 0 ? "disabled" : ""}>Previous</button>
         <button type="button" class="btn btn-primary" id="student-quiz-next-btn">${
           quizIndex + 1 >= questions.length ? "Submit Quiz" : "Next"
@@ -6532,8 +7289,15 @@ function showEmpty(message) {
   }
 
   async function loadStudentSubjects() {
+    const studentId = getStudentIdNumberForApi();
+    if (!studentId) {
+      studentSubjects = [];
+      return;
+    }
     try {
-      const res = await fetch(apiUrl("/subjects"));
+      const res = await fetch(
+        apiUrl(`/student/subjects?student_id_number=${encodeURIComponent(studentId)}`)
+      );
       if (!res.ok) {
         studentSubjects = [];
         return;
@@ -6572,8 +7336,17 @@ function showEmpty(message) {
     try {
       await loadStudentSubjects();
 
+      const studentId = getStudentIdNumberForApi();
+      if (!studentId) {
+        studentLessons = [];
+        showEmpty("Please sign in as a student to view lessons.");
+        return;
+      }
+
       console.log("Calling /student/lessons...");
-      const apiUrlValue = apiUrl("/student/lessons");
+      const apiUrlValue = apiUrl(
+        `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
+      );
       const res = await fetch(apiUrlValue);
 
       if (!res.ok) {
@@ -7624,6 +8397,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (window.location.pathname.includes('teacher-learniq-dashboard.html') || window.location.pathname.includes('teacher-dashboard.html')) {
     setupTeacherDashboard();
+  }
+  if (window.location.pathname.includes('teacher-subject-lessons.html')) {
+    setupTeacherSubjectLessonsPage();
   }
   if (window.location.pathname.includes('teacher-subjects.html')) {
     setupTeacherSubjectsPage();

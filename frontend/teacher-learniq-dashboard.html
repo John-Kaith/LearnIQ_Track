@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Teacher LearnIQ Dashboard | LearnIQ Track</title>
+  <title>Teacher Dashboard | LearnIQ Track</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026051609" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026051609" defer></script>
 </head>
-<body class="teacher-learniq-page">
+<body class="teacher-learniq-page teacher-stats-dashboard-page teacher-overview-page" data-sidebar-active="dashboard">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -51,104 +51,116 @@
     </aside>
 
     <main class="main-panel">
-      <section id="teacher-learniq-panel-head" class="glass-card panel-header">
+      <section class="glass-card panel-header teacher-stats-header">
         <div class="panel-title">
-          <h1 id="teacher-dashboard-panel-title">Teacher LearnIQ Dashboard</h1>
-          <p id="teacher-dashboard-panel-subtitle">Upload your lesson file, run AI once to build reviewer, quiz, and activities, then publish for students.</p>
+          <h1>Teaching overview</h1>
+          <p>High-level pulse of your classes — open <strong>My Subjects</strong> to upload, publish, and manage lessons.</p>
         </div>
       </section>
 
-      <section class="stats-grid">
-        <article class="glass-card stat-card">
-          <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
+      <p class="small-note teacher-stats-updated" id="teacher-stats-updated" hidden></p>
+
+      <section class="stats-grid teacher-overview-kpi-grid">
+        <article class="glass-card stat-card teacher-stat-kpi">
+          <div class="metric-icon"><i class="fa-solid fa-user-group"></i></div>
           <div>
-            <span class="small-note">Lessons uploaded</span>
-            <strong class="metric-value" id="teacher-stat-lessons">—</strong>
-            <span class="metric-note" id="teacher-stat-lessons-note">Loading…</span>
+            <span class="small-note">Enrolled students</span>
+            <strong class="metric-value" id="teacher-overview-enrolled">—</strong>
+            <span class="metric-note" id="teacher-overview-enrolled-note">Loading…</span>
           </div>
         </article>
-        <article class="glass-card stat-card">
-          <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
+        <article class="glass-card stat-card teacher-stat-kpi">
+          <div class="metric-icon"><i class="fa-solid fa-clipboard-check"></i></div>
           <div>
-            <span class="small-note">Active students</span>
-            <strong class="metric-value" id="teacher-stat-students">—</strong>
-            <span class="metric-note" id="teacher-stat-students-note">Quiz activity on your lessons</span>
+            <span class="small-note">Quiz attempts</span>
+            <strong class="metric-value" id="teacher-overview-quiz-attempts">—</strong>
+            <span class="metric-note" id="teacher-overview-quiz-note">Loading…</span>
           </div>
         </article>
-        <article class="glass-card stat-card">
+        <article class="glass-card stat-card teacher-stat-kpi">
           <div class="metric-icon"><i class="fa-solid fa-chart-line"></i></div>
           <div>
-            <span class="small-note">Avg quiz score</span>
-            <strong class="metric-value" id="teacher-stat-avg">—</strong>
-            <span class="metric-note" id="teacher-stat-avg-note">Loading…</span>
+            <span class="small-note">Class average</span>
+            <strong class="metric-value" id="teacher-overview-avg">—</strong>
+            <span class="metric-note" id="teacher-overview-avg-note">Loading…</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card teacher-stat-kpi">
+          <div class="metric-icon"><i class="fa-solid fa-bolt"></i></div>
+          <div>
+            <span class="small-note">Active this month</span>
+            <strong class="metric-value" id="teacher-overview-participation">—</strong>
+            <span class="metric-note" id="teacher-overview-participation-note">Quiz participation</span>
           </div>
         </article>
       </section>
 
-      <section class="dashboard-grid">
-        <div class="content-stack">
-          <article class="glass-card content-card upload-box" id="teacher-dashboard-upload-panel" data-upload-role="teacher" aria-label="Add lesson form">
-            <div>
-              <h3>Add lesson</h3>
-              <p class="content-subtitle">Upload a PDF or PowerPoint lesson file. PDF gives the best text for AI.</p>
+      <section class="dashboard-grid teacher-overview-main-grid">
+        <article class="glass-card content-card teacher-overview-panel">
+          <h3 class="teacher-card-heading">Content pipeline</h3>
+          <p class="content-subtitle">How ready your lesson materials are across all subjects.</p>
+          <div class="teacher-overview-pipeline-grid">
+            <div class="teacher-overview-pipeline-item">
+              <span class="small-note">Draft lessons</span>
+              <strong id="teacher-overview-drafts">—</strong>
+              <span class="metric-note" id="teacher-overview-drafts-note">—</span>
             </div>
-            <form id="upload-form" class="upload-form" autocomplete="off">
-              <div class="file-input-wrapper">
-                <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file" />
-                <label for="file-input" class="file-input-label">
-                  <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-                  <span id="file-input-text">Choose PDF or PPT file</span>
-                </label>
-                <button type="button" class="file-clear-btn" id="file-clear-btn" hidden aria-label="Clear selected file">
-                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                </button>
-              </div>
-              <button type="submit" class="btn btn-primary" id="upload-btn">
-                <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload lesson
-              </button>
-              <p class="file-meta small-note" id="file-meta">No file selected yet.</p>
-            </form>
-          </article>
+            <div class="teacher-overview-pipeline-item">
+              <span class="small-note">Published</span>
+              <strong id="teacher-overview-published">—</strong>
+              <span class="metric-note" id="teacher-overview-published-note">—</span>
+            </div>
+            <div class="teacher-overview-pipeline-item">
+              <span class="small-note">With AI pack</span>
+              <strong id="teacher-overview-ai">—</strong>
+              <span class="metric-note" id="teacher-overview-ai-note">—</span>
+            </div>
+            <div class="teacher-overview-pipeline-item">
+              <span class="small-note">Publish rate</span>
+              <strong id="teacher-overview-publish-rate">—</strong>
+              <span class="metric-note" id="teacher-overview-publish-rate-note">—</span>
+            </div>
+          </div>
+          <div class="teacher-stats-progress-wrap teacher-overview-publish-bar">
+            <div class="teacher-stats-progress-label">
+              <span class="small-note">Lessons live for students</span>
+              <span class="small-note" id="teacher-overview-publish-pct-label">—</span>
+            </div>
+            <div class="progress-bar teacher-stats-progress-bar" aria-hidden="true">
+              <span class="progress-span" id="teacher-overview-publish-progress" data-progress="0%"></span>
+            </div>
+          </div>
+        </article>
 
-          <article class="glass-card content-card">
-            <h3 class="teacher-card-heading">Recent Lessons</h3>
-            <div class="lesson-list teacher-lesson-grid" id="recent-lessons-list">
-              <!-- Lessons will be loaded dynamically -->
-            </div>
-          </article>
-
-          <article class="glass-card content-card">
-            <h3 class="teacher-card-heading">Published Lessons</h3>
-            <div class="published-lessons teacher-lesson-grid" id="published-lessons-list">
-              <!-- Published lessons will be loaded dynamically -->
-            </div>
-          </article>
-        </div>
-
-        <div class="content-stack">
-          <article class="glass-card content-card teacher-performance-section">
-            <h3 class="teacher-card-heading">Student Performance</h3>
-            <p class="small-note teacher-performance-hint" id="teacher-performance-hint" hidden></p>
-            <div class="teacher-performance-stack" id="teacher-performance-stack">
-              <div class="teacher-performance-tile">
-                <span class="small-note teacher-performance-label" id="teacher-perf-top-label">Top performer</span>
-                <p class="teacher-performance-value" id="teacher-perf-top-value">—</p>
-                <span class="small-note teacher-performance-sub" id="teacher-perf-top-detail">Loading…</span>
-              </div>
-              <div class="teacher-performance-tile">
-                <span class="small-note teacher-performance-label" id="teacher-perf-attention-label">Needs attention</span>
-                <p class="teacher-performance-value"><strong id="teacher-perf-attention-count">—</strong></p>
-                <span class="small-note teacher-performance-sub" id="teacher-perf-attention-detail">Below 70% avg</span>
-              </div>
-              <div class="teacher-performance-tile">
-                <span class="small-note teacher-performance-label" id="teacher-perf-completion-label">Participation</span>
-                <p class="teacher-performance-value"><strong id="teacher-perf-completion-pct">—</strong></p>
-                <span class="small-note teacher-performance-sub" id="teacher-perf-completion-detail">This month</span>
-              </div>
-            </div>
-          </article>
-        </div>
+        <article class="glass-card content-card teacher-overview-panel">
+          <h3 class="teacher-card-heading">Where to go next</h3>
+          <p class="content-subtitle">Detailed lists and actions live in these pages.</p>
+          <div class="teacher-stats-quick-actions">
+            <a href="teacher-subjects.html" class="teacher-stats-quick-card">
+              <i class="fa-solid fa-book-open"></i>
+              <span>My Subjects</span>
+              <small>Upload, AI, publish per class</small>
+            </a>
+            <a href="teacher-student-gradecard.html" class="teacher-stats-quick-card">
+              <i class="fa-solid fa-id-card"></i>
+              <span>Student gradecard</span>
+              <small>Grades and per-student detail</small>
+            </a>
+            <a href="leaderboard.html" class="teacher-stats-quick-card">
+              <i class="fa-solid fa-trophy"></i>
+              <span>Leaderboard</span>
+              <small>Top scorers and rankings</small>
+            </a>
+          </div>
+        </article>
       </section>
+
+      <article class="glass-card content-card teacher-overview-panel teacher-overview-alerts">
+        <h3 class="teacher-card-heading">Insights</h3>
+        <ul class="teacher-overview-insights" id="teacher-overview-insights">
+          <li class="small-note">Loading insights…</li>
+        </ul>
+      </article>
     </main>
   </div>
 </body>

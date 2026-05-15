@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026051602" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026051602" defer></script>
 </head>
 <body class="subjects-page">
   <div class="dashboard-shell container">
@@ -52,23 +52,65 @@
     <main class="main-panel">
       <section class="glass-card panel-header">
         <div class="panel-title">
-          <h1>Subjects</h1>
-          <p>Pick a subject to see its published lessons.</p>
+          <h1>My lesson</h1>
+          <p>Enter your teacher's class code to join a subject, then open it to view published lessons.</p>
         </div>
       </section>
 
       <section class="dashboard-grid">
         <div class="content-stack lesson-workspace-main">
+          <article class="glass-card content-card student-join-hero" id="student-join-subject-panel" aria-label="Join subject with class code">
+            <div class="student-join-hero-head">
+              <div class="student-join-hero-icon" aria-hidden="true">
+                <i class="fa-solid fa-right-to-bracket"></i>
+              </div>
+              <div>
+                <h3>Join a subject</h3>
+                <p class="content-subtitle">Your teacher will give you a code like <strong>MAT-C5DL</strong>. Paste it below to enroll.</p>
+              </div>
+            </div>
+
+            <form id="student-join-subject-form" class="join-subject-form" autocomplete="off">
+              <div class="join-subject-form-row">
+                <label class="form-field join-code-field">
+                  <span class="small-note">Class code</span>
+                  <input
+                    type="text"
+                    id="student-join-code-input"
+                    class="form-input join-code-input"
+                    placeholder="e.g. MAT-C5DL"
+                    maxlength="16"
+                    autocapitalize="characters"
+                    autocomplete="off"
+                    spellcheck="false"
+                    required
+                  />
+                </label>
+                <button type="submit" class="btn btn-primary join-submit-btn" id="student-join-submit-btn">
+                  <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Join class
+                </button>
+              </div>
+              <p id="student-join-code-error" class="small-note add-subject-error" hidden role="alert"></p>
+            </form>
+          </article>
+
           <article id="subjects-empty" class="glass-card content-card" hidden>
             <h3>No subjects yet</h3>
             <p class="content-subtitle" id="subjects-empty-text">
-              Your school has not set up any subjects yet. Please ask an administrator to add subjects in the database.
+              You have not joined any subjects. Use the form above to enter your teacher's class code.
             </p>
           </article>
 
           <article id="subjects-selection" class="glass-card content-card" hidden>
-            <h3>Published subjects</h3>
-            <p class="content-subtitle">Each subject groups lessons published by your teachers.</p>
+            <div class="content-card-header-row">
+              <div>
+                <h3>My subjects</h3>
+                <p class="content-subtitle">Tap a subject to open its published lessons.</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-small" id="subjects-refresh-btn">
+                <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
             <div id="subjects-list" class="lesson-grid"></div>
           </article>
         </div>

@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,7 @@ load_dotenv(_backend_env, override=True)
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 UPLOADS_DIR = immersion_upload.UPLOAD_ROOT
+LESSON_UPLOADS_DIR = UPLOADS_DIR / "lessons"
 API_KEY = os.getenv("API_KEY")
 
 IMMERSION_CAPTURE_MAX_SKEW_MINUTES = 15
@@ -919,43 +921,100 @@ async def unpublish_lesson(body: dict):
 
 
 @app.get("/student/lessons")
-def get_student_lessons(subject_id: str | None = None):
+def get_student_lessons(
+    subject_id: str | None = None,
+    student_id_number: str | None = Query(default=None),
+):
     err = require_supabase()
     if err is not None:
         return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse(
+            {"error": "student_id_number is required to list lessons."},
+            status_code=400,
+        )
+    student_uuid = db_supabase.profile_uuid_for_id_number(sid)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
     try:
-        lessons = db_supabase.list_published_lessons_with_content()
-        if subject_id:
-            lessons = [
-                lesson for lesson in lessons
-                if str(lesson.get("subject_id") or "") == str(subject_id)
-            ]
-        print("STUDENT LESSONS DEBUG: Found", len(lessons), "published lessons (subject_id=", subject_id, ")")
-        for i, lesson in enumerate(lessons):
-            print(f"  Lesson {i+1}: {lesson.get('filename', 'No filename')} (id: {lesson.get('file_id', 'No id')})")
+        lessons = db_supabase.list_published_lessons_for_student(
+            student_uuid,
+            subject_id=subject_id,
+        )
+        print(
+            "STUDENT LESSONS DEBUG: Found",
+            len(lessons),
+            "enrolled lessons (subject_id=",
+            subject_id,
+            ")",
+        )
         return {"lessons": lessons}
     except Exception as e:
         print("STUDENT LESSONS ERROR:", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.get("/student/subjects")
+def list_student_enrolled_subjects_endpoint(
+    student_id_number: str = Query(...),
+    period_id: str | None = Query(default=None),
+):
+    """Subjects the student is enrolled in (current grading period by default)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    student_uuid = db_supabase.profile_uuid_for_id_number(sid)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+    try:
+        subjects = db_supabase.list_enrolled_subjects_for_student(student_uuid, period_id)
+        return {"subjects": subjects, "count": len(subjects)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _attach_subject_aggregate_counts(subjects: list[dict]) -> None:
+    pub_counts = db_supabase.count_published_lessons_by_subject()
+    total_counts = db_supabase.count_lessons_by_subject()
+    teacher_counts = db_supabase.count_teachers_by_subject()
+    for s in subjects:
+        key = str(s.get("id") or "")
+        s["published_lesson_count"] = pub_counts.get(key, 0)
+        s["total_lesson_count"] = total_counts.get(key, 0)
+        s["teacher_count"] = teacher_counts.get(key, 0)
+
+
+def _subject_response(row: dict) -> dict:
+    sid = row.get("id")
+    return {
+        "id": str(sid) if sid is not None else None,
+        "name": row.get("name") or "",
+        "description": row.get("description") or "",
+        "color": row.get("color") or "",
+        "join_code": row.get("join_code"),
+        "created_by_teacher_id_number": row.get("created_by_teacher_id_number"),
+    }
+
+
 @app.get("/subjects")
-def list_subjects_endpoint():
-    """List all subjects with lesson counts (used by Student/Teacher/Admin UIs)."""
+def list_subjects_endpoint(
+    owner_teacher_id_number: str | None = Query(default=None),
+):
+    """List subjects with lesson counts. Filter by owner when owner_teacher_id_number is set."""
     err = require_supabase()
     if err is not None:
         return err
     try:
-        subjects = db_supabase.list_subjects()
-        pub_counts = db_supabase.count_published_lessons_by_subject()
-        total_counts = db_supabase.count_lessons_by_subject()
-        teacher_counts = db_supabase.count_teachers_by_subject()
-        for s in subjects:
-            sid = s.get("id")
-            key = str(sid) if sid is not None else ""
-            s["published_lesson_count"] = pub_counts.get(key, 0)
-            s["total_lesson_count"] = total_counts.get(key, 0)
-            s["teacher_count"] = teacher_counts.get(key, 0)
+        owner = (owner_teacher_id_number or "").strip()
+        if owner:
+            subjects = db_supabase.list_subjects_for_teacher_owner(owner)
+        else:
+            subjects = db_supabase.list_subjects()
+        _attach_subject_aggregate_counts(subjects)
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -972,15 +1031,19 @@ async def create_subject_endpoint(body: dict):
         return JSONResponse({"error": "Subject name is required."}, status_code=400)
     description = body.get("description")
     color = body.get("color")
+    created_by = (body.get("created_by_teacher_id_number") or body.get("teacher_id_number") or "").strip() or None
     try:
-        row = db_supabase.create_subject(name=name, description=description, color=color)
-        sid = row.get("id") if isinstance(row, dict) else None
-        return {
-            "id": str(sid) if sid is not None else None,
-            "name": (row.get("name") if isinstance(row, dict) else name) or name,
-            "description": (row.get("description") if isinstance(row, dict) else description) or "",
-            "color": (row.get("color") if isinstance(row, dict) else color) or "",
-        }
+        row = db_supabase.create_subject(
+            name=name,
+            description=description,
+            color=color,
+            created_by_teacher_id_number=created_by,
+        )
+        out = _subject_response(row)
+        out["published_lesson_count"] = 0
+        out["total_lesson_count"] = 0
+        out["teacher_count"] = 0
+        return out
     except ValueError as ve:
         return JSONResponse({"error": str(ve)}, status_code=400)
     except Exception as e:
@@ -989,6 +1052,66 @@ async def create_subject_endpoint(body: dict):
         if "duplicate" in msg.lower() or "unique" in msg.lower():
             return JSONResponse({"error": "A subject with this name already exists."}, status_code=409)
         return JSONResponse({"error": msg}, status_code=502)
+
+
+@app.post("/subjects/join")
+async def join_subject_with_code_endpoint(body: dict = Body(...)):
+    """Student joins a subject using a join code."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+    join_code = str(payload.get("join_code") or payload.get("code") or "").strip()
+    student_id_number = str(payload.get("student_id_number") or "").strip()
+    if not join_code:
+        return JSONResponse({"error": "join_code is required"}, status_code=400)
+    if not student_id_number:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+    try:
+        result = db_supabase.join_subject_by_code(student_uuid, join_code)
+        subject = result.get("subject") or {}
+        return {
+            "ok": True,
+            "subject": _subject_response(subject),
+            "enrollment": result.get("enrollment"),
+        }
+    except ValueError as ve:
+        msg = str(ve)
+        if "already enrolled" in msg.lower():
+            return JSONResponse({"error": msg}, status_code=409)
+        if "invalid subject code" in msg.lower():
+            return JSONResponse({"error": msg}, status_code=404)
+        return JSONResponse({"error": msg}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/subjects/{subject_id}/regenerate-code")
+async def regenerate_subject_join_code_endpoint(subject_id: str, body: dict = Body(...)):
+    """Teacher regenerates join code; existing enrollments are kept."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not subject_id:
+        return JSONResponse({"error": "subject_id is required."}, status_code=400)
+    payload = body if isinstance(body, dict) else {}
+    teacher_id_number = str(
+        payload.get("teacher_id_number") or payload.get("created_by_teacher_id_number") or ""
+    ).strip()
+    if not teacher_id_number:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    try:
+        row = db_supabase.regenerate_subject_join_code(subject_id, teacher_id_number)
+        return _subject_response(row)
+    except LookupError:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+    except PermissionError as pe:
+        return JSONResponse({"error": str(pe)}, status_code=403)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
 
 
 @app.put("/subjects/{subject_id}")
@@ -1020,6 +1143,185 @@ async def update_subject_endpoint(subject_id: str, body: dict):
         if "duplicate" in msg.lower() or "unique" in msg.lower():
             return JSONResponse({"error": "Another subject already uses this name."}, status_code=409)
         return JSONResponse({"error": msg}, status_code=502)
+
+
+_LESSON_FILE_MEDIA = {
+    "pdf": "application/pdf",
+    "ppt": "application/vnd.ms-powerpoint",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
+
+def _resolve_lesson_file_path(
+    lesson_id: str,
+    storage_path: str | None = None,
+    filename: str | None = None,
+) -> Path | None:
+    """Find lesson file on disk (uploads/lessons, DB path, or legacy temp_upload)."""
+    backend_dir = Path(__file__).resolve().parent
+    lid = str(lesson_id or "").strip()
+
+    if lid:
+        for ext in (".pdf", ".ppt", ".pptx", ".PDF", ".PPT", ".PPTX"):
+            canonical = LESSON_UPLOADS_DIR / f"{lid}{ext.lower()}"
+            if canonical.is_file():
+                return canonical.resolve()
+
+    raw_path = (str(storage_path).strip() if storage_path else "") or ""
+    if raw_path:
+        candidates = [
+            Path(raw_path),
+            backend_dir / raw_path,
+            UPLOADS_DIR / raw_path,
+            BASE_DIR / raw_path,
+            BASE_DIR / "backend" / raw_path,
+        ]
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+                if resolved.is_file():
+                    return resolved
+            except OSError:
+                continue
+
+    if filename:
+        safe = Path(filename).name.replace(" ", "_")
+        legacy_name = f"temp_upload_{safe}"
+        for base in (backend_dir, BASE_DIR, BASE_DIR / "backend", Path.cwd()):
+            try:
+                legacy = (base / legacy_name).resolve()
+                if legacy.is_file():
+                    return legacy
+            except OSError:
+                continue
+    return None
+
+
+def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) -> str:
+    """Pull plain text from PDF or PPTX for AI reviewer/quiz generation."""
+    name = (filename or file_path.name or "").lower()
+    text_parts: list[str] = []
+
+    if name.endswith(".pdf"):
+        try:
+            reader = PdfReader(str(file_path))
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text_parts.append(extracted)
+        except Exception as e:
+            print(f"extract_lesson_text_from_file pdf: {e}")
+    elif name.endswith(".pptx"):
+        try:
+            from pptx import Presentation
+
+            prs = Presentation(str(file_path))
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if not hasattr(shape, "text"):
+                        continue
+                    block = (shape.text or "").strip()
+                    if block:
+                        text_parts.append(block)
+                if slide.has_notes_slide and slide.notes_slide and slide.notes_slide.notes_text_frame:
+                    notes = (slide.notes_slide.notes_text_frame.text or "").strip()
+                    if notes:
+                        text_parts.append(notes)
+        except Exception as e:
+            print(f"extract_lesson_text_from_file pptx: {e}")
+    elif name.endswith(".ppt"):
+        print("extract_lesson_text_from_file: legacy .ppt not supported; use .pptx or PDF")
+
+    combined = "\n".join(text_parts).strip()
+    return combined[:3000] if combined else ""
+
+
+def lesson_text_for_ai(lesson: dict) -> tuple[str, str | None]:
+    """
+    Text used for Gemini prompts. Re-extracts from disk when DB field is empty
+  (e.g. PPTX uploaded before pptx parsing existed).
+    """
+    existing = str(lesson.get("extracted_text") or "").strip()
+    if existing:
+        return existing, None
+
+    lid = str(lesson.get("id") or "")
+    file_path = _resolve_lesson_file_path(
+        lid,
+        lesson.get("storage_path"),
+        lesson.get("filename"),
+    )
+    if file_path:
+        fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
+        if fresh.strip():
+            try:
+                db_supabase.update_lesson_extracted_text(lid, fresh)
+            except Exception as e:
+                print(f"lesson_text_for_ai cache extract: {e}")
+            return fresh, None
+
+    fn = (lesson.get("filename") or "").lower()
+    if fn.endswith(".pptx") or fn.endswith(".ppt"):
+        return "", (
+            "No readable text in this PowerPoint. Use slides with text boxes (not only pictures), "
+            "or save as PDF with selectable text and upload again."
+        )
+    if fn.endswith(".pdf"):
+        return "", (
+            "No text found in this PDF. Use a file with selectable/copyable text (not a scanned photo PDF)."
+        )
+    return "", "No text extracted from this file. Upload a PDF with selectable text or a PPTX with slide text."
+
+
+@app.get("/lessons/{lesson_id}/file")
+def view_lesson_file(lesson_id: str, teacher_id_number: str = Query(...)):
+    """Stream the uploaded lesson file (teacher must own the lesson)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid = (teacher_id_number or "").strip()
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required."}, status_code=400)
+    try:
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
+            return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        owner = (lesson.get("teacher_id_number") or "").strip()
+        if owner and owner != tid:
+            return JSONResponse({"error": "You can only view your own lessons."}, status_code=403)
+        file_path = _resolve_lesson_file_path(
+            str(lesson_id),
+            lesson.get("storage_path"),
+            lesson.get("filename"),
+        )
+        if not file_path:
+            return JSONResponse(
+                {
+                    "error": "Original file is not available on the server. "
+                    "Re-upload the lesson from the Upload tab."
+                },
+                status_code=404,
+            )
+        try:
+            LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+            canonical = LESSON_UPLOADS_DIR / f"{lesson_id}{file_path.suffix.lower()}"
+            if not canonical.is_file():
+                shutil.copy2(file_path, canonical)
+                db_supabase.update_lesson_storage_path(str(lesson_id), f"lessons/{canonical.name}")
+                file_path = canonical
+        except Exception as copy_err:
+            print(f"lesson file canonicalize: {copy_err}")
+        ext = file_path.suffix.lower().lstrip(".")
+        media_type = _LESSON_FILE_MEDIA.get(ext, "application/octet-stream")
+        filename = lesson.get("filename") or file_path.name
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            filename=filename,
+            content_disposition_type="inline",
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
 
 
 @app.delete("/lessons/{lesson_id}")
@@ -1220,17 +1522,7 @@ async def upload_file(
     with open(temp_path, "wb") as f:
         f.write(raw)
 
-    text = ""
-    if file.filename.lower().endswith(".pdf"):
-        try:
-            reader = PdfReader(temp_path)
-            for page in reader.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    text += extracted + "\n"
-            text = text[:3000]
-        except Exception:
-            text = ""
+    text = extract_lesson_text_from_file(Path(temp_path), file.filename)
 
     try:
         print("CALLING INSERT LESSON...")
@@ -1239,13 +1531,30 @@ async def upload_file(
             filename=file.filename,
             file_type=file_type,
             extracted_text=text,
-            storage_path=temp_path,
+            storage_path=None,
             teacher_id_number=teacher_id_number,
             subject_id=clean_subject_id,
         )
-        lid = lesson["id"]
-        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}")
-        return {"file_id": lid, "filename": file.filename}
+        lid = str(lesson["id"])
+        LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        stored_name = f"{lid}{ext}"
+        dest_path = LESSON_UPLOADS_DIR / stored_name
+        with open(dest_path, "wb") as out:
+            out.write(raw)
+        db_rel_path = f"lessons/{stored_name}"
+        try:
+            db_supabase.update_lesson_storage_path(lid, db_rel_path)
+        except Exception as storage_err:
+            print(f"update_lesson_storage_path: {storage_err}")
+        try:
+            if Path(temp_path).is_file() and Path(temp_path).resolve() != dest_path.resolve():
+                Path(temp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+        if clean_subject_id:
+            db_supabase.update_lesson_subject(lid, clean_subject_id)
+        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}, subject_id={clean_subject_id}")
+        return {"file_id": lid, "filename": file.filename, "subject_id": clean_subject_id}
     except Exception as e:
         import traceback
         print(f"UPLOAD FAILED: {e}")
@@ -1271,13 +1580,10 @@ async def generate_reviewer(body: dict):
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text = lesson.get("extracted_text") or ""
-    if not str(text).strip():
+    text, text_err = lesson_text_for_ai(lesson)
+    if text_err:
         print("AI GENERATION ERROR: empty extracted_text")
-        return JSONResponse(
-            {"error": "No text extracted from this file. Use a PDF with selectable text, or another file."},
-            status_code=400,
-        )
+        return JSONResponse({"error": text_err}, status_code=400)
 
     source = str(text).replace("\r\n", "\n").replace("\r", "\n")
     if len(source) > REVIEWER_SOURCE_MAX_CHARS:
@@ -1329,13 +1635,10 @@ async def generate_question(body: dict):
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text = lesson.get("extracted_text") or ""
-    if not str(text).strip():
+    text, text_err = lesson_text_for_ai(lesson)
+    if text_err:
         print("AI GENERATION ERROR: empty extracted_text")
-        return JSONResponse(
-            {"error": "No text extracted from this file. Use a PDF with selectable text."},
-            status_code=400,
-        )
+        return JSONResponse({"error": text_err}, status_code=400)
 
     quiz_count = body.get("quiz_count", 1)
     if not isinstance(quiz_count, int) or quiz_count < 1:
@@ -1418,14 +1721,11 @@ async def generate_activities(body: dict):
         print(f"[DEBUG] Lesson not found for file_id: {file_id}")
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text = lesson.get("extracted_text") or ""
+    text, text_err = lesson_text_for_ai(lesson)
     print(f"[DEBUG] Extracted text length: {len(text)}")
-    if not str(text).strip():
-        print(f"[DEBUG] No extracted text found")
-        return JSONResponse(
-            {"error": "No text extracted from this file. Use a PDF with selectable text."},
-            status_code=400,
-        )
+    if text_err:
+        print("[DEBUG] No extracted text found")
+        return JSONResponse({"error": text_err}, status_code=400)
 
     activity_type = (body.get("activity_type") or "essay").strip().lower()
     count = body.get("count", 5)
@@ -2250,6 +2550,7 @@ async def submit_activity_endpoint(
 
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (UPLOADS_DIR / "immersion").mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 

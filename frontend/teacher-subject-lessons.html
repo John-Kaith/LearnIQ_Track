@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subject lessons | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css?v=2026051618" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js?v=2026051618" defer></script>
+</head>
+<body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
+        <a class="active" href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
+        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="teacher-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header teacher-subject-lessons-header">
+        <a href="teacher-subjects.html" class="admin-subjects-back-link teacher-subject-back-link" id="teacher-subject-back-link">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to My Subjects
+        </a>
+        <div class="panel-title">
+          <h1 id="teacher-subject-page-title">Subject lessons</h1>
+          <p id="teacher-subject-page-subtitle">Upload and manage lessons for this subject only.</p>
+        </div>
+        <div id="teacher-subject-page-join" class="teacher-subject-page-join" hidden></div>
+      </section>
+
+      <section class="stats-grid teacher-subject-stats">
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
+          <div>
+            <span class="small-note">Lessons in this subject</span>
+            <strong class="metric-value" id="teacher-stat-lessons">0</strong>
+            <span class="metric-note" id="teacher-stat-lessons-note">Upload your first lesson in the Upload tab</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-eye"></i></div>
+          <div>
+            <span class="small-note">Published</span>
+            <strong class="metric-value" id="teacher-stat-published">0</strong>
+            <span class="metric-note" id="teacher-stat-published-note">Visible to enrolled students</span>
+          </div>
+        </article>
+        <article class="glass-card stat-card">
+          <div class="metric-icon"><i class="fa-solid fa-key"></i></div>
+          <div>
+            <span class="small-note">Class code</span>
+            <strong class="metric-value teacher-subject-code-stat" id="teacher-stat-join-code">—</strong>
+            <span class="metric-note" id="teacher-stat-join-note">Share with students to join</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid teacher-subject-lessons-grid">
+        <article class="glass-card content-card teacher-subject-workspace">
+          <div class="workspace-tabs" role="tablist" aria-label="Subject lesson sections">
+            <button type="button" class="workspace-tab is-active" data-teacher-subject-tab="upload" role="tab" aria-selected="true" aria-controls="teacher-subject-panel-upload" id="teacher-subject-tab-upload">
+              <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload lesson
+            </button>
+            <button type="button" class="workspace-tab" data-teacher-subject-tab="lessons" role="tab" aria-selected="false" aria-controls="teacher-subject-panel-lessons" id="teacher-subject-tab-lessons">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i> Unpublished lessons
+              <span class="users-tab-count" id="teacher-subject-tab-count-lessons">0</span>
+            </button>
+            <button type="button" class="workspace-tab" data-teacher-subject-tab="published" role="tab" aria-selected="false" aria-controls="teacher-subject-panel-published" id="teacher-subject-tab-published">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i> Published lessons
+              <span class="users-tab-count" id="teacher-subject-tab-count-published">0</span>
+            </button>
+          </div>
+
+          <div id="teacher-subject-panel-upload" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-upload">
+            <p class="content-subtitle teacher-subject-panel-intro">Files you upload here are saved under <strong id="teacher-subject-upload-label">this subject</strong>.</p>
+            <form id="upload-form" class="upload-form teacher-subject-upload-form upload-box" autocomplete="off">
+              <div class="file-input-wrapper">
+                <input type="file" id="file-input" accept=".pdf,.ppt,.pptx" required aria-label="Select lesson file" />
+                <label for="file-input" class="file-input-label">
+                  <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                  <span id="file-input-text">Choose PDF or PPT file</span>
+                </label>
+                <button type="button" class="file-clear-btn" id="file-clear-btn" hidden aria-label="Clear selected file">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="teacher-subject-upload-actions">
+                <button type="submit" class="btn btn-primary" id="upload-btn">
+                  <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload
+                </button>
+              </div>
+              <p class="file-meta small-note" id="file-meta">No file selected yet.</p>
+            </form>
+          </div>
+
+          <div id="teacher-subject-panel-lessons" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-lessons" hidden>
+            <p class="content-subtitle teacher-subject-panel-intro">Unpublished files for this subject. Publish when students should see them.</p>
+            <div class="lesson-list teacher-lesson-grid" id="recent-lessons-list">
+              <p class="small-note">Loading lessons…</p>
+            </div>
+          </div>
+
+          <div id="teacher-subject-panel-published" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-published" hidden>
+            <p class="content-subtitle teacher-subject-panel-intro">Published files for this subject. Students can open these in My lesson.</p>
+            <div class="published-lessons teacher-lesson-grid" id="published-lessons-list">
+              <p class="small-note">Loading published lessons…</p>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

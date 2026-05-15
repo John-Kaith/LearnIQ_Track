@@ -2464,6 +2464,177 @@ body.teacher-learniq-page #published-lessons-list {
   border-bottom-color: rgba(96, 165, 250, 0.45);
 }
 
+/* Teacher stats-only dashboard (overview template) */
+.teacher-stats-dashboard-page .teacher-stats-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-updated {
+  margin: -0.35rem 0 0.85rem;
+  opacity: 0.75;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.teacher-stats-dashboard-page .teacher-stat-kpi {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stat-kpi .metric-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(139, 92, 246, 0.35));
+  color: #e2e8f0;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-main-grid {
+  align-items: start;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-panel {
+  padding: 1.15rem 1.2rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-metric-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 1.1rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-metric-block {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.teacher-stats-dashboard-page .teacher-stats-big {
+  display: block;
+  font-size: 1.65rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0.15rem;
+  line-height: 1.2;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-progress-wrap {
+  margin-top: 0.25rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-highlight-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-actions {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-card i {
+  grid-row: 1 / span 2;
+  font-size: 1.15rem;
+  color: #93c5fd;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-card span {
+  font-weight: 600;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-card small {
+  grid-column: 2;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-quick-card:hover {
+  border-color: rgba(139, 92, 246, 0.45);
+  transform: translateY(-1px);
+}
+
+.teacher-stats-dashboard-page .teacher-stats-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teacher-stats-dashboard-page .teacher-stats-activity-list li {
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  line-height: 1.45;
+}
+
+html[data-theme="light"] .teacher-stats-dashboard-page .teacher-stats-metric-block,
+html[data-theme="light"] .teacher-stats-dashboard-page .teacher-stats-quick-card,
+html[data-theme="light"] .teacher-stats-dashboard-page .teacher-stats-activity-list li {
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 1100px) {
+  .teacher-stats-dashboard-page .teacher-stats-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .teacher-stats-dashboard-page .teacher-stats-kpi-grid,
+  .teacher-stats-dashboard-page .teacher-stats-metric-row,
+  .teacher-stats-dashboard-page .teacher-stats-highlight-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* LearnIQ dashboard only: keep activity row in three columns (same cards as rest of app) */
 .learniq-dashboard-page #student-learning-block .progress-stats {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3276,6 +3447,10 @@ html[data-theme="light"] .admin-subject-card-actions .btn-danger:hover {
   margin-top: 0.75rem;
 }
 
+.teacher-subjects-page .lesson-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
 .lesson-card {
   display: grid;
   grid-template-columns: 44px 1fr;
@@ -3383,27 +3558,140 @@ html[data-theme="light"] .admin-subject-card-actions .btn-danger:hover {
   --subject-color: #60a5fa;
 }
 
-/* Teacher My Subjects: compact actions (Upload / Open / Delete) — base .lesson-card forces full-width large .btn */
-.teacher-subjects-page .lesson-card .lesson-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: center;
-  justify-content: center;
+/* Teacher My Subjects — card layout & actions */
+.teacher-subjects-page .lesson-card {
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
 }
 
-.teacher-subjects-page .lesson-card .lesson-actions .btn {
-  width: auto;
-  flex: 0 1 auto;
-  min-width: 0;
-  padding: 0.42rem 0.72rem;
+.teacher-subjects-page .lesson-card-tagline {
+  margin-top: 0.4rem;
+  font-weight: 500;
+  font-size: 0.86rem;
+  color: rgba(226, 232, 240, 0.72);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.teacher-subjects-page .lesson-card .lesson-actions.teacher-subject-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.teacher-subjects-page .teacher-subject-open-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.teacher-subjects-page .teacher-subject-secondary-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.teacher-subjects-page .teacher-subject-secondary-actions .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 0.48rem 0.65rem;
   border-radius: 10px;
   font-size: 0.78rem;
-  line-height: 1.25;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.teacher-subjects-page .teacher-subject-delete-trigger {
+  min-width: 2.75rem;
+  padding-left: 0.55rem;
+  padding-right: 0.55rem;
+}
+
+.teacher-subjects-page .teacher-subject-delete-trigger .btn-label,
+.teacher-subjects-page .teacher-subject-upload-trigger .btn-label {
+  display: none;
 }
 
 .teacher-subjects-page .lesson-card .lesson-actions .btn i {
-  font-size: 0.85em;
+  font-size: 0.9em;
+}
+
+/* Join code: full-width code, then Copy | Regenerate */
+.teacher-subjects-page .teacher-subject-join-code {
+  margin: 0.65rem 0 0;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.teacher-subjects-page .subject-join-code-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  margin: 0;
+}
+
+.teacher-subjects-page .subject-join-code-value {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.5rem 0.65rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.teacher-subjects-page .subject-join-code-empty {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 0.82rem;
+  color: rgba(148, 163, 184, 0.75);
+  font-style: italic;
+  padding: 0.35rem 0;
+}
+
+.teacher-subjects-page .subject-join-code-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.teacher-subjects-page .subject-join-code-actions .btn {
+  width: 100% !important;
+  justify-content: center;
+  padding: 0.42rem 0.5rem;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  gap: 0.35rem;
+}
+
+html[data-theme="light"] .teacher-subjects-page .teacher-subject-join-code {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+html[data-theme="light"] .teacher-subjects-page .lesson-card-tagline {
+  color: rgba(15, 23, 42, 0.65);
 }
 
 .panel-header-actions {
@@ -3525,6 +3813,414 @@ html[data-theme="light"] .add-subject-error {
   color: #b91c1c;
   background: rgba(220, 38, 38, 0.08);
   border-color: rgba(220, 38, 38, 0.25);
+}
+
+.join-subject-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  max-width: 36rem;
+}
+
+.join-subject-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.join-subject-form-row .join-code-field {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.join-subject-form-row .join-submit-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0.65rem 1.15rem;
+  min-height: 2.65rem;
+}
+
+.join-code-input {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.subjects-page .student-join-hero {
+  display: block !important;
+  border-color: rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12) inset;
+}
+
+.subjects-page .student-join-hero-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.subjects-page .student-join-hero-icon {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(96, 165, 250, 0.18);
+  color: #93c5fd;
+  font-size: 1.1rem;
+}
+
+.subjects-page .student-join-hero h3 {
+  margin: 0 0 0.2rem;
+}
+
+html[data-theme="light"] .subjects-page .student-join-hero {
+  border-color: rgba(37, 99, 235, 0.25);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08) inset;
+}
+
+html[data-theme="light"] .subjects-page .student-join-hero-icon {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+@media (max-width: 520px) {
+  .join-subject-form-row .join-submit-btn {
+    width: 100%;
+  }
+}
+
+/* Teacher: per-subject lesson workspace */
+.teacher-subject-lessons-page .teacher-subject-back-link {
+  margin-bottom: 0.65rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-page-join {
+  margin-top: 0.85rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-page-join-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.teacher-subject-lessons-page .teacher-subject-code-stat {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  letter-spacing: 0.08em;
+  font-size: 1.05rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-upload-card .upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-upload-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.teacher-subject-lessons-page .teacher-subject-upload-actions .btn {
+  width: auto;
+  min-width: 12rem;
+  justify-content: center;
+}
+
+.teacher-subject-lessons-page .teacher-subject-upload-head {
+  margin-bottom: 0.85rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-lessons-grid {
+  grid-template-columns: 1fr;
+}
+
+.teacher-subject-lessons-page .teacher-subject-workspace {
+  padding: 1.15rem 1.25rem 1.35rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-workspace .workspace-tabs {
+  margin-top: 0;
+  margin-bottom: 0.15rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-tab-panel {
+  margin-top: 0.85rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-panel-intro {
+  margin: 0 0 0.9rem;
+}
+
+.teacher-subject-lessons-page .teacher-subject-workspace .workspace-tab i {
+  margin-right: 0.35rem;
+  opacity: 0.9;
+}
+
+html[data-theme="light"] .teacher-subject-lessons-page .teacher-subject-page-join-inner {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+/* Subject lessons: full-width rows (not 2-column cards) */
+.teacher-subject-lessons-page .teacher-lesson-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+body.teacher-subject-lessons-page.teacher-learniq-page #recent-lessons-list,
+body.teacher-subject-lessons-page.teacher-learniq-page #published-lessons-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
+  grid-template-columns: none !important;
+  width: 100%;
+}
+
+body.teacher-subject-lessons-page.teacher-learniq-page #recent-lessons-list > .lesson-item,
+body.teacher-subject-lessons-page.teacher-learniq-page #recent-lessons-list > .teacher-subject-orphan-item,
+body.teacher-subject-lessons-page.teacher-learniq-page #published-lessons-list > .lesson-item,
+body.teacher-subject-lessons-page.teacher-learniq-page #published-lessons-list > .published-lesson {
+  width: 100%;
+  max-width: none;
+}
+
+/* Subject page: hide legacy published card innards if any slip through */
+.teacher-subject-lessons-page #published-lessons-list .published-lesson .lesson-header,
+.teacher-subject-lessons-page #published-lessons-list .published-lesson .lesson-stats {
+  display: none;
+}
+
+.teacher-subject-lessons-page #published-lessons-list .published-lesson {
+  flex-direction: row;
+  align-items: center;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .lesson-item,
+.teacher-subject-lessons-page .teacher-lesson-grid .published-lesson,
+.teacher-subject-lessons-page .teacher-lesson-grid .teacher-subject-orphan-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .lesson-info,
+.teacher-subject-lessons-page .teacher-lesson-grid .published-lesson .lesson-header {
+  flex: 1;
+  min-width: 0;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .published-lesson .lesson-header {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .lesson-info h4,
+.teacher-subject-lessons-page .teacher-lesson-grid .published-lesson h4 {
+  margin: 0 0 0.2rem;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .lesson-actions {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  width: auto;
+  margin-top: 0;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid .published-lesson .lesson-stats {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.teacher-subject-lessons-page .teacher-lesson-grid > p.small-note:only-child {
+  text-align: left;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .teacher-subject-lessons-page .teacher-lesson-grid .lesson-item,
+  .teacher-subject-lessons-page .teacher-lesson-grid .published-lesson,
+  .teacher-subject-lessons-page .teacher-lesson-grid .teacher-subject-orphan-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .teacher-subject-lessons-page .teacher-lesson-grid .lesson-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+html[data-theme="light"] .teacher-subject-lessons-page .teacher-lesson-grid .lesson-item,
+html[data-theme="light"] .teacher-subject-lessons-page .teacher-lesson-grid .published-lesson,
+html[data-theme="light"] .teacher-subject-lessons-page .teacher-lesson-grid .teacher-subject-orphan-item {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+/* Teacher overview dashboard (generic stats, not lesson lists) */
+.teacher-overview-page .teacher-overview-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.teacher-overview-page .teacher-overview-main-grid {
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: start;
+}
+
+.teacher-overview-page .teacher-overview-panel {
+  padding: 1.15rem 1.25rem;
+}
+
+.teacher-overview-pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.1rem;
+}
+
+.teacher-overview-pipeline-item {
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.teacher-overview-pipeline-item strong {
+  display: block;
+  font-size: 1.35rem;
+  margin: 0.2rem 0 0.15rem;
+  line-height: 1.2;
+}
+
+.teacher-overview-publish-bar {
+  margin-top: 0.25rem;
+}
+
+.teacher-overview-insights {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teacher-overview-insight {
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.35);
+  line-height: 1.45;
+}
+
+.teacher-overview-insight a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.teacher-overview-insight a:hover {
+  text-decoration: underline;
+}
+
+.teacher-overview-insight-warn {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.teacher-overview-insight-ok {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.06);
+}
+
+html[data-theme="light"] .teacher-overview-pipeline-item,
+html[data-theme="light"] .teacher-overview-insight {
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 1100px) {
+  .teacher-overview-page .teacher-overview-kpi-grid,
+  .teacher-overview-pipeline-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-overview-page .teacher-overview-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .teacher-overview-page .teacher-overview-kpi-grid,
+  .teacher-overview-pipeline-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subject-join-code-block {
+  margin: 0.65rem 0 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.subject-join-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.subject-join-code-value {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+
+html[data-theme="light"] .subject-join-code-value {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: var(--text);
+}
+
+.content-card-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .upload-subject-field {
@@ -5862,6 +6558,74 @@ html[data-theme="light"] .learniq-dashboard-page .overview-item:hover {
   margin-bottom: 0.5rem;
   color: var(--text);
   font-weight: 500;
+}
+
+/* Student My Lesson — quiz choices (override global input { width: 100% }) */
+#student-quiz-body .student-quiz-question {
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+#student-quiz-body .student-quiz-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#student-quiz-body .student-quiz-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 400;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+#student-quiz-body .student-quiz-choice:has(input:checked) {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+#student-quiz-body .student-quiz-choice input[type="radio"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  min-width: 1.125rem;
+  min-height: 1.125rem;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  align-self: center;
+  accent-color: var(--primary-strong);
+  cursor: pointer;
+}
+
+#student-quiz-body .student-quiz-choice-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+#student-quiz-body .student-quiz-choice-letter {
+  font-weight: 600;
+  margin-right: 0.15rem;
+}
+
+html[data-theme="light"] #student-quiz-body .student-quiz-choice {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+html[data-theme="light"] #student-quiz-body .student-quiz-choice:has(input:checked) {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.35);
 }
 
 .auth-form input,

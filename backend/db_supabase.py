@@ -1,9 +1,13 @@
 """Small Supabase helpers for lessons and related tables (beginner-friendly)."""
 from __future__ import annotations
 
+import re
+import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 from supabase_client import supabase
 
@@ -307,6 +311,16 @@ def insert_lesson(
     lesson = res.data[0]
     lid = lesson["id"]
     print(f"  Lesson inserted with ID: {lid}")
+    if subject_id:
+        try:
+            update_lesson_subject(str(lid), str(subject_id))
+            lesson["subject_id"] = subject_id
+        except Exception as link_err:
+            print(f"  post-insert subject link failed: {link_err}")
+            raise RuntimeError(
+                "Lesson was saved but could not be linked to the subject. "
+                "Run backend/migrations/lessons_subject_id.sql in Supabase, then try again."
+            ) from link_err
     _sb().table("lesson_content").insert({"lesson_id": lid, "reviewer": None, "quiz": [], "activities": None}).execute()
     return lesson
 
@@ -776,9 +790,80 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
             "subject_id": sid_key,
             "subject_name": (subject or {}).get("name") or "",
             "subject_color": (subject or {}).get("color") or "",
+            "teacher_id_number": (clean.get("teacher_id_number") or "").strip(),
         })
 
     return lessons
+
+
+def _serialize_subject_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id")) if row.get("id") is not None else None,
+        "name": (row.get("name") or "").strip(),
+        "description": row.get("description") or "",
+        "color": row.get("color") or "",
+        "created_at": row.get("created_at"),
+        "join_code": (row.get("join_code") or "").strip() or None,
+        "created_by_teacher_id_number": (row.get("created_by_teacher_id_number") or "").strip() or None,
+    }
+
+
+def _join_code_prefix_from_name(name: str) -> str:
+    letters = re.sub(r"[^A-Za-z]", "", name or "")[:3].upper()
+    return letters if len(letters) >= 2 else "CLS"
+
+
+def _generate_join_code_candidate(name: str) -> str:
+    prefix = _join_code_prefix_from_name(name)
+    suffix = "".join(secrets.choice(JOIN_CODE_CHARS) for _ in range(4))
+    return f"{prefix}-{suffix}".upper()
+
+
+def _allocate_unique_join_code(name: str, max_attempts: int = 12) -> str:
+    for _ in range(max_attempts):
+        code = _generate_join_code_candidate(name)
+        if not get_subject_by_join_code(code):
+            return code
+    raise RuntimeError("Could not generate a unique join code. Please try again.")
+
+
+def get_subject_by_join_code(join_code: str) -> dict[str, Any] | None:
+    code = (join_code or "").strip().upper()
+    if not code:
+        return None
+    try:
+        res = (
+            _sb()
+            .table("subjects")
+            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
+            .eq("join_code", code)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return _serialize_subject_row(rows[0]) if rows else None
+    except Exception as e:
+        print(f"get_subject_by_join_code: {e}")
+        return None
+
+
+def get_subject_row(subject_id: str) -> dict[str, Any] | None:
+    if not subject_id:
+        return None
+    try:
+        res = (
+            _sb()
+            .table("subjects")
+            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
+            .eq("id", subject_id)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return _serialize_subject_row(rows[0]) if rows else None
+    except Exception as e:
+        print(f"get_subject_row: {e}")
+        return None
 
 
 def list_subjects() -> list[dict[str, Any]]:
@@ -787,29 +872,58 @@ def list_subjects() -> list[dict[str, Any]]:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, description, color, created_at")
+            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
             .order("name")
             .execute()
         )
-        rows = res.data or []
-        out: list[dict[str, Any]] = []
-        for r in rows:
-            out.append(
-                {
-                    "id": str(r.get("id")) if r.get("id") is not None else None,
-                    "name": (r.get("name") or "").strip(),
-                    "description": r.get("description") or "",
-                    "color": r.get("color") or "",
-                    "created_at": r.get("created_at"),
-                }
-            )
-        return out
+        return [_serialize_subject_row(r) for r in (res.data or [])]
     except Exception as e:
         print(f"list_subjects: {e}")
         return []
 
 
-def create_subject(name: str, description: str | None = None, color: str | None = None) -> dict[str, Any]:
+def list_subjects_for_teacher_owner(teacher_id_number: str) -> list[dict[str, Any]]:
+    """Subjects owned by this teacher, plus legacy rows they have lessons under (no owner yet)."""
+    tid = (teacher_id_number or "").strip()
+    if not tid:
+        return []
+    owned: dict[str, dict[str, Any]] = {}
+    for s in list_subjects():
+        owner = (s.get("created_by_teacher_id_number") or "").strip()
+        if owner == tid:
+            owned[str(s["id"])] = s
+    try:
+        res = (
+            _sb()
+            .table("lessons")
+            .select("subject_id")
+            .eq("teacher_id_number", tid)
+            .execute()
+        )
+        legacy_ids = {
+            str(r["subject_id"])
+            for r in (res.data or [])
+            if r.get("subject_id") is not None
+        }
+    except Exception as e:
+        print(f"list_subjects_for_teacher_owner lessons: {e}")
+        legacy_ids = set()
+    for s in list_subjects():
+        sid = str(s.get("id") or "")
+        if not sid or sid in owned:
+            continue
+        owner = (s.get("created_by_teacher_id_number") or "").strip()
+        if not owner and sid in legacy_ids:
+            owned[sid] = s
+    return sorted(owned.values(), key=lambda x: (x.get("name") or "").lower())
+
+
+def create_subject(
+    name: str,
+    description: str | None = None,
+    color: str | None = None,
+    created_by_teacher_id_number: str | None = None,
+) -> dict[str, Any]:
     """Insert a new subject row and return it."""
     payload: dict[str, Any] = {"name": (name or "").strip()}
     if not payload["name"]:
@@ -818,12 +932,49 @@ def create_subject(name: str, description: str | None = None, color: str | None 
         payload["description"] = str(description).strip() or None
     if color is not None:
         payload["color"] = str(color).strip() or None
+    owner = (created_by_teacher_id_number or "").strip()
+    if owner:
+        payload["created_by_teacher_id_number"] = owner
+        payload["join_code"] = _allocate_unique_join_code(payload["name"])
     try:
         res = _sb().table("subjects").insert(payload).execute()
         rows = res.data or []
-        return rows[0] if rows else payload
+        return _serialize_subject_row(rows[0]) if rows else _serialize_subject_row(payload)
     except Exception as e:
         print(f"create_subject: {e}")
+        raise
+
+
+def regenerate_subject_join_code(subject_id: str, teacher_id_number: str) -> dict[str, Any]:
+    """Issue a new join code for a subject; existing enrollments are unchanged."""
+    tid = (teacher_id_number or "").strip()
+    if not tid:
+        raise ValueError("teacher_id_number is required.")
+    subject = get_subject_row(subject_id)
+    if not subject:
+        raise LookupError("Subject not found.")
+    owner = (subject.get("created_by_teacher_id_number") or "").strip()
+    if owner and owner != tid:
+        raise PermissionError("Only the subject owner can regenerate the join code.")
+    new_code = _allocate_unique_join_code(subject.get("name") or "CLS")
+    try:
+        res = (
+            _sb()
+            .table("subjects")
+            .update({"join_code": new_code})
+            .eq("id", subject_id)
+            .execute()
+        )
+        rows = res.data or []
+        if rows:
+            return _serialize_subject_row(rows[0])
+        subject["join_code"] = new_code
+        if not owner:
+            _sb().table("subjects").update({"created_by_teacher_id_number": tid}).eq("id", subject_id).execute()
+            subject["created_by_teacher_id_number"] = tid
+        return subject
+    except Exception as e:
+        print(f"regenerate_subject_join_code: {e}")
         raise
 
 
@@ -944,6 +1095,25 @@ def update_lesson_subject(lesson_id: str, subject_id: str | None) -> None:
         _sb().table("lessons").update({"subject_id": subject_id}).eq("id", lesson_id).execute()
     except Exception as e:
         print(f"update_lesson_subject: {e}")
+        raise
+
+
+def update_lesson_storage_path(lesson_id: str, storage_path: str) -> None:
+    """Persist where the uploaded lesson file is stored on disk."""
+    try:
+        _sb().table("lessons").update({"storage_path": storage_path}).eq("id", lesson_id).execute()
+    except Exception as e:
+        print(f"update_lesson_storage_path: {e}")
+        raise
+
+
+def update_lesson_extracted_text(lesson_id: str, extracted_text: str) -> None:
+    """Save text extracted from the uploaded file (used for AI generation)."""
+    try:
+        snippet = str(extracted_text or "")[:3000]
+        _sb().table("lessons").update({"extracted_text": snippet}).eq("id", lesson_id).execute()
+    except Exception as e:
+        print(f"update_lesson_extracted_text: {e}")
         raise
 
 
@@ -1200,6 +1370,21 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
         "active_students_note": "Students who took quizzes on your lessons",
         "avg_quiz_score_pct": None,
         "avg_quiz_note": "No quiz attempts on your lessons yet",
+        "lessons_published": 0,
+        "lessons_published_note": "Nothing published yet",
+        "subjects_count": 0,
+        "subjects_count_note": "Create a subject in My Subjects",
+        "enrolled_students": 0,
+        "enrolled_students_note": "Students joined your subjects",
+        "draft_lessons": 0,
+        "draft_lessons_note": "Not published yet",
+        "publish_rate_pct": None,
+        "publish_rate_note": "Published vs total uploads",
+        "lessons_with_ai": 0,
+        "lessons_with_ai_note": "Lessons with AI reviewer or quiz",
+        "quiz_attempts_total": 0,
+        "quiz_attempts_this_month": 0,
+        "quiz_attempts_note": "On your lesson quizzes",
         "student_performance": dict(perf_empty),
     }
 
@@ -1223,14 +1408,90 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
             this_month += 1
 
     n_lessons = len(lessons)
+    n_published = sum(1 for row in lessons if row.get("is_published"))
+    n_draft = max(0, n_lessons - n_published)
+    ai_ready = 0
+    for row in lessons:
+        lc = row.get("lesson_content")
+        if isinstance(lc, list):
+            lc = lc[0] if lc else {}
+        if not isinstance(lc, dict):
+            lc = {}
+        quiz = lc.get("quiz") or []
+        if lc.get("reviewer") or (isinstance(quiz, list) and len(quiz) > 0):
+            ai_ready += 1
     base["lessons_uploaded"] = n_lessons
     base["lessons_this_month"] = this_month
+    base["lessons_published"] = n_published
+    base["draft_lessons"] = n_draft
+    base["lessons_with_ai"] = ai_ready
+    if n_lessons > 0:
+        base["publish_rate_pct"] = round(100.0 * float(n_published) / float(n_lessons), 1)
+        base["publish_rate_note"] = f"{n_published} of {n_lessons} lessons live for students"
+        base["draft_lessons_note"] = (
+            "All published" if n_draft == 0 else f"{n_draft} waiting to publish"
+        )
+        base["lessons_with_ai_note"] = (
+            f"{ai_ready} with AI content"
+            if ai_ready
+            else "Generate AI from a subject lesson"
+        )
+    else:
+        base["publish_rate_note"] = "Upload from My Subjects"
+        base["draft_lessons_note"] = "No drafts yet"
+        base["lessons_with_ai_note"] = "No AI packs yet"
     if n_lessons == 0:
-        base["lessons_uploaded_note"] = "Upload your first lesson"
+        base["lessons_uploaded_note"] = "Create a subject and upload from My Subjects"
+        base["lessons_published_note"] = "Nothing published yet"
     elif this_month > 0:
-        base["lessons_uploaded_note"] = f"+{this_month} this month"
+        base["lessons_uploaded_note"] = f"+{this_month} uploaded this month"
+        base["lessons_published_note"] = (
+            f"{n_published} of {n_lessons} visible to students"
+            if n_published < n_lessons
+            else "All uploads are published"
+        )
     else:
         base["lessons_uploaded_note"] = "No uploads this month"
+        base["lessons_published_note"] = (
+            f"{n_published} published" if n_published else "Publish from a subject page"
+        )
+
+    owned: list[dict[str, Any]] = []
+    try:
+        owned = list_subjects_for_teacher_owner(tid)
+        base["subjects_count"] = len(owned)
+        base["subjects_count_note"] = (
+            "Open a subject to upload lessons"
+            if not owned
+            else f"{len(owned)} class{'es' if len(owned) != 1 else ''} you manage"
+        )
+        subject_ids = [str(s["id"]) for s in owned if s.get("id")]
+        if subject_ids:
+            try:
+                eres = (
+                    _sb()
+                    .table("enrollments")
+                    .select("student_id")
+                    .in_("subject_id", subject_ids)
+                    .execute()
+                )
+                enrolled = {
+                    str(r["student_id"])
+                    for r in (eres.data or [])
+                    if r.get("student_id") is not None
+                }
+                base["enrolled_students"] = len(enrolled)
+                base["enrolled_students_note"] = (
+                    "Across all your subjects"
+                    if enrolled
+                    else "Share join codes so students can enroll"
+                )
+            except Exception as e:
+                print(f"get_teacher_learniq_dashboard_stats enrollments: {e}")
+    except Exception as e:
+        print(f"get_teacher_learniq_dashboard_stats subjects: {e}")
+        base["subjects_count"] = 0
+        base["subjects_count_note"] = "—"
 
     if not lesson_ids:
         return base
@@ -1243,6 +1504,18 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
 
     rows = att_res.data or []
     relevant = [r for r in rows if str(r.get("lesson_id") or "") in lesson_ids]
+    base["quiz_attempts_total"] = len(relevant)
+    base["quiz_attempts_this_month"] = sum(
+        1
+        for r in relevant
+        if (_quiz_attempt_ts_utc(r) is not None and _quiz_attempt_ts_utc(r) >= month_start)
+    )
+    if not relevant:
+        base["quiz_attempts_note"] = "Students have not taken your quizzes yet"
+    elif base["quiz_attempts_this_month"]:
+        base["quiz_attempts_note"] = f"{base['quiz_attempts_this_month']} attempts this month"
+    else:
+        base["quiz_attempts_note"] = "No quiz attempts this month yet"
     if not relevant:
         base["active_students_note"] = "No quiz attempts yet"
         return base
@@ -2140,6 +2413,146 @@ def upsert_enrollment(
     except Exception as e:
         print(f"upsert_enrollment: {e}")
         return None
+
+
+def student_enrollment_exists(
+    student_uuid: str,
+    subject_id: str,
+    grading_period_id: str | None,
+) -> bool:
+    if not student_uuid or not subject_id:
+        return False
+    try:
+        q = (
+            _sb()
+            .table("enrollments")
+            .select("id")
+            .eq("student_id", student_uuid)
+            .eq("subject_id", str(subject_id))
+        )
+        if grading_period_id:
+            q = q.eq("grading_period_id", grading_period_id)
+        res = q.limit(1).execute()
+        return bool(res.data)
+    except Exception as e:
+        print(f"student_enrollment_exists: {e}")
+        return False
+
+
+def _student_enrollment_access_map(
+    student_uuid: str,
+    grading_period_id: str | None,
+) -> dict[str, str | None]:
+    """Map subject_id -> teacher_id_number filter for published lessons (None = any teacher)."""
+    access: dict[str, str | None] = {}
+    for row in list_enrollments_for_student(student_uuid, grading_period_id):
+        sid = row.get("subject_id")
+        if not sid:
+            nested = row.get("subjects") or {}
+            sid = nested.get("id")
+        if not sid:
+            continue
+        key = str(sid)
+        tid = (row.get("teacher_id_number") or "").strip() or None
+        if key not in access:
+            access[key] = tid
+    return access
+
+
+def join_subject_by_code(student_uuid: str, join_code: str) -> dict[str, Any]:
+    """
+    Enroll a student using a subject join code.
+    Raises ValueError with user-facing messages for invalid / already enrolled.
+    """
+    if not student_uuid:
+        raise ValueError("Student not found.")
+    subject = get_subject_by_join_code(join_code)
+    if not subject or not subject.get("id"):
+        raise ValueError("Invalid subject code")
+    subject_id = str(subject["id"])
+    period = get_current_grading_period() or {}
+    period_id = period.get("id")
+    if not period_id:
+        raise ValueError("No grading period is configured. Ask your administrator.")
+    if student_enrollment_exists(student_uuid, subject_id, period_id):
+        raise ValueError("You are already enrolled in this subject")
+    teacher_id = (subject.get("created_by_teacher_id_number") or "").strip() or None
+    row = upsert_enrollment(
+        student_uuid=student_uuid,
+        subject_id=subject_id,
+        teacher_id_number=teacher_id,
+        grading_period_id=period_id,
+    )
+    if not row:
+        raise RuntimeError("Could not complete enrollment.")
+    return {"subject": subject, "enrollment": row}
+
+
+def list_enrolled_subjects_for_student(
+    student_uuid: str,
+    grading_period_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Subjects the student is enrolled in for the given (or current) grading period."""
+    if not student_uuid:
+        return []
+    period_id = grading_period_id
+    if not period_id:
+        cur = get_current_grading_period() or {}
+        period_id = cur.get("id")
+    pub_counts = count_published_lessons_by_subject()
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in list_enrollments_for_student(student_uuid, period_id):
+        nested = row.get("subjects") or {}
+        sid = row.get("subject_id") or nested.get("id")
+        if not sid:
+            continue
+        key = str(sid)
+        if key in seen:
+            continue
+        seen.add(key)
+        full = get_subject_row(key) or {
+            "id": key,
+            "name": nested.get("name") or "Subject",
+            "description": nested.get("description") or "",
+            "color": nested.get("color") or "",
+        }
+        full = dict(full)
+        full["published_lesson_count"] = pub_counts.get(key, 0)
+        out.append(full)
+    return sorted(out, key=lambda x: (x.get("name") or "").lower())
+
+
+def list_published_lessons_for_student(
+    student_uuid: str,
+    subject_id: str | None = None,
+    grading_period_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Published lessons limited to subjects the student is enrolled in."""
+    if not student_uuid:
+        return []
+    period_id = grading_period_id
+    if not period_id:
+        cur = get_current_grading_period() or {}
+        period_id = cur.get("id")
+    access = _student_enrollment_access_map(student_uuid, period_id)
+    if not access:
+        return []
+    lessons = list_published_lessons_with_content()
+    out: list[dict[str, Any]] = []
+    for lesson in lessons:
+        sid = lesson.get("subject_id")
+        if not sid or str(sid) not in access:
+            continue
+        required_teacher = access[str(sid)]
+        if required_teacher:
+            lesson_teacher = (lesson.get("teacher_id_number") or "").strip()
+            if lesson_teacher and lesson_teacher != required_teacher:
+                continue
+        if subject_id is not None and str(sid) != str(subject_id):
+            continue
+        out.append(lesson)
+    return out
 
 
 # ---------- Quiz / activity / attendance aggregations ----------

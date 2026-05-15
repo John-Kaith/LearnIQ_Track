@@ -96,6 +96,9 @@ alter table if exists public.attendance_logs
 alter table if exists public.journals
   add column if not exists attendance_id uuid references public.attendance_logs (id) on delete set null;
 
+alter table if exists public.lessons
+  add column if not exists subject_id uuid references public.subjects (id) on delete set null;
+
 -- Editable profile fields (bio, contact, avatar). Safe for existing installs.
 alter table if exists public.profiles
   add column if not exists bio text,
