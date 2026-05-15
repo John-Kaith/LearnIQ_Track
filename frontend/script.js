@@ -4024,6 +4024,27 @@ function viewTeacherLessonFile(lessonId) {
   window.open(teacherLessonFileViewUrl(id), "_blank", "noopener,noreferrer");
 }
 
+function studentLessonFileViewUrl(lessonId) {
+  const sid = getStudentIdNumberForApi();
+  const lid = encodeURIComponent(String(lessonId || "").trim());
+  const student = encodeURIComponent(String(sid || "").trim());
+  return apiUrl(`/student/lessons/${lid}/file?student_id_number=${student}`);
+}
+
+function viewStudentLessonFile(lessonId) {
+  const sid = getStudentIdNumberForApi();
+  if (!sid) {
+    showToast("Please sign in as a student to view lessons.", "error");
+    return;
+  }
+  const id = String(lessonId || "").trim();
+  if (!id) {
+    showToast("Missing lesson id.", "error");
+    return;
+  }
+  window.open(studentLessonFileViewUrl(id), "_blank", "noopener,noreferrer");
+}
+
 function teacherSubjectYourLessonActionsHtml(lesson) {
   const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
   const isPub = Boolean(lesson.is_published || lesson.published);
@@ -6926,6 +6947,7 @@ function renderLessonSelection() {
   lessons.forEach((lesson) => {
     const teacherName = lesson.teacher_name || lesson.teacher_id_number || "Teacher";
     const createdLabel = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "Unknown date";
+    const lid = String(lesson.file_id || "").replace(/'/g, "\\'");
     html += `
     <article class="lesson-card ${selectedLesson?.file_id === lesson.file_id ? 'selected' : ''}"
          data-lesson-id="${lesson.file_id}">
@@ -6940,8 +6962,9 @@ function renderLessonSelection() {
         <p class="lesson-card-tagline">AI Learning Workspace</p>
         <p class="lesson-card-features small-note">Review • Quiz • Activities</p>
       </div>
-      <div class="lesson-actions">
-        <button class="btn btn-primary btn-small" onclick="selectLessonById('${lesson.file_id}')">Open Workspace</button>
+      <div class="lesson-actions lesson-actions-split">
+        <button type="button" class="btn btn-secondary btn-small" onclick="event.stopPropagation(); viewStudentLessonFile('${lid}')">View</button>
+        <button type="button" class="btn btn-primary btn-small" onclick="event.stopPropagation(); selectLessonById('${lid}')">Open Workspace</button>
       </div>
     </article>
   `;

@@ -2523,6 +2523,27 @@ def list_enrolled_subjects_for_student(
     return sorted(out, key=lambda x: (x.get("name") or "").lower())
 
 
+def student_can_view_published_lesson(student_uuid: str, lesson: dict[str, Any]) -> bool:
+    """True when the lesson is published and the student is enrolled in its subject."""
+    if not student_uuid or not lesson:
+        return False
+    if not lesson.get("is_published"):
+        return False
+    period_id = None
+    cur = get_current_grading_period() or {}
+    period_id = cur.get("id")
+    access = _student_enrollment_access_map(student_uuid, period_id)
+    sid = lesson.get("subject_id")
+    if not sid or str(sid) not in access:
+        return False
+    required_teacher = access[str(sid)]
+    if required_teacher:
+        lesson_teacher = (lesson.get("teacher_id_number") or "").strip()
+        if lesson_teacher and lesson_teacher != required_teacher:
+            return False
+    return True
+
+
 def list_published_lessons_for_student(
     student_uuid: str,
     subject_id: str | None = None,

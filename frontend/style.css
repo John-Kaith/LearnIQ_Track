@@ -3367,6 +3367,62 @@ html[data-theme="light"] .profile-uuid {
   grid-template-columns: 1fr;
 }
 
+/* My lesson — published cards: pin action row to bottom so buttons align across the row; compact button height */
+.my-lesson-page #student-lesson-list.lesson-grid > .lesson-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.65rem 0.9rem;
+  padding: 1.05rem 1.05rem 0.8rem;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.my-lesson-page #student-lesson-list.lesson-grid > .lesson-card > .lesson-card-icon {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+}
+
+.my-lesson-page #student-lesson-list.lesson-grid > .lesson-card > .lesson-info {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  min-width: 0;
+  min-height: 0;
+}
+
+.my-lesson-page #student-lesson-list.lesson-grid > .lesson-card > .lesson-actions {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+}
+
+.my-lesson-page .lesson-card .lesson-actions.lesson-actions-split {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
+.my-lesson-page .lesson-card .lesson-actions.lesson-actions-split .btn {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  min-height: 2.125rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.15;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
 /* Admin subjects drill-down (Teachers → Subjects → Lessons) */
 .admin-subjects-back-link {
   align-items: center;

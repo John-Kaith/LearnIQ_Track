@@ -1,7 +1,10 @@
+import base64
 import json
 import os
+import re
 import shutil
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
@@ -125,6 +128,8 @@ def strip_outer_markdown_code_fence(text: str) -> str:
 
 
 REVIEWER_SOURCE_MAX_CHARS = 120_000
+LESSON_EXTRACT_MAX_CHARS = 120_000
+LESSON_VISION_MAX_SLIDES = 15
 
 REVIEWER_PROMPT_TEMPLATE = (
     "You are an experienced teacher writing a study reviewer for senior high school students.\n\n"
@@ -1197,6 +1202,102 @@ def _resolve_lesson_file_path(
     return None
 
 
+def _pptx_media_sort_key(name: str) -> tuple:
+    m = re.search(r"image(\d+)", name, re.I)
+    return (int(m.group(1)) if m else 0, name.lower())
+
+
+def _pptx_collect_shape_text(shape, text_parts: list[str]) -> None:
+    """Recursively collect text from shapes (groups, tables, text frames)."""
+    try:
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            for child in shape.shapes:
+                _pptx_collect_shape_text(child, text_parts)
+            return
+    except Exception:
+        pass
+
+    if getattr(shape, "has_table", False):
+        try:
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    block = (cell.text or "").strip()
+                    if block:
+                        text_parts.append(block)
+        except Exception:
+            pass
+        return
+
+    if getattr(shape, "has_text_frame", False):
+        block = (shape.text or "").strip()
+        if block:
+            text_parts.append(block)
+
+
+def _pptx_slide_images(file_path: Path, max_slides: int = LESSON_VISION_MAX_SLIDES) -> list[tuple[str, bytes]]:
+    """JPEG/PNG embedded in PPTX (common when slides are exported as pictures)."""
+    images: list[tuple[str, bytes]] = []
+    try:
+        with zipfile.ZipFile(file_path) as zf:
+            names = [
+                n
+                for n in zf.namelist()
+                if n.startswith("ppt/media/")
+                and n.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+            ]
+            names.sort(key=_pptx_media_sort_key)
+            for name in names[:max_slides]:
+                ext = Path(name).suffix.lower()
+                mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+                images.append((mime, zf.read(name)))
+    except Exception as e:
+        print(f"_pptx_slide_images: {e}")
+    return images
+
+
+def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]]) -> str:
+    """Use Gemini vision to read text from slide/page images (picture-only decks)."""
+    if not images or not API_KEY or not str(API_KEY).strip():
+        return ""
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash:generateContent?key={API_KEY}"
+    )
+    prompt = (
+        "These images are consecutive slides from a lesson presentation. "
+        "Extract ALL readable text in slide order. Use plain text only—keep headings, "
+        "bullets, and numbering. Separate slides with a blank line. "
+        "If a slide has no readable text, write [slide: no text]."
+    )
+    parts: list[dict] = [{"text": prompt}]
+    for mime, data in images:
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": mime,
+                    "data": base64.standard_b64encode(data).decode("ascii"),
+                }
+            }
+        )
+    try:
+        response = requests.post(
+            url,
+            json={"contents": [{"parts": parts}]},
+            timeout=180,
+        )
+        result = response.json()
+        if response.status_code != 200:
+            print(f"_gemini_ocr_lesson_images status {response.status_code}: {result}")
+            return ""
+        return (gemini_text_from_result(result) or "").strip()
+    except Exception as e:
+        print(f"_gemini_ocr_lesson_images: {e}")
+        return ""
+
+
 def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) -> str:
     """Pull plain text from PDF or PPTX for AI reviewer/quiz generation."""
     name = (filename or file_path.name or "").lower()
@@ -1218,11 +1319,7 @@ def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) 
             prs = Presentation(str(file_path))
             for slide in prs.slides:
                 for shape in slide.shapes:
-                    if not hasattr(shape, "text"):
-                        continue
-                    block = (shape.text or "").strip()
-                    if block:
-                        text_parts.append(block)
+                    _pptx_collect_shape_text(shape, text_parts)
                 if slide.has_notes_slide and slide.notes_slide and slide.notes_slide.notes_text_frame:
                     notes = (slide.notes_slide.notes_text_frame.text or "").strip()
                     if notes:
@@ -1233,13 +1330,28 @@ def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) 
         print("extract_lesson_text_from_file: legacy .ppt not supported; use .pptx or PDF")
 
     combined = "\n".join(text_parts).strip()
-    return combined[:3000] if combined else ""
+    if combined:
+        return combined[:LESSON_EXTRACT_MAX_CHARS]
+    return ""
 
 
-def lesson_text_for_ai(lesson: dict) -> tuple[str, str | None]:
+def extract_lesson_text_with_vision(file_path: Path, filename: str | None = None) -> str:
+    """OCR fallback for picture-only PPTX slides via Gemini vision."""
+    name = (filename or file_path.name or "").lower()
+    if not name.endswith(".pptx"):
+        return ""
+    images = _pptx_slide_images(file_path)
+    if not images:
+        return ""
+    print(f"extract_lesson_text_with_vision: {len(images)} slide image(s) from {file_path.name}")
+    ocr = _gemini_ocr_lesson_images(images)
+    return ocr[:LESSON_EXTRACT_MAX_CHARS] if ocr else ""
+
+
+def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> tuple[str, str | None]:
     """
     Text used for Gemini prompts. Re-extracts from disk when DB field is empty
-  (e.g. PPTX uploaded before pptx parsing existed).
+    (e.g. PPTX uploaded before pptx parsing existed).
     """
     existing = str(lesson.get("extracted_text") or "").strip()
     if existing:
@@ -1251,26 +1363,71 @@ def lesson_text_for_ai(lesson: dict) -> tuple[str, str | None]:
         lesson.get("storage_path"),
         lesson.get("filename"),
     )
-    if file_path:
-        fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
-        if fresh.strip():
-            try:
-                db_supabase.update_lesson_extracted_text(lid, fresh)
-            except Exception as e:
-                print(f"lesson_text_for_ai cache extract: {e}")
-            return fresh, None
-
     fn = (lesson.get("filename") or "").lower()
+
+    if not file_path:
+        if fn.endswith((".pptx", ".ppt", ".pdf")):
+            return "", (
+                "Lesson file is missing on the server. Please upload the presentation again from the subject page."
+            )
+        return "", "No lesson file found. Upload a PDF or PowerPoint (.pptx) first."
+
+    fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
+    if not fresh.strip() and allow_vision_fallback:
+        fresh = extract_lesson_text_with_vision(file_path, lesson.get("filename"))
+
+    if fresh.strip():
+        try:
+            db_supabase.update_lesson_extracted_text(lid, fresh)
+        except Exception as e:
+            print(f"lesson_text_for_ai cache extract: {e}")
+        return fresh, None
+
     if fn.endswith(".pptx") or fn.endswith(".ppt"):
         return "", (
-            "No readable text in this PowerPoint. Use slides with text boxes (not only pictures), "
-            "or save as PDF with selectable text and upload again."
+            "No readable text in this PowerPoint. Slides may be pictures only—we tried reading them "
+            "but found nothing usable. Re-save with editable text boxes, or export as PDF with selectable text."
         )
     if fn.endswith(".pdf"):
         return "", (
             "No text found in this PDF. Use a file with selectable/copyable text (not a scanned photo PDF)."
         )
     return "", "No text extracted from this file. Upload a PDF with selectable text or a PPTX with slide text."
+
+
+def _lesson_file_response(lesson_id: str, lesson: dict) -> FileResponse | JSONResponse:
+    """Stream lesson file inline when available on disk."""
+    file_path = _resolve_lesson_file_path(
+        str(lesson_id),
+        lesson.get("storage_path"),
+        lesson.get("filename"),
+    )
+    if not file_path:
+        return JSONResponse(
+            {
+                "error": "Original file is not available on the server. "
+                "Ask your teacher to re-upload the lesson."
+            },
+            status_code=404,
+        )
+    try:
+        LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        canonical = LESSON_UPLOADS_DIR / f"{lesson_id}{file_path.suffix.lower()}"
+        if not canonical.is_file():
+            shutil.copy2(file_path, canonical)
+            db_supabase.update_lesson_storage_path(str(lesson_id), f"lessons/{canonical.name}")
+            file_path = canonical
+    except Exception as copy_err:
+        print(f"lesson file canonicalize: {copy_err}")
+    ext = file_path.suffix.lower().lstrip(".")
+    media_type = _LESSON_FILE_MEDIA.get(ext, "application/octet-stream")
+    filename = lesson.get("filename") or file_path.name
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="inline",
+    )
 
 
 @app.get("/lessons/{lesson_id}/file")
@@ -1289,37 +1446,40 @@ def view_lesson_file(lesson_id: str, teacher_id_number: str = Query(...)):
         owner = (lesson.get("teacher_id_number") or "").strip()
         if owner and owner != tid:
             return JSONResponse({"error": "You can only view your own lessons."}, status_code=403)
-        file_path = _resolve_lesson_file_path(
-            str(lesson_id),
-            lesson.get("storage_path"),
-            lesson.get("filename"),
-        )
-        if not file_path:
+        return _lesson_file_response(str(lesson_id), lesson)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/lessons/{lesson_id}/file")
+def view_student_lesson_file(
+    lesson_id: str,
+    student_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
+):
+    """Stream a published lesson file for an enrolled student."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid, auth_err = resolve_student_id_number_or_403(
+        {"student_id_number": student_id_number},
+        authorization,
+    )
+    if auth_err is not None:
+        return auth_err
+    try:
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
+            return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        student_uuid = db_supabase.profile_uuid_for_id_number(sid)
+        if not student_uuid:
+            return JSONResponse({"error": "Student not found"}, status_code=404)
+        if not db_supabase.student_can_view_published_lesson(student_uuid, lesson):
             return JSONResponse(
-                {
-                    "error": "Original file is not available on the server. "
-                    "Re-upload the lesson from the Upload tab."
-                },
-                status_code=404,
+                {"error": "You do not have access to this lesson."},
+                status_code=403,
             )
-        try:
-            LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-            canonical = LESSON_UPLOADS_DIR / f"{lesson_id}{file_path.suffix.lower()}"
-            if not canonical.is_file():
-                shutil.copy2(file_path, canonical)
-                db_supabase.update_lesson_storage_path(str(lesson_id), f"lessons/{canonical.name}")
-                file_path = canonical
-        except Exception as copy_err:
-            print(f"lesson file canonicalize: {copy_err}")
-        ext = file_path.suffix.lower().lstrip(".")
-        media_type = _LESSON_FILE_MEDIA.get(ext, "application/octet-stream")
-        filename = lesson.get("filename") or file_path.name
-        return FileResponse(
-            path=str(file_path),
-            media_type=media_type,
-            filename=filename,
-            content_disposition_type="inline",
-        )
+        return _lesson_file_response(str(lesson_id), lesson)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1580,7 +1740,7 @@ async def generate_reviewer(body: dict):
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text, text_err = lesson_text_for_ai(lesson)
+    text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     if text_err:
         print("AI GENERATION ERROR: empty extracted_text")
         return JSONResponse({"error": text_err}, status_code=400)
@@ -1635,7 +1795,7 @@ async def generate_question(body: dict):
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text, text_err = lesson_text_for_ai(lesson)
+    text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     if text_err:
         print("AI GENERATION ERROR: empty extracted_text")
         return JSONResponse({"error": text_err}, status_code=400)
@@ -1721,7 +1881,7 @@ async def generate_activities(body: dict):
         print(f"[DEBUG] Lesson not found for file_id: {file_id}")
         return JSONResponse({"error": "File not found"}, status_code=404)
 
-    text, text_err = lesson_text_for_ai(lesson)
+    text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     print(f"[DEBUG] Extracted text length: {len(text)}")
     if text_err:
         print("[DEBUG] No extracted text found")
