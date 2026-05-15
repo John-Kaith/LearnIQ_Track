@@ -10,6 +10,22 @@ function learniqLogout() {
 }
 window.learniqLogout = learniqLogout;
 
+function getProfileDisplayName(user) {
+  if (!user) return "User";
+  const dn = user.display_name && String(user.display_name).trim();
+  if (dn) return dn;
+  const fn = String(user.first_name || "").trim();
+  const ln = String(user.last_name || "").trim();
+  const mn = String(user.middle_name || "").trim();
+  const suf = String(user.name_suffix || "").trim();
+  if (fn && ln) {
+    const base = [fn, mn, ln].filter(Boolean).join(" ");
+    return suf ? `${base} ${suf}` : base;
+  }
+  return String(user.email || "User").trim();
+}
+window.getProfileDisplayName = getProfileDisplayName;
+
 function getUserInitials(fullName) {
   const parts = String(fullName || "")
     .trim()
@@ -28,11 +44,17 @@ function setCurrentUserSession(user) {
     id: user.id,
     id_number: user.id_number,
     email: user.email,
-    full_name: user.full_name,
+    display_name: getProfileDisplayName(user),
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    middle_name: user.middle_name || "",
+    name_suffix: user.name_suffix || "",
+    grade_level: user.grade_level || "",
+    strand: user.strand || "",
     role: user.role || "student",
     approval_status: user.approval_status || "approved",
     access_token: user.access_token,
-    refresh_token: user.refresh_token
+    refresh_token: user.refresh_token,
   };
   
   console.log("Session stored:", safeUser);
@@ -65,7 +87,7 @@ function hydrateImmersionSidebarUserChip() {
   const nameEl = document.getElementById("student-display-name");
   const initialsEl = document.getElementById("student-avatar-initials");
   const trackEl = document.getElementById("student-display-track");
-  const full = (u.full_name && String(u.full_name).trim()) || "";
+  const full = getProfileDisplayName(u);
   if (nameEl && full) nameEl.textContent = full;
   if (initialsEl) {
     const fallback = getUserInitials(full || u.email || "");

@@ -22,7 +22,7 @@
       const nameEl = document.getElementById("student-display-name");
       const initialsEl = document.getElementById("student-avatar-initials");
       const trackEl = document.getElementById("student-display-track");
-      const full = (u.full_name && String(u.full_name).trim()) || "";
+      const full = (typeof getProfileDisplayName === "function" ? getProfileDisplayName(u) : u.display_name) || "";
       if (nameEl && full) nameEl.textContent = full;
       if (initialsEl) {
         const parts = full.split(/\s+/).filter(Boolean);

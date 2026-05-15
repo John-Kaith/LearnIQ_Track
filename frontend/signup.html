@@ -30,7 +30,7 @@
         <p>Choose your account type and register using your official ID. All accounts require admin approval before access.</p>
 
         <div class="role-selector">
-          <div class="role-card" data-role="student">
+          <div class="role-card selected" data-role="student">
             <div class="role-icon">
               <i class="fa-solid fa-graduation-cap"></i>
             </div>
@@ -64,10 +64,28 @@
         </div>
 
         <form id="signup-form" class="auth-form">
-          <label>
-            <span>Full Name</span>
-            <input id="signup-name" type="text" placeholder="Juan Dela Cruz" required />
-          </label>
+          <div id="signup-student-fields" class="signup-role-fields">
+            <div class="two-field-grid">
+              <label>
+                <span>Last name</span>
+                <input id="signup-last-name" type="text" placeholder="Dela Cruz" autocomplete="family-name" />
+              </label>
+              <label>
+                <span>First name</span>
+                <input id="signup-first-name" type="text" placeholder="Juan" autocomplete="given-name" />
+              </label>
+            </div>
+            <div class="two-field-grid">
+              <label>
+                <span>Middle name</span>
+                <input id="signup-middle-name" type="text" placeholder="Optional" autocomplete="additional-name" />
+              </label>
+              <label>
+                <span>Suffix</span>
+                <input id="signup-name-suffix" type="text" placeholder="e.g. Jr., Sr., III" autocomplete="off" />
+              </label>
+            </div>
+          </div>
 
           <label>
             <span id="id-label">Student ID Number</span>
@@ -76,14 +94,35 @@
 
           <label>
             <span>Email</span>
-            <input id="signup-email" type="email" placeholder="name@school.edu" required />
+            <input id="signup-email" type="email" placeholder="name@school.edu" required autocomplete="email" />
           </label>
+
+          <div id="signup-student-shs-fields" class="two-field-grid signup-role-fields">
+            <label>
+              <span>Year level</span>
+              <select id="signup-grade-level" required>
+                <option value="">Select year</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </label>
+            <label>
+              <span>Strand</span>
+              <select id="signup-strand" required>
+                <option value="">Select strand</option>
+                <option value="ABM">ABM</option>
+                <option value="HUMSS">HUMSS</option>
+                <option value="STEM">STEM</option>
+                <option value="TVL-HE">TVL-HE</option>
+              </select>
+            </label>
+          </div>
 
           <div class="two-field-grid">
             <label class="password-field">
               <span>Password</span>
               <div class="password-input-container">
-                <input id="signup-password" type="password" placeholder="Create password" required />
+                <input id="signup-password" type="password" placeholder="Create password" required autocomplete="new-password" />
                 <button type="button" class="password-toggle-btn" onclick="togglePassword('signup-password', this)">
                   <i class="fa-solid fa-eye"></i>
                 </button>
@@ -92,7 +131,7 @@
             <label class="password-field">
               <span>Confirm Password</span>
               <div class="password-input-container">
-                <input id="signup-confirm" type="password" placeholder="Repeat password" required />
+                <input id="signup-confirm" type="password" placeholder="Repeat password" required autocomplete="new-password" />
                 <button type="button" class="password-toggle-btn" onclick="togglePassword('signup-confirm', this)">
                   <i class="fa-solid fa-eye"></i>
                 </button>

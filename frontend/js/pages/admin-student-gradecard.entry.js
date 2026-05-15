@@ -141,8 +141,9 @@
     // Header / student block
     setText("gradecard-ref", summary.reference_no || "GR-XXXX-XXXX");
     const av = $("gradecard-avatar");
-    if (av) av.textContent = initials(student.full_name);
-    setText("gradecard-student-name", student.full_name || "—");
+    const studentName = student.display_name || student.first_name || "—";
+    if (av) av.textContent = initials(studentName);
+    setText("gradecard-student-name", studentName);
 
     const metaBits = [
       student.id_number ? `ID No. ${student.id_number}` : null,
@@ -154,7 +155,7 @@
 
     setText(
       "gradecard-student-adviser",
-      `Adviser: ${adviser?.full_name || "—"}`
+      `Adviser: ${adviser?.display_name || "—"}`
     );
 
     setText("gradecard-gpa", fmtNumber(summary.general_average));
@@ -183,7 +184,7 @@
         <tr>
           <td colspan="7" class="empty-state">
             <i class="fa-solid fa-id-card"></i>
-            <p>No subject activity recorded for <strong>${escapeHtml(student.full_name || student.id_number || "this student")}</strong> in this period.</p>
+            <p>No subject activity recorded for <strong>${escapeHtml(student.display_name || student.id_number || "this student")}</strong> in this period.</p>
             <p class="small-note">Enroll this student in subjects or wait for them to submit quizzes/activities.</p>
           </td>
         </tr>`;

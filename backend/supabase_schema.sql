@@ -2,7 +2,10 @@
 
 create table if not exists public.profiles (
   id uuid primary key default gen_random_uuid(),
-  full_name text not null,
+  last_name text not null,
+  first_name text not null,
+  middle_name text,
+  name_suffix text,
   id_number text not null unique,
   email text not null unique,
   password text not null,
@@ -74,6 +77,22 @@ alter table if exists public.attendance_logs
   add column if not exists date date default (current_date),
   alter column event_type drop not null;
 
+-- Immersion Time In: verified photo + GPS capture (run in Supabase SQL editor).
+alter table if exists public.attendance_logs
+  add column if not exists captured_photo_path text,
+  add column if not exists latitude double precision,
+  add column if not exists longitude double precision,
+  add column if not exists readable_location_name text,
+  add column if not exists capture_timestamp timestamptz;
+
+-- Immersion Time Out: verified photo + GPS capture (run in Supabase SQL editor).
+alter table if exists public.attendance_logs
+  add column if not exists time_out_photo_path text,
+  add column if not exists time_out_latitude double precision,
+  add column if not exists time_out_longitude double precision,
+  add column if not exists time_out_readable_location_name text,
+  add column if not exists time_out_capture_timestamp timestamptz;
+
 alter table if exists public.journals
   add column if not exists attendance_id uuid references public.attendance_logs (id) on delete set null;
 
@@ -85,3 +104,12 @@ alter table if exists public.profiles
   add column if not exists dob date,
   add column if not exists address text,
   add column if not exists avatar_data text;
+
+-- Student signup (SHS): name parts, year level, strand
+alter table if exists public.profiles
+  add column if not exists last_name text,
+  add column if not exists first_name text,
+  add column if not exists middle_name text,
+  add column if not exists name_suffix text,
+  add column if not exists grade_level text,
+  add column if not exists strand text;

@@ -35,6 +35,42 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function getProfileDisplayName(user) {
+  if (!user) return "User";
+  const dn = user.display_name && String(user.display_name).trim();
+  if (dn) return dn;
+  const fn = String(user.first_name || "").trim();
+  const ln = String(user.last_name || "").trim();
+  const mn = String(user.middle_name || "").trim();
+  const suf = String(user.name_suffix || "").trim();
+  if (fn && ln) {
+    const base = [fn, mn, ln].filter(Boolean).join(" ");
+    return suf ? `${base} ${suf}` : base;
+  }
+  return String(user.email || "User").trim();
+}
+window.getProfileDisplayName = getProfileDisplayName;
+
+function normalizeGradeLevel(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  const m = s.match(/\b(11|12)\b/);
+  return m ? m[1] : "";
+}
+
+function isGrade11Student(user) {
+  if (!user) return false;
+  const role = String(user.role || "").trim().toLowerCase();
+  if (role !== "student") return false;
+  return normalizeGradeLevel(user.grade_level) === "11";
+}
+
+function canAccessImmersionTracker(user) {
+  if (!user) return false;
+  const role = String(user.role || "").trim().toLowerCase();
+  if (role === "teacher" || role === "admin") return true;
+  return normalizeGradeLevel(user.grade_level) === "12";
+}
+
 // ============================================================
 // Flashcards modal study experience
 // ------------------------------------------------------------
@@ -446,7 +482,13 @@ function setCurrentUserSession(user) {
     id: user.id,
     id_number: user.id_number,
     email: user.email,
-    full_name: user.full_name,
+    display_name: getProfileDisplayName(user),
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    middle_name: user.middle_name || "",
+    name_suffix: user.name_suffix || "",
+    grade_level: user.grade_level || "",
+    strand: user.strand || "",
     role: user.role || "student",
     approval_status: user.approval_status || "approved",
     access_token: user.access_token,
@@ -866,7 +908,7 @@ function hydrateStudentSidebarChip() {
   const trackEl = document.getElementById("student-display-track");
   if (!nameEl && !initialsEl && !trackEl) return;
   const user = getCurrentUserSession();
-  const full = user && user.full_name ? String(user.full_name).trim() : "";
+  const full = user ? getProfileDisplayName(user) : "";
   const roleGuess = user && user.role ? String(user.role).trim().toLowerCase() : "";
   const defaultName = roleGuess === "teacher" ? "Teacher" : "Student";
   if (nameEl) nameEl.textContent = full || (user && user.email) || defaultName;
@@ -893,6 +935,70 @@ function hydrateStudentSidebarChip() {
   }
 }
 
+const DASHBOARD_SIDEBAR_BY_ROLE = {
+  teacher: {
+    brandSubtitle: "Teacher LearnIQ",
+    bodyClass: "teacher-learniq-page",
+    profileLinkId: "teacher-profile-chip-link",
+    items: [
+      { id: "dashboard", href: "teacher-learniq-dashboard.html", icon: "fa-chalkboard-user", label: "Dashboard" },
+      { id: "subjects", href: "teacher-subjects.html", icon: "fa-book-open", label: "My Subjects" },
+      { id: "ai-result", href: "ai-result.html", icon: "fa-wand-sparkles", label: "Full lesson review" },
+      { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
+      { id: "gradecard", href: "teacher-student-gradecard.html", icon: "fa-id-card", label: "Student Gradecard" },
+      { id: "module", href: "module-selection.html", icon: "fa-th-large", label: "Module Selection" },
+      { id: "settings", href: "teacher-settings.html", icon: "fa-gear", label: "Settings" },
+    ],
+  },
+  student: {
+    brandSubtitle: "LearnIQ Module",
+    bodyClass: null,
+    profileLinkId: "student-profile-chip-link",
+    items: [
+      { id: "learniq-dashboard", href: "learniq-dashboard.html", icon: "fa-graduation-cap", label: "LearnIQ Dashboard" },
+      { id: "subjects", href: "subjects.html", icon: "fa-book-open", label: "My lesson" },
+      { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
+      { id: "history", href: "history.html", icon: "fa-clock-rotate-left", label: "History" },
+      { id: "module", href: "module-selection.html", icon: "fa-th-large", label: "Module Selection" },
+      { id: "settings", href: "student-settings.html", icon: "fa-gear", label: "Settings" },
+    ],
+  },
+};
+
+/** Shared pages (leaderboard, history) show student nav in HTML; swap for teachers from session. */
+function applyRoleAwareDashboardSidebar(activePageId) {
+  const navHost = document.querySelector(".side-links");
+  if (!navHost || !activePageId) return;
+
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "student";
+  const config = role === "teacher" ? DASHBOARD_SIDEBAR_BY_ROLE.teacher : DASHBOARD_SIDEBAR_BY_ROLE.student;
+
+  const brandSmall = document.querySelector(".sidebar-header .brand small");
+  if (brandSmall) brandSmall.textContent = config.brandSubtitle;
+
+  document.body.classList.toggle("teacher-learniq-page", Boolean(config.bodyClass));
+
+  const profileLink = document.querySelector(".sidebar-footer .user-chip-profile-link");
+  if (profileLink && config.profileLinkId) profileLink.id = config.profileLinkId;
+
+  navHost.innerHTML = config.items
+    .map((item) => {
+      const isActive = item.id === activePageId;
+      return `<a href="${escapeHtml(item.href)}"${isActive ? ' class="active"' : ""}><i class="fa-solid ${escapeHtml(
+        item.icon
+      )}"></i> ${escapeHtml(item.label)}</a>`;
+    })
+    .join("");
+
+  hydrateStudentSidebarChip();
+}
+
+function initRoleAwareDashboardSidebar() {
+  const activePageId = document.body?.dataset?.sidebarActive;
+  if (activePageId) applyRoleAwareDashboardSidebar(activePageId);
+}
+
 /** Admin sidebar chip (pages under admin-*.html with #admin-sidebar-* ids). */
 function hydrateAdminSidebarFromSession() {
   const nameEl = document.getElementById("admin-sidebar-name");
@@ -901,7 +1007,7 @@ function hydrateAdminSidebarFromSession() {
   if (!nameEl && !roleEl && !avatarEl) return;
   const user = getCurrentUserSession();
   if (!user) return;
-  const full = String(user.full_name || "").trim();
+  const full = getProfileDisplayName(user);
   const roleRaw = String(user.role || "admin").trim().toLowerCase();
   const roleLabel =
     roleRaw === "admin" ? "Admin / Principal" : roleRaw ? roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1) : "Admin";
@@ -991,7 +1097,7 @@ async function initLearniqDashboardIfPresent() {
           .map(
             (e) =>
               `<li><strong>${escapeHtml(String(e.rank))}. ${escapeHtml(
-                learniqPreviewName(e.full_name)
+                learniqPreviewName(e.display_name || getProfileDisplayName(e))
               )}</strong> <small>${Number(e.total_points || 0).toLocaleString()} pts</small></li>`
           )
           .join("");
@@ -1160,7 +1266,7 @@ function setupLeaderboardPage() {
   const path = (window.location.pathname || "").replace(/\\/g, "/").toLowerCase();
   if (!path.includes("leaderboard.html")) return;
 
-  hydrateStudentSidebarChip();
+  initRoleAwareDashboardSidebar();
 
   const emptyEl = document.getElementById("leaderboard-empty");
   const populatedEl = document.getElementById("leaderboard-populated");
@@ -1217,7 +1323,7 @@ function setupLeaderboardPage() {
         }
         return `<article class="glass-card top-rank-card ${podiumClass}">
           <div class="rank-badge">#${e.rank}</div>
-          <h3>${escapeHtml(e.full_name || "Student")}</h3>
+          <h3>${escapeHtml(e.display_name || getProfileDisplayName(e) || "Student")}</h3>
           <p>${fmtInt(e.total_points)} points</p>
           <small>${escapeHtml(e.tagline || "")}</small>
         </article>`;
@@ -1234,7 +1340,7 @@ function setupLeaderboardPage() {
         const isYou = cur && idn && idn === cur;
         return `<tr class="${isYou ? "leaderboard-row-you" : ""}">
           <td>#${e.rank}</td>
-          <td>${escapeHtml(e.full_name || "Student")}${isYou ? ' <span class="small-note">(you)</span>' : ""}</td>
+          <td>${escapeHtml(e.display_name || getProfileDisplayName(e) || "Student")}${isYou ? ' <span class="small-note">(you)</span>' : ""}</td>
           <td>${fmtInt(e.total_points)}</td>
           <td>${fmtInt(e.quiz_attempts)}</td>
           <td>${fmtPct(e.progress_pct)}</td>
@@ -1290,7 +1396,9 @@ function setupLeaderboardPage() {
   }
 
   emptyCta?.addEventListener("click", () => {
-    window.location.href = "subjects.html";
+    const user = getCurrentUserSession();
+    const role = user && user.role ? String(user.role).trim().toLowerCase() : "student";
+    window.location.href = role === "teacher" ? "teacher-subjects.html" : "subjects.html";
   });
   retryBtn?.addEventListener("click", () => {
     defaultEmptyCopy();
@@ -1327,12 +1435,20 @@ async function hydrateSidebarProfileFromDatabase() {
   try {
     const res = await fetch(apiUrl("/me"), { headers: immersionAuthHeaders() });
     const p = await readApiJson(res);
-    const full = p && p.full_name ? String(p.full_name).trim() : "";
+    const showName = getProfileDisplayName(p) || (p && p.email ? String(p.email).trim() : "") || "User";
     const email = p && p.email ? String(p.email).trim() : "";
     const idn = p && p.id_number ? String(p.id_number).trim() : "";
-    const showName = full || email || "User";
 
-    const cacheUser = { id_number: idn, email, full_name: full, access_token: u.access_token };
+    const cacheUser = {
+      id_number: idn,
+      email,
+      display_name: showName,
+      first_name: p?.first_name || "",
+      last_name: p?.last_name || "",
+      middle_name: p?.middle_name || "",
+      name_suffix: p?.name_suffix || "",
+      access_token: u.access_token,
+    };
 
     // Fold the freshly-fetched profile (incl. avatar_data) into the local
     // cache so any synchronous `applyToElement` calls on this page (and
@@ -1400,6 +1516,148 @@ function immersionPickTodayRow(history, todayKey) {
   return sameDay[0];
 }
 
+function immersionCoordsLabel(lat, lon) {
+  if (lat == null || lat === "" || lon == null || lon === "") return "";
+  const a = Number(lat);
+  const b = Number(lon);
+  if (Number.isNaN(a) || Number.isNaN(b)) return "";
+  return `${a.toFixed(6)}, ${b.toFixed(6)}`;
+}
+
+function fmtImmersionDetailTimestamp(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
+  } catch {
+    return String(iso);
+  }
+}
+
+function buildImmersionAttendanceDetailHtml(row) {
+  const esc = escapeHtml;
+  const photoSrc = (url) => {
+    if (!url) return "";
+    const u = String(url);
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    return apiUrl(u);
+  };
+  const section = (title, photoUrl, location, coords, ts, pendingNote) => {
+    const src = photoSrc(photoUrl);
+    const photoBlock = src
+      ? `<div class="immersion-detail-photo">
+          <button type="button" class="immersion-detail-photo-thumb" data-photo-src="${esc(src)}" data-photo-label="${esc(title)}" aria-label="View full ${esc(title)} photo">
+            <img src="${esc(src)}" alt="${esc(title)} verification photo" loading="lazy" />
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm immersion-see-photo-btn" data-photo-src="${esc(src)}" data-photo-label="${esc(title)}">
+            <i class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i> See photo
+          </button>
+        </div>`
+      : `<p class="small-note">${esc(pendingNote || "No photo on file.")}</p>`;
+    return `<section class="immersion-detail-section">
+      <h4>${esc(title)}</h4>
+      ${photoBlock}
+      <dl class="immersion-detail-meta">
+        <div><dt>location</dt><dd>${esc(location || "—")}</dd></div>
+        <div><dt>coordinates</dt><dd>${esc(coords || "—")}</dd></div>
+        <div><dt>timestamp</dt><dd>${esc(fmtImmersionDetailTimestamp(ts))}</dd></div>
+      </dl>
+    </section>`;
+  };
+  const tin = row.photo_url || row.time_in_photo_url;
+  const tout = row.time_out_photo_url;
+  const hasOut = row.time_out && String(row.time_out).trim() !== "";
+  let html = section(
+    "Time In",
+    tin,
+    row.readable_location_name,
+    immersionCoordsLabel(row.latitude, row.longitude),
+    row.capture_timestamp || row.time_in,
+    "No Time In photo on file."
+  );
+  if (hasOut || tout || row.time_out_readable_location_name) {
+    html += section(
+      "Time Out",
+      tout,
+      row.time_out_readable_location_name,
+      immersionCoordsLabel(row.time_out_latitude, row.time_out_longitude),
+      row.time_out_capture_timestamp || row.time_out,
+      "No Time Out photo on file."
+    );
+  } else {
+    html += `<section class="immersion-detail-section"><h4>Time Out</h4><p class="small-note">Not recorded yet.</p></section>`;
+  }
+  return html;
+}
+
+function openImmersionAttendanceModal() {
+  const modal = document.getElementById("immersion-attendance-modal");
+  if (!modal) return;
+  modal.removeAttribute("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeImmersionAttendanceModal() {
+  closeImmersionPhotoLightbox();
+  const modal = document.getElementById("immersion-attendance-modal");
+  if (!modal) return;
+  modal.setAttribute("hidden", "");
+  document.body.style.overflow = "";
+}
+
+function openImmersionPhotoLightbox(src, label) {
+  if (!src) return;
+  const lb = document.getElementById("immersion-photo-lightbox");
+  const img = document.getElementById("immersion-photo-lightbox-img");
+  if (!lb || !img) {
+    window.open(src, "_blank", "noopener,noreferrer");
+    return;
+  }
+  img.src = src;
+  img.alt = label ? `${label} verification photo` : "Attendance verification photo";
+  lb.removeAttribute("hidden");
+}
+
+function closeImmersionPhotoLightbox() {
+  const lb = document.getElementById("immersion-photo-lightbox");
+  const img = document.getElementById("immersion-photo-lightbox-img");
+  if (!lb) return;
+  lb.setAttribute("hidden", "");
+  if (img) {
+    img.removeAttribute("src");
+    img.alt = "";
+  }
+}
+
+function handleImmersionPhotoPreviewClick(ev) {
+  const trigger = ev.target.closest(".immersion-see-photo-btn, .immersion-detail-photo-thumb");
+  if (!trigger) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const src = trigger.dataset.photoSrc;
+  const label = trigger.dataset.photoLabel || "Attendance";
+  if (src) openImmersionPhotoLightbox(src, label);
+}
+
+function showImmersionAttendanceDetail(row) {
+  if (!row) return;
+  const titleEl = document.getElementById("immersion-attendance-modal-title");
+  const subEl = document.getElementById("immersion-attendance-modal-subtitle");
+  const body = document.getElementById("immersion-attendance-modal-body");
+  const day = row.date || (row.time_in ? String(row.time_in).slice(0, 10) : "—");
+  const tIn = fmtImmersionClock(row.time_in);
+  const tOut = row.time_out ? fmtImmersionClock(row.time_out) : "—";
+  if (titleEl) titleEl.textContent = "Attendance details";
+  if (subEl) subEl.textContent = `${day} · Time In ${tIn} · Time Out ${tOut}`;
+  if (body) {
+    body.innerHTML = buildImmersionAttendanceDetailHtml(row);
+    body.removeEventListener("click", handleImmersionPhotoPreviewClick);
+    body.addEventListener("click", handleImmersionPhotoPreviewClick);
+  }
+  openImmersionAttendanceModal();
+}
+
 async function setupImmersionDashboard() {
   const path = (window.location.pathname || "").replace(/\\/g, "/").toLowerCase();
   if (!path.includes("immersion-dashboard.html")) return;
@@ -1410,10 +1668,32 @@ async function setupImmersionDashboard() {
     return;
   }
 
+  if (isGrade11Student(user)) {
+    showToast("Immersion Tracker is only for Grade 12 students.", "info");
+    window.location.href = "module-selection.html";
+    return;
+  }
+
+  if (!canAccessImmersionTracker(user)) {
+    try {
+      const res = await fetch(apiUrl("/me"), { headers: immersionAuthHeaders() });
+      const prof = await readApiJson(res);
+      const merged = { ...user, ...prof };
+      if (isGrade11Student(merged)) {
+        showToast("Immersion Tracker is only for Grade 12 students.", "info");
+        window.location.href = "module-selection.html";
+        return;
+      }
+      setCurrentUserSession({ ...merged, access_token: user.access_token, refresh_token: user.refresh_token });
+    } catch {
+      /* continue if profile refresh fails */
+    }
+  }
+
   const nameEl = document.getElementById("student-display-name");
   const initialsEl = document.getElementById("student-avatar-initials");
   const trackEl = document.getElementById("student-display-track");
-  const full = (user.full_name && String(user.full_name).trim()) || "";
+  const full = getProfileDisplayName(user) || "";
   if (nameEl && full) nameEl.textContent = full;
   if (initialsEl) {
     const fallback = getUserInitials(full || user.email || "");
@@ -1428,13 +1708,119 @@ async function setupImmersionDashboard() {
 
   const timeInBtn = document.getElementById("time-in-btn");
   const timeOutBtn = document.getElementById("time-out-btn");
+  const takePhotoBtn = document.getElementById("take-photo-btn");
+  const retakePhotoBtn = document.getElementById("retake-photo-btn");
+  const cameraPanel = document.getElementById("immersion-camera-panel");
+  const previewPanel = document.getElementById("immersion-capture-preview");
   const statusText = document.getElementById("time-status-text");
   const timeInDisplay = document.getElementById("time-in-display");
   const timeOutDisplay = document.getElementById("time-out-display");
   const durationDisplay = document.getElementById("duration-display");
   const listEl = document.getElementById("recent-attendance-list");
+  const timeInSummary = document.getElementById("immersion-time-in-summary");
+  const viewTimeInDetailsBtn = document.getElementById("view-time-in-details-btn");
 
   let durationTimer = null;
+  let captureController = null;
+  let canClockIn = false;
+  let canClockOut = false;
+  let sessionRowForDetails = null;
+  let recentAttendanceRows = [];
+
+  if (typeof window.createImmersionCaptureController === "function") {
+    captureController = window.createImmersionCaptureController({
+      takePhotoBtn,
+      shutterBtn: document.getElementById("immersion-shutter-btn"),
+      cancelCameraBtn: document.getElementById("immersion-cancel-camera-btn"),
+      cameraPanel,
+      videoEl: document.getElementById("immersion-capture-video"),
+      canvasEl: document.getElementById("immersion-capture-canvas"),
+      previewPanel,
+      previewImg: document.getElementById("immersion-preview-img"),
+      previewBadgeEl: document.getElementById("immersion-preview-badge-text"),
+      fieldLocation: document.getElementById("immersion-field-location"),
+      fieldTimeLabel: document.getElementById("immersion-field-time-label"),
+      fieldTime: document.getElementById("immersion-field-time"),
+      fieldCoords: document.getElementById("immersion-field-coords"),
+      captureStatusEl: document.getElementById("immersion-capture-status"),
+      timeInBtn,
+      timeOutBtn,
+      onReadyChange: (ready, mode) => {
+        if (mode === "time_out") syncImmersionTimeOutButton(ready);
+        else syncImmersionTimeInButton(ready);
+      },
+    });
+  }
+
+  function syncImmersionTimeInButton(ready) {
+    if (!timeInBtn) return;
+    const isReady = canClockIn && ready === true;
+    timeInBtn.disabled = !isReady;
+    timeInBtn.classList.toggle("is-locked", !isReady);
+    timeInBtn.classList.toggle("btn-primary", isReady);
+    timeInBtn.classList.toggle("btn-secondary", !isReady);
+    timeInBtn.setAttribute("aria-disabled", isReady ? "false" : "true");
+    timeInBtn.title = isReady ? "" : "Take a photo first to enable Time In";
+  }
+
+  function syncImmersionTimeOutButton(ready) {
+    if (!timeOutBtn) return;
+    const isReady = canClockOut && ready === true;
+    timeOutBtn.disabled = !isReady;
+    timeOutBtn.classList.toggle("is-locked", !isReady);
+    timeOutBtn.classList.toggle("btn-primary", isReady);
+    timeOutBtn.classList.toggle("btn-secondary", !isReady);
+    timeOutBtn.setAttribute("aria-disabled", isReady ? "false" : "true");
+    timeOutBtn.title = isReady ? "" : "Take a photo first to enable Time Out";
+  }
+
+  function applyClockedInForTimeOut(sessionRow) {
+    canClockIn = false;
+    canClockOut = true;
+    sessionRowForDetails = sessionRow;
+    captureController?.setMode?.("time_out");
+    captureController?.revokePreview?.();
+    captureController?.resetCapture?.();
+    setCaptureUiVisible(true);
+    if (timeInBtn) timeInBtn.hidden = true;
+    if (timeInSummary) timeInSummary.hidden = false;
+    syncImmersionTimeInButton(false);
+    syncImmersionTimeOutButton(captureController && captureController.isReady());
+  }
+
+  function applyIdleClockState() {
+    canClockIn = true;
+    canClockOut = false;
+    sessionRowForDetails = null;
+    captureController?.setMode?.("time_in");
+    setCaptureUiVisible(true);
+    if (timeInBtn) timeInBtn.hidden = false;
+    if (timeInSummary) timeInSummary.hidden = true;
+    syncImmersionTimeOutButton(false);
+    syncImmersionTimeInButton(captureController && captureController.isReady());
+    if (timeOutBtn) {
+      timeOutBtn.disabled = true;
+      timeOutBtn.hidden = false;
+    }
+  }
+
+  retakePhotoBtn?.addEventListener("click", () => {
+    captureController?.revokePreview?.();
+    captureController?.resetCapture?.();
+    if (canClockOut) syncImmersionTimeOutButton(false);
+    else syncImmersionTimeInButton(false);
+  });
+
+  function setCaptureUiVisible(showCaptureFlow) {
+    if (takePhotoBtn) takePhotoBtn.hidden = !showCaptureFlow;
+    if (retakePhotoBtn && !showCaptureFlow) retakePhotoBtn.hidden = true;
+    if (!showCaptureFlow) {
+      if (cameraPanel) cameraPanel.hidden = true;
+      if (previewPanel) previewPanel.hidden = true;
+      captureController?.revokePreview?.();
+      captureController?.resetCapture?.();
+    }
+  }
 
   async function refreshAttendanceUi() {
     let data;
@@ -1456,18 +1842,33 @@ async function setupImmersionDashboard() {
     }
 
     if (active && active.time_in) {
+      applyClockedInForTimeOut(active);
       if (statusText) statusText.textContent = "Clocked In";
       if (timeInDisplay) timeInDisplay.textContent = fmtImmersionClock(active.time_in);
       if (timeOutDisplay) timeOutDisplay.textContent = "--:--";
       if (durationDisplay) durationDisplay.textContent = fmtImmersionDurationLabel(active.time_in, null);
-      if (timeInBtn) timeInBtn.disabled = true;
-      if (timeOutBtn) timeOutBtn.disabled = false;
       const t0 = active.time_in;
       durationTimer = setInterval(() => {
         if (durationDisplay) durationDisplay.textContent = fmtImmersionDurationLabel(t0, null);
       }, 30_000);
     } else if (todayRow && todayRow.time_in) {
       const done = todayRow.time_out && String(todayRow.time_out).trim() !== "";
+      if (done) {
+        canClockIn = true;
+        canClockOut = false;
+        sessionRowForDetails = todayRow;
+        captureController?.setMode?.("time_in");
+        captureController?.revokePreview?.();
+        captureController?.resetCapture?.();
+        setCaptureUiVisible(true);
+        if (timeInBtn) timeInBtn.hidden = false;
+        if (timeInSummary) timeInSummary.hidden = true;
+        syncImmersionTimeOutButton(false);
+        syncImmersionTimeInButton(captureController && captureController.isReady());
+        if (timeOutBtn) timeOutBtn.disabled = true;
+      } else {
+        applyClockedInForTimeOut(todayRow);
+      }
       if (statusText) statusText.textContent = done ? "Session complete" : "Clocked In";
       if (timeInDisplay) timeInDisplay.textContent = fmtImmersionClock(todayRow.time_in);
       if (timeOutDisplay) {
@@ -1486,8 +1887,6 @@ async function setupImmersionDashboard() {
           durationDisplay.textContent = fmtImmersionDurationLabel(todayRow.time_in, todayRow.time_out);
         }
       }
-      if (timeInBtn) timeInBtn.disabled = !done;
-      if (timeOutBtn) timeOutBtn.disabled = done;
       if (!done) {
         const t0 = todayRow.time_in;
         durationTimer = setInterval(() => {
@@ -1495,19 +1894,19 @@ async function setupImmersionDashboard() {
         }, 30_000);
       }
     } else {
+      applyIdleClockState();
       if (statusText) statusText.textContent = "Not Clocked In";
       if (timeInDisplay) timeInDisplay.textContent = "--:--";
       if (timeOutDisplay) timeOutDisplay.textContent = "--:--";
       if (durationDisplay) durationDisplay.textContent = "0h 0m";
-      if (timeInBtn) timeInBtn.disabled = false;
-      if (timeOutBtn) timeOutBtn.disabled = true;
     }
 
     if (listEl && Array.isArray(data.history)) {
       const rows = data.history.slice(0, 10);
+      recentAttendanceRows = rows;
       listEl.innerHTML = rows.length
         ? rows
-            .map((r) => {
+            .map((r, idx) => {
               const st = String(r.status || "").toLowerCase();
               const badgeClass = st === "active" ? "active" : st === "completed" ? "completed" : "warning";
               const day =
@@ -1521,16 +1920,24 @@ async function setupImmersionDashboard() {
                   : r.total_hours != null && r.total_hours !== ""
                   ? `${Number(r.total_hours).toFixed(2)} hours`
                   : "—";
-              return `<li class="time-log-item">
+              const loc = (r.readable_location_name || "").trim();
+              const locLine = loc
+                ? `<span class="small-note time-log-location"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(loc)}</span>`
+                : "";
+              return `<li class="time-log-item immersion-attendance-row" data-row-idx="${idx}" role="button" tabindex="0">
               <div>
                 <strong>${escapeHtml(day)}</strong>
                 <span class="small-note">Time In: ${escapeHtml(tIn)} | Time Out: ${escapeHtml(tOut)}</span>
+                ${locLine}
               </div>
-              <span class="status-badge ${badgeClass}">${escapeHtml(sub)}</span>
+              <div class="time-log-actions">
+                <span class="status-badge ${badgeClass}">${escapeHtml(sub)}</span>
+                <button type="button" class="btn btn-ghost btn-sm immersion-view-details-btn">View details</button>
+              </div>
             </li>`;
             })
             .join("")
-        : `<li class="time-log-item"><div><span class="small-note">No attendance logs yet. Tap Time In to start.</span></div></li>`;
+        : `<li class="time-log-item"><div><span class="small-note">No attendance logs yet. Take a photo, then tap Time In to start.</span></div></li>`;
     }
   }
 
@@ -1564,32 +1971,102 @@ async function setupImmersionDashboard() {
   }
 
   timeInBtn?.addEventListener("click", async () => {
+    const fd = captureController?.buildFormData?.();
+    if (!fd) {
+      showToast("Take a photo first. Time In needs photo, GPS, and timestamp.", "error");
+      return;
+    }
+    const headers = {};
+    const u = getCurrentUserSession();
+    if (u?.access_token) headers.Authorization = `Bearer ${u.access_token}`;
     try {
+      if (timeInBtn) timeInBtn.disabled = true;
       const res = await fetch(apiUrl("/time-in"), {
         method: "POST",
-        headers: immersionAuthHeaders(),
-        body: "{}",
+        headers,
+        body: fd,
       });
       await readApiJson(res);
+      captureController?.revokePreview?.();
+      captureController?.resetCapture?.();
       showToast("Time In recorded.", "success");
       await refreshAttendanceUi();
     } catch (e) {
       showToast(e?.message || "Time In failed.", "error");
+      syncImmersionTimeInButton(captureController && captureController.isReady());
     }
   });
 
   timeOutBtn?.addEventListener("click", async () => {
+    const fd = captureController?.buildFormData?.();
+    if (!fd) {
+      showToast("Take a photo first. Time Out needs photo, GPS, and timestamp.", "error");
+      return;
+    }
+    const headers = {};
+    const u = getCurrentUserSession();
+    if (u?.access_token) headers.Authorization = `Bearer ${u.access_token}`;
     try {
+      if (timeOutBtn) timeOutBtn.disabled = true;
       const res = await fetch(apiUrl("/time-out"), {
         method: "POST",
-        headers: immersionAuthHeaders(),
-        body: "{}",
+        headers,
+        body: fd,
       });
       await readApiJson(res);
+      captureController?.revokePreview?.();
+      captureController?.resetCapture?.();
       showToast("Time Out recorded.", "success");
       await refreshAttendanceUi();
     } catch (e) {
       showToast(e?.message || "Time Out failed.", "error");
+      syncImmersionTimeOutButton(captureController && captureController.isReady());
+    }
+  });
+
+  viewTimeInDetailsBtn?.addEventListener("click", () => {
+    if (sessionRowForDetails) showImmersionAttendanceDetail(sessionRowForDetails);
+  });
+
+  listEl?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".immersion-view-details-btn");
+    const rowEl = ev.target.closest(".immersion-attendance-row");
+    if (!btn && !rowEl) return;
+    if (btn) ev.stopPropagation();
+    const li = rowEl || btn?.closest(".immersion-attendance-row");
+    const idx = Number(li?.dataset?.rowIdx);
+    const row = recentAttendanceRows[idx];
+    if (row) showImmersionAttendanceDetail(row);
+  });
+
+  listEl?.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const rowEl = ev.target.closest(".immersion-attendance-row");
+    if (!rowEl) return;
+    ev.preventDefault();
+    const idx = Number(rowEl.dataset.rowIdx);
+    const row = recentAttendanceRows[idx];
+    if (row) showImmersionAttendanceDetail(row);
+  });
+
+  const attendanceModal = document.getElementById("immersion-attendance-modal");
+  document.getElementById("immersion-attendance-modal-close")?.addEventListener("click", closeImmersionAttendanceModal);
+  attendanceModal?.addEventListener("click", (ev) => {
+    if (ev.target === attendanceModal) closeImmersionAttendanceModal();
+  });
+  const photoLightbox = document.getElementById("immersion-photo-lightbox");
+  document.getElementById("immersion-photo-lightbox-close")?.addEventListener("click", closeImmersionPhotoLightbox);
+  photoLightbox?.addEventListener("click", (ev) => {
+    if (ev.target === photoLightbox) closeImmersionPhotoLightbox();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    if (photoLightbox && !photoLightbox.hasAttribute("hidden")) {
+      closeImmersionPhotoLightbox();
+      return;
+    }
+    if (attendanceModal && !attendanceModal.hasAttribute("hidden")) {
+      closeImmersionAttendanceModal();
     }
   });
 
@@ -1756,20 +2233,36 @@ async function renderMetrics() {
   }
 }
 
+function setMetricText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value ?? "";
+}
+
 function updateMetricsDisplay(stats) {
-  document.getElementById("metric-total-students").textContent = stats.totalStudents;
-  document.getElementById("metric-total-teachers").textContent = stats.totalTeachers;
-  document.getElementById("metric-pending-approvals").textContent = stats.pendingApprovals;
-  document.getElementById("metric-approved-accounts").textContent = stats.approvedAccounts;
-  document.getElementById("metric-rejected-accounts").textContent = stats.rejectedAccounts;
-  const uploadedEl = document.getElementById("metric-uploaded-files");
-  if (uploadedEl) uploadedEl.textContent = stats.uploadedFilesCount ?? 0;
-  const activeEl = document.getElementById("metric-active-users");
-  if (activeEl) activeEl.textContent = stats.activeUsersToday ?? 0;
-  document.getElementById("chart-pending").dataset.progress = `${Math.min(100, Math.round((stats.pendingApprovals / Math.max(1, stats.totalStudents + stats.totalTeachers)) * 100))}%`;
-  document.getElementById("chart-approved").dataset.progress = `${Math.min(100, Math.round((stats.approvedAccounts / Math.max(1, stats.totalStudents + stats.totalTeachers)) * 100))}%`;
-  document.getElementById("chart-rejected").dataset.progress = `${Math.min(100, Math.round((stats.rejectedAccounts / Math.max(1, stats.totalStudents + stats.totalTeachers)) * 100))}%`;
-  animateProgressBars();
+  setMetricText("metric-total-students", stats.totalStudents);
+  setMetricText("metric-total-teachers", stats.totalTeachers);
+  setMetricText("metric-pending-approvals", stats.pendingApprovals);
+  setMetricText("metric-approved-accounts", stats.approvedAccounts);
+  setMetricText("metric-rejected-accounts", stats.rejectedAccounts);
+  setMetricText("metric-uploaded-files", stats.uploadedFilesCount ?? 0);
+  setMetricText("metric-active-users", stats.activeUsersToday ?? 0);
+
+  const denom = Math.max(1, (stats.totalStudents || 0) + (stats.totalTeachers || 0));
+  const chartPending = document.getElementById("chart-pending");
+  const chartApproved = document.getElementById("chart-approved");
+  const chartRejected = document.getElementById("chart-rejected");
+  if (chartPending) {
+    chartPending.dataset.progress = `${Math.min(100, Math.round((stats.pendingApprovals / denom) * 100))}%`;
+  }
+  if (chartApproved) {
+    chartApproved.dataset.progress = `${Math.min(100, Math.round((stats.approvedAccounts / denom) * 100))}%`;
+  }
+  if (chartRejected) {
+    chartRejected.dataset.progress = `${Math.min(100, Math.round((stats.rejectedAccounts / denom) * 100))}%`;
+  }
+  if (chartPending || chartApproved || chartRejected) {
+    animateProgressBars();
+  }
 }
 
 function formatAdminActivityTime(iso) {
@@ -1920,34 +2413,51 @@ function setupForms() {
   });
 }
 
-function setupRoleSelection() {
-  const roleCards = document.querySelectorAll(".role-card");
+function setSignupFieldRequired(el, required) {
+  if (!el) return;
+  if (required) el.setAttribute("required", "");
+  else el.removeAttribute("required");
+}
+
+function applySignupRoleUi(role) {
+  const isStudent = role !== "teacher";
   const signupHeading = document.getElementById("signup-heading");
   const idLabel = document.getElementById("id-label");
-  
-  // Default to student selection
-  if (roleCards.length > 0) {
-    roleCards[0].classList.add("selected");
+  const studentShsFields = document.getElementById("signup-student-shs-fields");
+  const lastNameEl = document.getElementById("signup-last-name");
+  const firstNameEl = document.getElementById("signup-first-name");
+  const middleNameEl = document.getElementById("signup-middle-name");
+  const gradeLevelEl = document.getElementById("signup-grade-level");
+  const strandEl = document.getElementById("signup-strand");
+
+  if (signupHeading) {
+    signupHeading.textContent = isStudent ? "Student registration" : "Teacher registration";
   }
-  
-  roleCards.forEach(card => {
+  if (idLabel) {
+    idLabel.textContent = isStudent ? "Student ID Number" : "Teacher ID / Employee ID";
+  }
+  if (studentShsFields) studentShsFields.hidden = !isStudent;
+
+  setSignupFieldRequired(lastNameEl, true);
+  setSignupFieldRequired(firstNameEl, true);
+  setSignupFieldRequired(gradeLevelEl, isStudent);
+  setSignupFieldRequired(strandEl, isStudent);
+  if (middleNameEl) middleNameEl.removeAttribute("required");
+}
+
+function setupRoleSelection() {
+  const roleCards = document.querySelectorAll(".role-card");
+  const selected = document.querySelector(".role-card.selected") || roleCards[0];
+  if (selected && !selected.classList.contains("selected")) {
+    selected.classList.add("selected");
+  }
+  applySignupRoleUi(selected?.dataset?.role || "student");
+
+  roleCards.forEach((card) => {
     card.addEventListener("click", () => {
-      // Remove selected class from all cards
-      roleCards.forEach(c => c.classList.remove("selected"));
-      
-      // Add selected class to clicked card
+      roleCards.forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
-      
-      // Update UI based on selected role
-      const role = card.dataset.role;
-      
-      if (role === "teacher") {
-        if (signupHeading) signupHeading.textContent = "Teacher registration";
-        if (idLabel) idLabel.textContent = "Teacher ID / Employee ID";
-      } else {
-        if (signupHeading) signupHeading.textContent = "Student registration";
-        if (idLabel) idLabel.textContent = "Student ID Number";
-      }
+      applySignupRoleUi(card.dataset.role || "student");
     });
   });
 }
@@ -1964,22 +2474,37 @@ function setupSignupPage() {
     event.preventDefault();
     if (!signupMessage) return;
 
-    const fullName = document.querySelector("#signup-name").value.trim();
     const idNumber = document.querySelector("#signup-id").value.trim();
     const email = document.querySelector("#signup-email").value.trim().toLowerCase();
     const password = document.querySelector("#signup-password").value;
     const confirmPassword = document.querySelector("#signup-confirm").value;
-    
-    // Get selected role
+    const lastName = (document.querySelector("#signup-last-name")?.value || "").trim();
+    const firstName = (document.querySelector("#signup-first-name")?.value || "").trim();
+    const middleName = (document.querySelector("#signup-middle-name")?.value || "").trim();
+    const nameSuffix = (document.querySelector("#signup-name-suffix")?.value || "").trim();
+    const gradeLevel = (document.querySelector("#signup-grade-level")?.value || "").trim();
+    const strand = (document.querySelector("#signup-strand")?.value || "").trim();
+
     const selectedRole = document.querySelector(".role-card.selected");
     if (!selectedRole) {
       showAuthMessage("Please select an account type.", signupMessage, "error");
       return;
     }
     const role = selectedRole.dataset.role;
+    const isStudent = role === "student";
 
-    if (!fullName || !idNumber || !email || !password || !confirmPassword) {
-      showAuthMessage("All fields are required.", signupMessage, "error");
+    if (!idNumber || !email || !password || !confirmPassword) {
+      showAuthMessage("All required fields must be filled in.", signupMessage, "error");
+      return;
+    }
+
+    if (!lastName || !firstName) {
+      showAuthMessage("Last name and first name are required.", signupMessage, "error");
+      return;
+    }
+
+    if (isStudent && (!gradeLevel || !strand)) {
+      showAuthMessage("Year level and strand are required.", signupMessage, "error");
       return;
     }
 
@@ -1988,18 +2513,26 @@ function setupSignupPage() {
       return;
     }
 
+    const payload = {
+      id_number: idNumber,
+      email,
+      password,
+      role,
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: middleName,
+      name_suffix: nameSuffix,
+    };
+    if (isStudent) {
+      payload.grade_level = gradeLevel;
+      payload.strand = strand;
+    }
+
     try {
-      // Call backend registration endpoint (now uses Supabase Auth)
       const response = await fetch(apiUrl("/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: fullName,
-          id_number: idNumber,
-          email: email,
-          password: password,
-          role: role
-        })
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -2010,7 +2543,10 @@ function setupSignupPage() {
       const result = await response.json();
       signupForm.reset();
       showAuthMessage(result.message || "Your account is pending approval by the Admin/Principal.", signupMessage, "success");
-      showToast("Student registration submitted for review.", "success");
+      showToast(
+        isStudent ? "Student registration submitted for review." : "Teacher registration submitted for review.",
+        "success"
+      );
     } catch (error) {
       showAuthMessage(error.message || "Registration failed. Please try again.", signupMessage, "error");
       showToast(`Registration failed: ${error.message}`, "error");
@@ -2207,7 +2743,7 @@ async function renderAdminTable(filter = "") {
     const rows = users
       .filter((user) =>
         !filterValue ||
-        (user.full_name && user.full_name.toLowerCase().includes(filterValue)) ||
+        (getProfileDisplayName(user).toLowerCase().includes(filterValue)) ||
         (user.id_number && user.id_number.toLowerCase().includes(filterValue))
       )
       .map((user) => {
@@ -2220,7 +2756,7 @@ async function renderAdminTable(filter = "") {
 
         return `
           <tr>
-            <td>${user.full_name || "N/A"}</td>
+            <td>${getProfileDisplayName(user) || "N/A"}</td>
             <td>${user.id_number || "N/A"}</td>
             <td>${user.email || "N/A"}</td>
             <td>${user.role || "N/A"}</td>
@@ -2407,7 +2943,7 @@ async function loadPendingApprovals() {
 
     if (q) {
       students = students.filter((u) => {
-        const blob = `${u.full_name || ""} ${u.id_number || ""} ${u.email || ""}`.toLowerCase();
+        const blob = `${getProfileDisplayName(u)} ${u.id_number || ""} ${u.email || ""}`.toLowerCase();
         return blob.includes(q);
       });
     }
@@ -2417,8 +2953,8 @@ async function loadPendingApprovals() {
         const idNum = String(user.id_number || "").trim();
         const encId = encodeURIComponent(idNum);
         const nameCell = idNum
-          ? `<span class="profile-row-name">${escapeHtml(user.full_name || "N/A")}</span>`
-          : escapeHtml(user.full_name || "N/A");
+          ? `<span class="profile-row-name">${escapeHtml(getProfileDisplayName(user) || "N/A")}</span>`
+          : escapeHtml(getProfileDisplayName(user) || "N/A");
         const stRaw = String(user.approval_status || "pending").toLowerCase();
         const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
         const statusCell = formatStatusBadge(stLabel);
@@ -2436,7 +2972,7 @@ async function loadPendingApprovals() {
           : '<span class="small-note">—</span>';
         const rowAttrs = idNum
           ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
-              user.full_name || "user"
+              getProfileDisplayName(user) || "user"
             )}"`
           : "";
         return `
@@ -2498,7 +3034,7 @@ async function loadTeacherApprovals() {
 
     if (q) {
       teachers = teachers.filter((u) => {
-        const blob = `${u.full_name || ""} ${u.id_number || ""} ${u.email || ""}`.toLowerCase();
+        const blob = `${getProfileDisplayName(u)} ${u.id_number || ""} ${u.email || ""}`.toLowerCase();
         return blob.includes(q);
       });
     }
@@ -2508,8 +3044,8 @@ async function loadTeacherApprovals() {
         const idNum = String(user.id_number || "").trim();
         const encId = encodeURIComponent(idNum);
         const nameCell = idNum
-          ? `<span class="profile-row-name">${escapeHtml(user.full_name || "N/A")}</span>`
-          : escapeHtml(user.full_name || "N/A");
+          ? `<span class="profile-row-name">${escapeHtml(getProfileDisplayName(user) || "N/A")}</span>`
+          : escapeHtml(getProfileDisplayName(user) || "N/A");
         const stRaw = String(user.approval_status || "pending").toLowerCase();
         const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
         const statusCell = formatStatusBadge(stLabel);
@@ -2527,7 +3063,7 @@ async function loadTeacherApprovals() {
           : '<span class="small-note">—</span>';
         const rowAttrs = idNum
           ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
-              user.full_name || "user"
+              getProfileDisplayName(user) || "user"
             )}"`
           : "";
         return `
@@ -2636,7 +3172,7 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
       return;
     }
     const p = data;
-    const fullName = String(p.full_name || "").trim() || "Unnamed user";
+    const fullName = getProfileDisplayName(p) || "Unnamed user";
     const role = String(p.role || "").trim();
     const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : "—";
     const ap = String(p.approval_status || "pending").toLowerCase();
@@ -2746,7 +3282,7 @@ function renderAdminUsersTable() {
     }
     if (!term) return true;
     const hay = [
-      u.full_name,
+      getProfileDisplayName(u),
       u.first_name,
       u.last_name,
       u.id_number,
@@ -2771,7 +3307,7 @@ function renderAdminUsersTable() {
     .map(
       (user) => `
       <tr>
-        <td>${escapeHtml(user.full_name || 'N/A')}</td>
+        <td>${escapeHtml(getProfileDisplayName(user) || 'N/A')}</td>
         <td>${escapeHtml(user.id_number || 'N/A')}</td>
         <td>${escapeHtml(user.email || 'N/A')}</td>
         <td>${escapeHtml(user.role || 'N/A')}</td>
@@ -2999,7 +3535,7 @@ async function loadLeaderboard() {
         (e) =>
           `<tr>
             <td>${escapeHtml(String(e.rank ?? "—"))}</td>
-            <td>${escapeHtml(e.full_name || "Student")}</td>
+            <td>${escapeHtml(e.display_name || getProfileDisplayName(e) || "Student")}</td>
             <td>${escapeHtml(String(e.total_points ?? 0))}</td>
             <td>${escapeHtml(String(e.quiz_attempts ?? 0))}</td>
             <td>${escapeHtml(String(e.progress_pct ?? 0))}%</td>
@@ -3181,16 +3717,21 @@ async function updateAdminUserStatus(idNumber, newStatus) {
       throw new Error(error.error || "Failed to update user status");
     }
 
-    // Refresh the table and metrics
-    await renderAdminTable(document.querySelector("#admin-search")?.value || "");
-    await renderMetrics();
-    await refreshAdminRecentActivity();
+    const refreshTasks = [];
+    if (document.querySelector("#admin-table-body")) {
+      refreshTasks.push(renderAdminTable(document.querySelector("#admin-search")?.value || ""));
+    }
+    if (document.getElementById("metric-total-students")) {
+      refreshTasks.push(renderMetrics());
+    }
+    refreshTasks.push(refreshAdminRecentActivity());
     if (document.querySelector("#approval-table-body") && typeof loadPendingApprovals === "function") {
-      await loadPendingApprovals();
+      refreshTasks.push(loadPendingApprovals());
     }
     if (document.querySelector("#teacher-approval-table-body") && typeof loadTeacherApprovals === "function") {
-      await loadTeacherApprovals();
+      refreshTasks.push(loadTeacherApprovals());
     }
+    await Promise.all(refreshTasks);
     showToast(`User marked ${newStatus.toLowerCase()} successfully.`, "success");
   } catch (error) {
     console.error("Failed to update user status:", error);
@@ -3371,47 +3912,12 @@ async function loadTeacherDashboardLessons() {
       }
     }
     
-    // AI Generation Queue - lessons without AI content or not published
-    const aiQueueList = document.getElementById('ai-queue-list');
-    if (aiQueueList) {
-      const queuedLessons = lessons.filter(
-        (lesson) =>
-          !(lesson.is_published || lesson.published) &&
-          (!lesson.lesson_content || !lesson.lesson_content.reviewer),
-      );
-      if (queuedLessons.length === 0) {
-        aiQueueList.innerHTML = subjectFilter
-          ? '<p class="small-note">No lessons waiting for AI generation under this subject.</p>'
-          : '<p class="small-note">No lessons waiting for AI generation.</p>';
-      } else {
-        aiQueueList.innerHTML = queuedLessons.map((lesson) => {
-          const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
-          const fname = escapeHtml(lesson.filename || "Untitled Lesson");
-          return `
-          <div class="queue-item">
-            <div class="queue-info">
-              <h4>${fname}</h4>
-              <span class="small-note">Waiting for AI processing</span>
-            </div>
-            <div class="queue-status">
-              <span class="status-badge warning">Pending</span>
-            </div>
-            <div class="lesson-actions">
-              <button type="button" class="btn btn-sm btn-danger" onclick="deleteTeacherLesson('${lid}')">Delete</button>
-            </div>
-          </div>
-        `;
-        }).join('');
-      }
-    }
-    
   } catch (error) {
     console.error('Failed to load teacher dashboard lessons:', error);
     
     // Show error messages in all sections
     document.getElementById('recent-lessons-list') && (document.getElementById('recent-lessons-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
     document.getElementById('published-lessons-list') && (document.getElementById('published-lessons-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
-    document.getElementById('ai-queue-list') && (document.getElementById('ai-queue-list').innerHTML = '<p class="small-note">Error loading lessons.</p>');
   }
 }
 
@@ -4925,7 +5431,7 @@ async function renderAdminTeacherSubjectsView(teacherIdNumber) {
     );
     if (teacher) {
       const composed = [teacher.first_name, teacher.last_name].filter(Boolean).join(" ").trim();
-      teacherName = composed || teacher.full_name || teacher.email || teacherName;
+      teacherName = composed || getProfileDisplayName(teacher) || teacher.email || teacherName;
     }
   } catch (e) {
     console.log("DEBUG: teacher subjects view — teacher lookup skipped:", e);
@@ -5043,7 +5549,7 @@ async function renderAdminTeacherLessonsView(teacherIdNumber, subjectId) {
     );
     if (teacher) {
       const composed = [teacher.first_name, teacher.last_name].filter(Boolean).join(" ").trim();
-      teacherName = composed || teacher.full_name || teacher.email || teacherName;
+      teacherName = composed || getProfileDisplayName(teacher) || teacher.email || teacherName;
     }
   } catch (e) {
     console.log("DEBUG: lessons view — teacher lookup skipped:", e);
@@ -5464,6 +5970,58 @@ function setupTeacherAddSubjectForm() {
       }
     }
   });
+}
+
+async function setupModuleSelectionPage() {
+  const learniqLink = document.getElementById("learniq-module-link");
+  const immersionLink = document.getElementById("immersion-module-link");
+  const immersionNote = document.getElementById("immersion-module-note");
+  const immersionBtn = document.getElementById("immersion-module-btn");
+
+  let user = getCurrentUserSession();
+  if (!user?.access_token) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  try {
+    const res = await fetch(apiUrl("/me"), { headers: immersionAuthHeaders() });
+    const prof = await readApiJson(res);
+    user = { ...user, ...prof, access_token: user.access_token, refresh_token: user.refresh_token };
+    setCurrentUserSession(user);
+  } catch (e) {
+    console.warn("module-selection: could not refresh profile", e);
+  }
+
+  const role = String(user.role || "").trim().toLowerCase();
+
+  if (learniqLink) {
+    learniqLink.href = role === "teacher" ? "teacher-learniq-dashboard.html" : "learniq-dashboard.html";
+  }
+
+  if (!immersionLink) return;
+
+  const immersionHref =
+    role === "teacher" ? "teacher-immersion.html" : "immersion-dashboard.html";
+
+  if (isGrade11Student(user)) {
+    immersionLink.href = "#";
+    immersionLink.classList.add("is-disabled");
+    immersionLink.setAttribute("aria-disabled", "true");
+    immersionLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      showToast("Immersion Tracker is only for Grade 12 students.", "info");
+    });
+    if (immersionNote) immersionNote.hidden = false;
+    if (immersionBtn) {
+      immersionBtn.classList.remove("btn-primary");
+      immersionBtn.classList.add("btn-secondary", "is-locked");
+      immersionBtn.textContent = "Grade 12 only";
+    }
+    return;
+  }
+
+  immersionLink.href = immersionHref;
 }
 
 function setupStudentDashboard() {
@@ -6918,7 +7476,7 @@ function openHistoryItemDetail(type, index) {
   }
 }
 
-function downloadHistoryDetailAsPdf() {
+async function downloadHistoryDetailAsPdf() {
   const body = document.getElementById("history-detail-body");
   const titleEl = document.getElementById("history-detail-title");
   const subEl = document.getElementById("history-detail-subtitle");
@@ -6931,15 +7489,6 @@ function downloadHistoryDetailAsPdf() {
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const baseName = `${typeLabel}_${lessonTitle}`;
 
-  if (typeof html2pdf === "undefined") {
-    if (typeof showToast === "function") {
-      showToast("PDF export is not ready. Refresh the page and try again.", "error");
-    }
-    return;
-  }
-
-  const clone = document.createElement("div");
-  clone.className = "history-pdf-export reviewer-markdown-body";
   const sanitizedTitle = escapeHtml(lessonTitle);
   const sanitizedSubtitle = escapeHtml(String(subEl?.textContent || ""));
   const header = `
@@ -6949,21 +7498,6 @@ function downloadHistoryDetailAsPdf() {
       ${sanitizedSubtitle ? `<p class="history-pdf-subtitle">${sanitizedSubtitle}</p>` : ""}
     </div>
   `;
-  clone.innerHTML = header + body.innerHTML;
-  clone.setAttribute("aria-hidden", "true");
-  clone.style.cssText = [
-    "position:fixed",
-    "left:-12000px",
-    "top:0",
-    "width:190mm",
-    "box-sizing:border-box",
-    "padding:14mm 14mm",
-    "font:11pt/1.55 Inter,system-ui,Segoe UI,sans-serif",
-    "background:#ffffff",
-    "color:#111827",
-  ].join(";");
-
-  document.body.appendChild(clone);
 
   const safeBase =
     (baseName || "history")
@@ -6972,15 +7506,6 @@ function downloadHistoryDetailAsPdf() {
       .replace(/_+/g, "_")
       .slice(0, 80) || "history";
 
-  const opt = {
-    margin: [8, 8, 8, 8],
-    filename: `${safeBase}.pdf`,
-    image: { type: "jpeg", quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"] },
-  };
-
   const btn = document.getElementById("history-detail-download");
   const originalHtml = btn ? btn.innerHTML : null;
   if (btn) {
@@ -6988,24 +7513,21 @@ function downloadHistoryDetailAsPdf() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Preparing PDF…';
   }
 
-  html2pdf()
-    .set(opt)
-    .from(clone)
-    .save()
-    .then(() => {
-      if (typeof showToast === "function") showToast("PDF downloaded.", "success");
-    })
-    .catch((err) => {
-      console.error(err);
-      if (typeof showToast === "function") showToast("Could not create PDF. Try again.", "error");
-    })
-    .finally(() => {
-      clone.remove();
-      if (btn) {
-        btn.disabled = false;
-        if (originalHtml !== null) btn.innerHTML = originalHtml;
+  try {
+    if (typeof downloadHtmlAsPdf !== "function") {
+      if (typeof showToast === "function") {
+        showToast("PDF export is not ready. Refresh the page and try again.", "error");
       }
-    });
+      return;
+    }
+    const ok = await downloadHtmlAsPdf(header + body.innerHTML, `${safeBase}.pdf`, "history-pdf-export");
+    if (ok && typeof showToast === "function") showToast("PDF downloaded.", "success");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      if (originalHtml !== null) btn.innerHTML = originalHtml;
+    }
+  }
 }
 
 function updateStudentHistoryTabCounts() {
@@ -7029,7 +7551,7 @@ function setStudentHistoryActiveTab(type) {
 }
 
 function setupStudentHistoryPage() {
-  if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
+  initRoleAwareDashboardSidebar();
   if (typeof hydrateSidebarProfileFromDatabase === "function") {
     void hydrateSidebarProfileFromDatabase();
   }
@@ -7079,6 +7601,7 @@ if (typeof window !== "undefined") {
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired:", window.location.pathname);
+  initRoleAwareDashboardSidebar();
   animateProgressBars();
   if (document.getElementById("admin-sidebar-name") || document.getElementById("admin-sidebar-avatar")) {
     hydrateAdminSidebarFromSession();
@@ -7112,7 +7635,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupLeaderboardPage();
   }
   if (window.location.pathname.includes("module-selection.html")) {
-    setupStudentDashboard();
+    void setupModuleSelectionPage();
   }
   if (window.location.pathname.includes('learniq-dashboard.html') || window.location.pathname.includes('my-lesson.html')) {
     setupStudentDashboard();
@@ -7135,7 +7658,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function refreshAvatarsAcrossPage(user) {
   if (!window.LearnIQAvatar || !user) return;
-  const fullName = String(user.full_name || "").trim();
+  const fullName = getProfileDisplayName(user);
   const fallback = getUserInitials(fullName || user.email || "");
   const sidebar = document.getElementById("student-avatar-initials");
   if (sidebar) window.LearnIQAvatar.applyToElement(sidebar, user, fallback);
@@ -7361,7 +7884,7 @@ function setupProfilePhotoEditor(user) {
   }
 
   function refresh() {
-    const fullName = String(user.full_name || "").trim();
+    const fullName = getProfileDisplayName(user);
     const fallback = getUserInitials(fullName || user.email || "") || "ST";
     if (window.LearnIQAvatar) {
       window.LearnIQAvatar.applyToElement(avatarEl, user, fallback);
@@ -7946,7 +8469,7 @@ function setupProfilePage() {
     }
 
     const role = String(u.role || "").trim();
-    setText("profile-full-name", String(u.full_name || "").trim() || "—");
+    setText("profile-full-name", getProfileDisplayName(u) || "—");
     setText("profile-role", role || "—");
     setText("profile-id-number", String(u.id_number || "").trim() || "—");
     setText("profile-email", String(u.email || "").trim() || "—");
@@ -7977,7 +8500,7 @@ function setupProfilePage() {
   }
 
   const role = String(u.role || "").trim();
-  setText("profile-full-name", String(u.full_name || "").trim() || "—");
+  setText("profile-full-name", getProfileDisplayName(u) || "—");
   setText("profile-role", role || "—");
   setText("profile-id-number", String(u.id_number || "").trim() || "—");
   setText("profile-email", String(u.email || "").trim() || "—");

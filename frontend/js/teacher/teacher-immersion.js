@@ -32,7 +32,7 @@
           .map(
             (s) =>
               `<option value="${escapeHtml(String(s.id_number))}">${escapeHtml(
-                `${s.full_name || s.id_number} (${String(s.id_number)})`
+                `${(typeof getProfileDisplayName === "function" ? getProfileDisplayName(s) : s.display_name) || s.id_number} (${String(s.id_number)})`
               )}</option>`
           )
           .join("") || `<option value="">No approved students</option>`;
@@ -52,7 +52,7 @@
     const bundle = await readApiJson(res);
     const hrs =
       bundle.total_hours_rendered != null ? Number(bundle.total_hours_rendered).toFixed(2) : "0.00";
-    const nm = bundle.student?.full_name || sid;
+    const nm = bundle.student?.display_name || (typeof getProfileDisplayName === "function" ? getProfileDisplayName(bundle.student) : sid) || sid;
     if (metricsEl) {
       metricsEl.innerHTML = `<strong>${escapeHtml(nm)}</strong> · rendered <strong>${escapeHtml(hrs)}</strong> hrs`;
     }

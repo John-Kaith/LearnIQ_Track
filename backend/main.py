@@ -13,6 +13,7 @@ from pypdf import PdfReader
 from supabase import create_client, Client
 
 import db_supabase
+import immersion_upload
 from supabase_client import is_configured
 
 # Always load `backend/.env` (same folder as this file), not only when cwd is `backend/`.
@@ -22,7 +23,10 @@ load_dotenv(_backend_env, override=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
+UPLOADS_DIR = immersion_upload.UPLOAD_ROOT
 API_KEY = os.getenv("API_KEY")
+
+IMMERSION_CAPTURE_MAX_SKEW_MINUTES = 15
 
 # Supabase Auth client
 supabase_url = os.getenv("SUPABASE_URL")
@@ -272,12 +276,13 @@ def test_db():
     }
     try:
         inserted = db_supabase.insert_profile(
-            full_name="Supabase DB Test",
             id_number=test_id,
             email=test_email,
             password="TempPass123",
             role="student",
             approval_status="pending",
+            last_name="Test",
+            first_name="Supabase",
         )
         result["insert_ok"] = bool(inserted and inserted.get("id_number") == test_id)
 
@@ -391,16 +396,10 @@ async def login_user(body: dict):
             print(f"DEBUG: Role value trimmed: '{role_value.strip() if role_value else None}'")
             print(f"DEBUG: Role value lowercased: '{role_value.strip().lower() if role_value else None}'")
             
-            safe_user = {
-                "id": user_profile.get("id"),
-                "full_name": user_profile.get("full_name"),
-                "id_number": user_profile.get("id_number"),
-                "email": user_profile.get("email"),
-                "role": role_value.strip().lower() if role_value else "student",
-                "approval_status": user_profile.get("approval_status"),
-                "access_token": auth_response.session.access_token,
-                "refresh_token": auth_response.session.refresh_token
-            }
+            safe_user = db_supabase.serialize_public_profile(user_profile)
+            safe_user["role"] = role_value.strip().lower() if role_value else "student"
+            safe_user["access_token"] = auth_response.session.access_token
+            safe_user["refresh_token"] = auth_response.session.refresh_token
             print(f"DEBUG: Safe user data prepared: {safe_user}")
             print(f"DEBUG: Final role in safe_user: '{safe_user['role']}'")
             print(f"DEBUG: Final role type: {type(safe_user['role'])}")
@@ -497,18 +496,31 @@ async def validate_session(body: dict):
             return JSONResponse({"error": "User profile not found."}, status_code=404)
         
         # Return safe user data
-        safe_user = {
-            "id": user_profile.get("id"),
-            "full_name": user_profile.get("full_name"),
-            "id_number": user_profile.get("id_number"),
-            "email": user_profile.get("email"),
-            "role": user_profile.get("role"),
-            "approval_status": user_profile.get("approval_status")
-        }
-        
+        safe_user = db_supabase.serialize_public_profile(user_profile)
         return {"user": safe_user, "message": "Session valid"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+_STUDENT_STRANDS = frozenset({"ABM", "HUMSS", "STEM", "TVL-HE"})
+_STUDENT_GRADE_LEVELS = frozenset({"11", "12"})
+def _normalize_name_suffix(raw: str) -> str | None:
+    s = (raw or "").strip()
+    if not s:
+        return None
+    if len(s) > 20:
+        return None
+    key = s.upper().replace(".", "")
+    aliases = {
+        "JR": "Jr",
+        "JUNIOR": "Jr",
+        "SR": "Sr",
+        "SENIOR": "Sr",
+        "III": "III",
+        "IV": "IV",
+        "V": "V",
+    }
+    return aliases.get(key, s)
 
 
 @app.post("/register")
@@ -517,44 +529,86 @@ async def register_user(body: dict):
     if err is not None:
         return err
     try:
-        full_name = (body.get("full_name") or "").strip()
         id_number = (body.get("id_number") or "").strip()
         email = (body.get("email") or "").strip()
         password = body.get("password") or ""
         role = (body.get("role") or "student").strip().lower()
-        
-        if not full_name or not id_number or not email or not password:
-            return JSONResponse({"error": "full_name, id_number, email, and password are required."}, status_code=400)
-        
-        # Only allow student and teacher roles for public signup
+
+        if not id_number or not email or not password:
+            return JSONResponse(
+                {"error": "id_number, email, and password are required."},
+                status_code=400,
+            )
+
         if role not in ("student", "teacher"):
             role = "student"
-        
-        # Create user with Supabase Auth (this sends confirmation email)
+
+        last_name = (body.get("last_name") or "").strip()
+        first_name = (body.get("first_name") or "").strip()
+        middle_name = (body.get("middle_name") or "").strip()
+        name_suffix = _normalize_name_suffix(body.get("name_suffix") or "")
+        if (body.get("name_suffix") or "").strip() and not name_suffix:
+            return JSONResponse(
+                {"error": "Suffix is too long (max 20 characters)."},
+                status_code=400,
+            )
+        grade_level = (body.get("grade_level") or "").strip()
+        strand_raw = (body.get("strand") or "").strip().upper().replace(" ", "-")
+        strand_aliases = {"HUMMS": "HUMSS", "TVLHE": "TVL-HE"}
+        strand = strand_aliases.get(strand_raw, strand_raw)
+
+        if not last_name or not first_name:
+            return JSONResponse(
+                {"error": "last_name and first_name are required."},
+                status_code=400,
+            )
+
+        if role == "student":
+            if grade_level not in _STUDENT_GRADE_LEVELS:
+                return JSONResponse(
+                    {"error": "grade_level must be 11 or 12."},
+                    status_code=400,
+                )
+            if strand not in _STUDENT_STRANDS:
+                return JSONResponse(
+                    {"error": "strand must be one of: ABM, HUMSS, STEM, TVL-HE."},
+                    status_code=400,
+                )
+
+        auth_meta = {
+            "id_number": id_number,
+            "role": role,
+            "last_name": last_name,
+            "first_name": first_name,
+            "middle_name": middle_name,
+            "name_suffix": name_suffix or "",
+        }
+        if role == "student":
+            auth_meta["grade_level"] = grade_level
+            auth_meta["strand"] = strand
+
         auth_response = supabase.auth.sign_up({
             "email": email,
             "password": password,
-            "options": {
-                "data": {
-                    "full_name": full_name,
-                    "id_number": id_number,
-                    "role": role
-                }
-            }
+            "options": {"data": auth_meta},
         })
-        
+
         if not auth_response.user:
             return JSONResponse({"error": "Failed to create account."}, status_code=400)
-        
-        # Insert user profile into our profiles table with matching auth user ID
+
         profile = db_supabase.insert_profile(
-            full_name=full_name,
             id_number=id_number,
             email=email,
-            password="",  # No password stored in profiles table anymore
+            password="",
             role=role,
             approval_status="pending",
-            auth_user_id=auth_response.user.id  # Use Supabase Auth user ID
+            auth_user_id=auth_response.user.id,
+            last_name=last_name,
+            first_name=first_name,
+            middle_name=middle_name or None,
+            name_suffix=name_suffix,
+            grade_level=grade_level if role == "student" else None,
+            strand=strand if role == "student" else None,
         )
         
         profile = dict(profile)
@@ -732,20 +786,7 @@ def get_teacher_dashboard_stats(authorization: str | None = Header(default=None)
 
 def _profile_response_payload(prof: dict) -> dict:
     """Shared shape returned by GET /me and PATCH /me/profile."""
-    return {
-        "id": prof.get("id"),
-        "full_name": prof.get("full_name"),
-        "id_number": prof.get("id_number"),
-        "email": prof.get("email"),
-        "role": prof.get("role"),
-        "approval_status": prof.get("approval_status"),
-        "bio": prof.get("bio") or "",
-        "phone": prof.get("phone") or "",
-        "section": prof.get("section") or "",
-        "dob": (str(prof.get("dob")) if prof.get("dob") else ""),
-        "address": prof.get("address") or "",
-        "avatar_data": prof.get("avatar_data") or "",
-    }
+    return db_supabase.serialize_public_profile(prof)
 
 
 @app.get("/me")
@@ -1569,19 +1610,98 @@ async def quiz_attempt(body: dict):
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+def _parse_capture_timestamp_iso(raw: str) -> datetime:
+    s = (raw or "").strip()
+    if not s:
+        raise ValueError("capture_timestamp is required.")
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _reverse_geocode_location(lat: float, lon: float) -> str | None:
+    try:
+        res = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers={"User-Agent": "LearnIQTrack/1.0 (immersion attendance)"},
+            timeout=10,
+        )
+        if res.status_code != 200:
+            return None
+        data = res.json()
+        return (data.get("display_name") or "").strip() or None
+    except Exception as e:
+        print("reverse_geocode:", e)
+        return None
+
+
 @app.post("/time-in")
 async def time_in(
-    body: dict | None = Body(default=None),
     authorization: str | None = Header(default=None),
+    photo: UploadFile | None = File(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    readable_location_name: str | None = Form(None),
+    capture_timestamp: str | None = Form(None),
 ):
+    """Time In requires multipart: photo + GPS + capture timestamp (no manual time/location)."""
     err = require_supabase()
     if err is not None:
         return err
     try:
-        payload = body if isinstance(body, dict) else {}
-        student_id, bad = resolve_student_id_number_or_403(payload, authorization)
+        student_id, bad = resolve_student_id_number_or_403({}, authorization)
         if bad is not None:
             return bad
+
+        if photo is None or not photo.filename:
+            return JSONResponse(
+                {
+                    "error": "Photo is required. Tap Take Photo and allow camera access before Time In.",
+                },
+                status_code=400,
+            )
+        if latitude is None or longitude is None:
+            return JSONResponse(
+                {"error": "GPS location is required. Allow location access when taking your photo."},
+                status_code=400,
+            )
+        try:
+            lat = float(latitude)
+            lon = float(longitude)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "Invalid GPS coordinates."}, status_code=400)
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return JSONResponse({"error": "GPS coordinates are out of range."}, status_code=400)
+
+        try:
+            capture_dt = _parse_capture_timestamp_iso(capture_timestamp or "")
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+        now_dt = datetime.now(timezone.utc)
+        skew_sec = abs((now_dt - capture_dt).total_seconds())
+        if skew_sec > IMMERSION_CAPTURE_MAX_SKEW_MINUTES * 60:
+            return JSONResponse(
+                {
+                    "error": f"Capture time must be within {IMMERSION_CAPTURE_MAX_SKEW_MINUTES} minutes of now. Take a new photo.",
+                },
+                status_code=400,
+            )
+
+        location_label = (readable_location_name or "").strip()
+        if not location_label:
+            location_label = _reverse_geocode_location(lat, lon) or ""
+        if not location_label:
+            return JSONResponse(
+                {
+                    "error": "Could not determine your location name. Allow GPS and try again outdoors or near a window.",
+                },
+                status_code=400,
+            )
 
         existing = db_supabase.get_active_attendance(student_id)
         if existing:
@@ -1590,36 +1710,145 @@ async def time_in(
                 status_code=409,
             )
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        row = db_supabase.insert_time_in(student_id, now_iso)
+        raw = await photo.read()
+        content_type = (photo.content_type or "").lower()
+        if content_type and not content_type.startswith("image/"):
+            return JSONResponse({"error": "Only image files are allowed for Time In."}, status_code=400)
+
+        try:
+            rel_path = immersion_upload.save_immersion_photo(
+                student_id, raw, photo.filename, name_prefix="time-in"
+            )
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+        now_iso = now_dt.isoformat()
+        capture_iso = capture_dt.isoformat()
+        row = db_supabase.insert_time_in_with_capture(
+            student_id,
+            now_iso,
+            captured_photo_path=rel_path,
+            latitude=lat,
+            longitude=lon,
+            readable_location_name=location_label,
+            capture_timestamp=capture_iso,
+        )
         return row
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        err_text = str(e)
+        if "PGRST204" in err_text or "capture_timestamp" in err_text:
+            return JSONResponse(
+                {
+                    "error": (
+                        "Database setup incomplete: run backend/migrations/immersion_attendance_capture.sql "
+                        "in Supabase SQL Editor, wait a few seconds, then try Time In again."
+                    ),
+                },
+                status_code=503,
+            )
+        return JSONResponse({"error": err_text}, status_code=502)
 
 
 @app.post("/time-out")
 async def time_out(
-    body: dict | None = Body(default=None),
     authorization: str | None = Header(default=None),
+    photo: UploadFile | None = File(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    readable_location_name: str | None = Form(None),
+    capture_timestamp: str | None = Form(None),
 ):
+    """Time Out requires multipart: photo + GPS + capture timestamp."""
     err = require_supabase()
     if err is not None:
         return err
     try:
-        payload = body if isinstance(body, dict) else {}
-        student_id, bad = resolve_student_id_number_or_403(payload, authorization)
+        student_id, bad = resolve_student_id_number_or_403({}, authorization)
         if bad is not None:
             return bad
+
+        if photo is None or not photo.filename:
+            return JSONResponse(
+                {"error": "Photo is required. Tap Take Photo and allow camera access before Time Out."},
+                status_code=400,
+            )
+        if latitude is None or longitude is None:
+            return JSONResponse(
+                {"error": "GPS location is required. Allow location access when taking your photo."},
+                status_code=400,
+            )
+        try:
+            lat = float(latitude)
+            lon = float(longitude)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "Invalid GPS coordinates."}, status_code=400)
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return JSONResponse({"error": "GPS coordinates are out of range."}, status_code=400)
+
+        try:
+            capture_dt = _parse_capture_timestamp_iso(capture_timestamp or "")
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+        now_dt = datetime.now(timezone.utc)
+        if abs((now_dt - capture_dt).total_seconds()) > IMMERSION_CAPTURE_MAX_SKEW_MINUTES * 60:
+            return JSONResponse(
+                {
+                    "error": f"Capture time must be within {IMMERSION_CAPTURE_MAX_SKEW_MINUTES} minutes of now. Take a new photo.",
+                },
+                status_code=400,
+            )
+
+        location_label = (readable_location_name or "").strip()
+        if not location_label:
+            location_label = _reverse_geocode_location(lat, lon) or ""
+        if not location_label:
+            return JSONResponse(
+                {"error": "Could not determine your location name. Allow GPS and try again."},
+                status_code=400,
+            )
 
         active = db_supabase.get_active_attendance(student_id)
         if not active:
             return JSONResponse({"error": "No active Time In found for this student."}, status_code=400)
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        updated = db_supabase.complete_time_out(str(active["id"]), now_iso)
+        raw = await photo.read()
+        content_type = (photo.content_type or "").lower()
+        if content_type and not content_type.startswith("image/"):
+            return JSONResponse({"error": "Only image files are allowed for Time Out."}, status_code=400)
+
+        try:
+            rel_path = immersion_upload.save_immersion_photo(
+                student_id, raw, photo.filename, name_prefix="time-out"
+            )
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+        now_iso = now_dt.isoformat()
+        capture_iso = capture_dt.isoformat()
+        updated = db_supabase.complete_time_out_with_capture(
+            str(active["id"]),
+            now_iso,
+            time_out_photo_path=rel_path,
+            latitude=lat,
+            longitude=lon,
+            readable_location_name=location_label,
+            capture_timestamp=capture_iso,
+        )
         return updated
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        err_text = str(e)
+        if "PGRST204" in err_text and "time_out_" in err_text:
+            return JSONResponse(
+                {
+                    "error": (
+                        "Database setup incomplete: run backend/migrations/immersion_time_out_capture.sql "
+                        "in Supabase SQL Editor, then try Time Out again."
+                    ),
+                },
+                status_code=503,
+            )
+        return JSONResponse({"error": err_text}, status_code=502)
 
 
 @app.get("/attendance-history")
@@ -1635,8 +1864,8 @@ def attendance_history(
         student_id, bad = resolve_student_id_number_or_403({}, authorization)
         if bad is not None:
             return bad
-        rows = db_supabase.list_attendance_by_student(student_id)[:limit]
-        active = db_supabase.get_active_attendance(student_id)
+        rows = [db_supabase.enrich_attendance_row(r) for r in db_supabase.list_attendance_by_student(student_id)[:limit]]
+        active = db_supabase.enrich_attendance_row(db_supabase.get_active_attendance(student_id))
         total = 0.0
         for r in rows:
             th = r.get("total_hours")
@@ -2019,6 +2248,10 @@ async def submit_activity_endpoint(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
+
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "immersion").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

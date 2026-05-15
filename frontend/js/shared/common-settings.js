@@ -70,7 +70,7 @@
   }
 
   function buildHTML(session) {
-    const name = session.full_name || "—";
+    const name = (typeof getProfileDisplayName === "function" ? getProfileDisplayName(session) : session.display_name) || "—";
     const idNumber = session.id_number || "—";
     const email = session.email || "—";
     const role = (session.role || "—").replace(/^./, (c) => c.toUpperCase());

@@ -1811,8 +1811,7 @@ html[data-theme="light"] .lesson-card .lesson-info .small-note {
 }
 
 html[data-theme="light"] .teacher-learniq-page .teacher-lesson-grid .lesson-item,
-html[data-theme="light"] .teacher-learniq-page .teacher-lesson-grid .published-lesson,
-html[data-theme="light"] .teacher-learniq-page .teacher-lesson-grid .queue-item {
+html[data-theme="light"] .teacher-learniq-page .teacher-lesson-grid .published-lesson {
   background: var(--panel-strong);
   border-color: var(--border);
 }
@@ -2309,9 +2308,8 @@ textarea:focus {
   margin-top: 0.75rem;
 }
 
-/* Recent lessons + AI queue: always 2 tiles per row inside the card */
-body.teacher-learniq-page #recent-lessons-list,
-body.teacher-learniq-page #ai-queue-list {
+/* Recent lessons: always 2 tiles per row inside the card */
+body.teacher-learniq-page #recent-lessons-list {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 1rem !important;
@@ -2339,8 +2337,7 @@ body.teacher-learniq-page #published-lessons-list {
 }
 
 .teacher-learniq-page .teacher-lesson-grid .lesson-item,
-.teacher-learniq-page .teacher-lesson-grid .published-lesson,
-.teacher-learniq-page .teacher-lesson-grid .queue-item {
+.teacher-learniq-page .teacher-lesson-grid .published-lesson {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2353,13 +2350,11 @@ body.teacher-learniq-page #published-lessons-list {
   min-width: 0;
 }
 
-.teacher-learniq-page .teacher-lesson-grid .lesson-info,
-.teacher-learniq-page .teacher-lesson-grid .queue-info {
+.teacher-learniq-page .teacher-lesson-grid .lesson-info {
   width: 100%;
 }
 
 .teacher-learniq-page .teacher-lesson-grid .lesson-info h4,
-.teacher-learniq-page .teacher-lesson-grid .queue-info h4,
 .teacher-learniq-page .teacher-lesson-grid .published-lesson h4 {
   margin: 0 0 0.35rem;
   font-size: 1rem;
@@ -2393,13 +2388,8 @@ body.teacher-learniq-page #published-lessons-list {
   color: var(--muted);
 }
 
-.teacher-learniq-page .teacher-lesson-grid .queue-status {
-  margin-top: auto;
-}
-
 @media (max-width: 720px) {
-  body.teacher-learniq-page #recent-lessons-list,
-  body.teacher-learniq-page #ai-queue-list {
+  body.teacher-learniq-page #recent-lessons-list {
     grid-template-columns: 1fr !important;
   }
 }
@@ -3393,6 +3383,29 @@ html[data-theme="light"] .admin-subject-card-actions .btn-danger:hover {
   --subject-color: #60a5fa;
 }
 
+/* Teacher My Subjects: compact actions (Upload / Open / Delete) — base .lesson-card forces full-width large .btn */
+.teacher-subjects-page .lesson-card .lesson-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.teacher-subjects-page .lesson-card .lesson-actions .btn {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.42rem 0.72rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.teacher-subjects-page .lesson-card .lesson-actions .btn i {
+  font-size: 0.85em;
+}
+
 .panel-header-actions {
   display: flex;
   align-items: center;
@@ -3999,9 +4012,11 @@ html[data-theme="light"] .history-quiz-choice.is-student:not(.is-correct) {
   border-color: rgba(239, 68, 68, 0.45);
 }
 
-/* --- History PDF export clone --- */
+/* --- History PDF export clone (also uses .reviewer-pdf-export for capture) --- */
+.history-pdf-export.reviewer-pdf-export,
 .history-pdf-export {
-  color: #111827;
+  background: #ffffff !important;
+  color: #111827 !important;
 }
 
 .history-pdf-export .history-pdf-header {
@@ -5300,6 +5315,36 @@ html[data-theme="light"] .learniq-dashboard-page .overview-item:hover {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.module-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  filter: grayscale(0.35);
+  pointer-events: auto;
+}
+
+.module-card.is-disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.module-restriction-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.module-card.is-disabled .module-action .btn.is-locked {
+  color: rgba(255, 255, 255, 0.45) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none !important;
+}
+
 .module-icon {
   font-size: 3rem;
   color: var(--accent);
@@ -5348,6 +5393,329 @@ html[data-theme="light"] .learniq-dashboard-page .overview-item:hover {
 }
 
 /* Immersion Dashboard Specific Styles */
+.immersion-capture-status {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+}
+
+.immersion-capture-status.is-error {
+  color: #f87171;
+}
+
+.immersion-clock-actions {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.immersion-camera-panel {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Compact landscape preview (16:9, scaled down) */
+.immersion-clock-card .immersion-camera-viewport {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 520px);
+  max-width: 520px;
+  margin: 0 auto 0.75rem;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0f1a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.immersion-preview-viewport {
+  margin-bottom: 0.85rem;
+}
+
+.immersion-capture-video,
+.immersion-preview-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  object-fit: cover;
+  object-position: center;
+  background: #0a0f1a;
+}
+
+
+.immersion-capture-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.immersion-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.immersion-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+
+.immersion-capture-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.immersion-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.immersion-meta-row {
+  display: grid;
+  grid-template-columns: 6.75rem minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+}
+
+@media (max-width: 520px) {
+  .immersion-meta-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}
+
+.immersion-meta-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.immersion-meta-value {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* Time In / Time Out: gray/outline look until photo capture (no gradient) */
+.immersion-clock-card .immersion-time-in-btn.is-locked,
+.immersion-clock-card .immersion-time-in-btn:disabled,
+.immersion-clock-card .immersion-time-out-btn.is-locked,
+.immersion-clock-card .immersion-time-out-btn:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.38) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none !important;
+  opacity: 0.72;
+  filter: grayscale(0.35);
+}
+
+.immersion-clock-card .immersion-time-in-btn.is-locked:hover,
+.immersion-clock-card .immersion-time-in-btn:disabled:hover,
+.immersion-clock-card .immersion-time-out-btn.is-locked:hover,
+.immersion-clock-card .immersion-time-out-btn:disabled:hover {
+  transform: none;
+}
+
+.immersion-clock-card .immersion-time-in-btn:not(.is-locked):not(:disabled),
+.immersion-clock-card .immersion-time-out-btn:not(.is-locked):not(:disabled) {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
+  border: 0 !important;
+  box-shadow: 0 16px 32px rgba(90, 110, 255, 0.28) !important;
+  opacity: 1;
+  filter: none;
+}
+
+.immersion-time-in-summary {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.immersion-time-in-summary .small-note {
+  margin: 0 0 0.5rem;
+}
+
+.immersion-detail-section + .immersion-detail-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.immersion-detail-section h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.immersion-detail-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.immersion-detail-photo-thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  cursor: zoom-in;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.immersion-detail-photo-thumb:hover,
+.immersion-detail-photo-thumb:focus-visible {
+  border-color: rgba(90, 110, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(90, 110, 255, 0.25);
+  outline: none;
+}
+
+.immersion-detail-photo-thumb img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.immersion-see-photo-btn {
+  padding-left: 0;
+}
+
+.immersion-photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.25rem 1.25rem;
+  background: rgba(2, 6, 23, 0.92);
+}
+
+.immersion-photo-lightbox[hidden] {
+  display: none !important;
+}
+
+.immersion-photo-lightbox-inner {
+  max-width: min(96vw, 1280px);
+  max-height: calc(100vh - 4rem);
+}
+
+.immersion-photo-lightbox-inner img {
+  display: block;
+  max-width: min(96vw, 1280px);
+  max-height: calc(100vh - 4rem);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.immersion-photo-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+}
+
+.immersion-photo-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.immersion-detail-meta {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.immersion-detail-meta div {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.immersion-detail-meta dt {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.immersion-detail-meta dd {
+  margin: 0;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.time-log-item.immersion-attendance-row {
+  cursor: pointer;
+}
+
+.time-log-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.time-log-location {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+
 .time-status {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -5496,7 +5864,8 @@ html[data-theme="light"] .learniq-dashboard-page .overview-item:hover {
   font-weight: 500;
 }
 
-.auth-form input {
+.auth-form input,
+.auth-form select {
   width: 100%;
   padding: 0.875rem 1.125rem;
   border-radius: 0.5rem;
@@ -5506,6 +5875,10 @@ html[data-theme="light"] .learniq-dashboard-page .overview-item:hover {
   font-size: 1rem;
   font-family: inherit;
   transition: all 0.3s ease;
+}
+
+.auth-form select {
+  cursor: pointer;
 }
 
 .password-input-container {
@@ -6382,6 +6755,123 @@ html[data-theme="light"] .fc-card-back .fc-card-label {
   font-size: 0.85rem;
   margin: 0;
   color: var(--muted);
+}
+
+/* html2pdf export clone only — never add reviewer-markdown-body to the clone (dark theme vars). */
+.reviewer-pdf-export {
+  background: #ffffff !important;
+  color: #111827 !important;
+  line-height: 1.55;
+  font-size: 11pt;
+}
+
+.reviewer-pdf-export h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0.75rem;
+  color: #111827 !important;
+}
+
+.reviewer-pdf-export h2 {
+  font-size: 1.08rem;
+  font-weight: 600;
+  margin: 1.35rem 0 0.55rem;
+  color: #111827 !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.18);
+  padding-bottom: 0.25rem;
+}
+
+.reviewer-pdf-export h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+  color: #374151 !important;
+}
+
+.reviewer-pdf-export h4,
+.reviewer-pdf-export h5,
+.reviewer-pdf-export h6 {
+  color: #111827 !important;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.reviewer-pdf-export p {
+  margin: 0.55rem 0;
+  color: #111827 !important;
+}
+
+.reviewer-pdf-export ul,
+.reviewer-pdf-export ol {
+  margin: 0.4rem 0 0.75rem;
+  padding-left: 1.2rem;
+  color: #111827 !important;
+}
+
+.reviewer-pdf-export li {
+  margin: 0.28rem 0;
+  color: #111827 !important;
+}
+
+.reviewer-pdf-export hr {
+  border: none;
+  border-top: 1px solid rgba(15, 23, 42, 0.22);
+  margin: 1.25rem 0;
+}
+
+.reviewer-pdf-export strong,
+.reviewer-pdf-export b {
+  color: #111827 !important;
+  font-weight: 700;
+}
+
+.reviewer-pdf-export em,
+.reviewer-pdf-export i {
+  color: #111827 !important;
+}
+
+.reviewer-pdf-export a {
+  color: #1d4ed8 !important;
+}
+
+.reviewer-pdf-export .reviewer-markdown-fallback,
+.reviewer-pdf-export .small-note {
+  color: #475569 !important;
+}
+
+.reviewer-pdf-export pre,
+.reviewer-pdf-export code {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+  border-radius: 6px;
+}
+
+.reviewer-pdf-export pre {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  white-space: pre-wrap;
+}
+
+.reviewer-pdf-export code {
+  padding: 0.12rem 0.35rem;
+  border: 1px solid #e2e8f0;
+}
+
+.reviewer-pdf-export table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.reviewer-pdf-export th,
+.reviewer-pdf-export td {
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.5rem;
+  color: #111827 !important;
+}
+
+/* Nested reviewer UI markup copied into history PDF body */
+.reviewer-pdf-export .reviewer-markdown-body,
+.reviewer-pdf-export .reviewer-markdown-body * {
+  color: #111827 !important;
 }
 
 /* ============================================================

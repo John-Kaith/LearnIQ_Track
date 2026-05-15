@@ -60,13 +60,16 @@
             </div>
           </a>
 
-          <a href="immersion-dashboard.html" class="module-card glass-card hover-lift">
+          <a href="immersion-dashboard.html" id="immersion-module-link" class="module-card glass-card hover-lift">
             <div class="module-icon">
               <i class="fa-solid fa-clock"></i>
             </div>
             <div class="module-content">
               <h3>Immersion Tracker</h3>
               <p>Track work immersion hours, log daily activities, and maintain attendance records.</p>
+              <p class="module-restriction-note" id="immersion-module-note" hidden>
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i> Only for Grade 12 students
+              </p>
               <div class="module-features">
                 <span><i class="fa-solid fa-right-to-bracket"></i> Time In</span>
                 <span><i class="fa-solid fa-right-from-bracket"></i> Time Out</span>
@@ -75,7 +78,7 @@
               </div>
             </div>
             <div class="module-action">
-              <span class="btn btn-primary">Enter Immersion Tracker</span>
+              <span class="btn btn-primary" id="immersion-module-btn">Enter Immersion Tracker</span>
             </div>
           </a>
         </div>
@@ -84,22 +87,5 @@
     </section>
   </main>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const learniqLink = document.getElementById('learniq-module-link');
-      const currentUser = getCurrentUserSession();
-      
-      if (learniqLink && currentUser) {
-        if (currentUser.role === 'Teacher') {
-          learniqLink.href = 'teacher-learniq-dashboard.html';
-        } else {
-          learniqLink.href = 'learniq-dashboard.html';
-        }
-      } else if (learniqLink) {
-        // Fallback to student dashboard if no user session
-        learniqLink.href = 'learniq-dashboard.html';
-      }
-    });
-  </script>
 </body>
 </html>

@@ -68,28 +68,94 @@ def profile_uuid_for_id_number(id_number: str) -> str | None:
     return str(p["id"])
 
 
+def profile_display_name(profile: dict[str, Any] | None) -> str:
+    """First [Middle] Last [Suffix]."""
+    if not profile:
+        return "User"
+    fn = (profile.get("first_name") or "").strip()
+    ln = (profile.get("last_name") or "").strip()
+    mn = (profile.get("middle_name") or "").strip()
+    if fn and ln:
+        parts = [fn]
+        if mn:
+            parts.append(mn)
+        parts.append(ln)
+        suffix = (profile.get("name_suffix") or "").strip()
+        name = " ".join(parts)
+        return f"{name} {suffix}".strip() if suffix else name
+    return (profile.get("id_number") or "").strip() or "User"
+
+
+_PROFILE_NAME_COLS = "id, last_name, first_name, middle_name, name_suffix, id_number, role"
+
+
+def serialize_public_profile(prof: dict[str, Any] | None) -> dict[str, Any]:
+    """API/session shape without full_name."""
+    if not prof:
+        return {}
+    p = dict(prof)
+    p.pop("password", None)
+    return {
+        "id": p.get("id"),
+        "display_name": profile_display_name(p),
+        "first_name": (p.get("first_name") or "").strip(),
+        "last_name": (p.get("last_name") or "").strip(),
+        "middle_name": (p.get("middle_name") or "").strip(),
+        "name_suffix": (p.get("name_suffix") or "").strip(),
+        "id_number": p.get("id_number"),
+        "email": p.get("email"),
+        "role": p.get("role"),
+        "approval_status": p.get("approval_status"),
+        "grade_level": p.get("grade_level"),
+        "strand": p.get("strand"),
+        "bio": p.get("bio") or "",
+        "phone": p.get("phone") or "",
+        "section": p.get("section") or "",
+        "dob": (str(p.get("dob")) if p.get("dob") else ""),
+        "address": p.get("address") or "",
+        "avatar_data": p.get("avatar_data") or "",
+    }
+
+
 def insert_profile(
-    full_name: str,
     id_number: str,
     email: str,
     password: str,
     role: str = "student",
     approval_status: str = "pending",
     auth_user_id: str | None = None,
+    *,
+    last_name: str | None = None,
+    first_name: str | None = None,
+    middle_name: str | None = None,
+    name_suffix: str | None = None,
+    grade_level: str | None = None,
+    strand: str | None = None,
 ) -> dict[str, Any]:
+    if not last_name or not first_name:
+        raise ValueError("last_name and first_name are required.")
     row = {
-        "full_name": full_name,
         "id_number": id_number,
         "email": email.lower().strip(),
         "password": password,
         "role": role,
         "approval_status": approval_status,
+        "last_name": last_name.strip(),
+        "first_name": first_name.strip(),
     }
-    
+    if middle_name is not None and str(middle_name).strip():
+        row["middle_name"] = str(middle_name).strip()
+    if name_suffix is not None and str(name_suffix).strip():
+        row["name_suffix"] = str(name_suffix).strip()
+    if grade_level is not None:
+        row["grade_level"] = grade_level
+    if strand is not None:
+        row["strand"] = strand
+
     # If auth_user_id is provided, use it as the profile ID
     if auth_user_id:
         row["id"] = auth_user_id
-    
+
     res = _sb().table("profiles").insert(row).execute()
     return res.data[0] if res.data else row
 
@@ -103,10 +169,14 @@ def get_all_profiles() -> list[dict[str, Any]]:
     """Get all profiles without passwords."""
     res = _sb().table("profiles").select("*").order("created_at", desc=True).execute()
     profiles = res.data or []
-    # Remove passwords from response
+    out: list[dict[str, Any]] = []
     for profile in profiles:
-        profile.pop("password", None)
-    return profiles
+        row = dict(profile)
+        row.pop("password", None)
+        row.pop("full_name", None)
+        row["display_name"] = profile_display_name(row)
+        out.append(row)
+    return out
 
 
 def update_user_approval_status(id_number: str, approval_status: str) -> bool:
@@ -439,11 +509,12 @@ def list_all_attendance_logs(limit: int = 200) -> list[dict[str, Any]]:
         idn = (r.get("student_id_number") or "").strip()
         name = ""
         if pid and str(pid) in by_uuid:
-            name = str(by_uuid[str(pid)].get("full_name") or "").strip()
-        if not name and idn:
-            p = by_idnum.get(idn) or get_profile_by_id_number(idn)
-            name = str((p or {}).get("full_name") or "").strip() or idn
-        student_display = name.strip() if name.strip() else (idn or "—")
+            name = profile_display_name(by_uuid[str(pid)])
+        if not name or name == "User":
+            if idn:
+                p = by_idnum.get(idn) or get_profile_by_id_number(idn)
+                name = profile_display_name(p) if p else idn
+        student_display = name.strip() if name.strip() and name != "User" else (idn or "—")
 
         day = r.get("date")
         if day:
@@ -498,11 +569,12 @@ def list_all_journals_admin(limit: int = 200) -> list[dict[str, Any]]:
         idn = (r.get("student_id_number") or "").strip()
         name = ""
         if pid and str(pid) in by_uuid:
-            name = str(by_uuid[str(pid)].get("full_name") or "").strip()
-        if not name and idn:
-            p = by_idnum.get(idn) or get_profile_by_id_number(idn)
-            name = str((p or {}).get("full_name") or "").strip() or idn
-        student_display = name.strip() if name.strip() else (idn or "—")
+            name = profile_display_name(by_uuid[str(pid)])
+        if not name or name == "User":
+            if idn:
+                p = by_idnum.get(idn) or get_profile_by_id_number(idn)
+                name = profile_display_name(p) if p else idn
+        student_display = name.strip() if name.strip() and name != "User" else (idn or "—")
         body = (r.get("journal_text") or r.get("body") or "").strip()
         ts = r.get("submitted_at") or r.get("created_at") or ""
         out.append(
@@ -521,7 +593,7 @@ def get_admin_recent_activity(limit: int = 12) -> list[dict[str, Any]]:
 
     for p in get_all_profiles():
         ts = p.get("created_at")
-        nm = str(p.get("full_name") or "User").strip()
+        nm = profile_display_name(p)
         role = str(p.get("role") or "").strip().lower()
         st = str(p.get("approval_status") or "pending").strip()
         items.append(
@@ -558,7 +630,7 @@ def get_admin_recent_activity(limit: int = 12) -> list[dict[str, Any]]:
             idn = (qa.get("student_id_number") or "").strip()
             who = ""
             if sid and str(sid) in by_uuid:
-                who = str(by_uuid[str(sid)].get("full_name") or "").strip()
+                who = profile_display_name(by_uuid[str(sid)])
             if not who and idn:
                 who = idn
             score = qa.get("score")
@@ -1006,7 +1078,7 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
             pres = (
                 _sb()
                 .table("profiles")
-                .select("id, full_name, id_number, role")
+                .select(_PROFILE_NAME_COLS)
                 .in_("id", chunk_ids)
                 .execute()
             )
@@ -1028,7 +1100,7 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
         entries.append(
             {
                 "student_id": sid,
-                "full_name": (str(prof.get("full_name") or "").strip() or "Student"),
+                "display_name": profile_display_name(prof),
                 "id_number": (str(prof.get("id_number") or "").strip()),
                 "total_points": int(v["total_score"]),
                 "quiz_attempts": int(v["attempts"]),
@@ -1238,7 +1310,7 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
         chunk_ids = uuids[i : i + chunk]
         try:
             pres = (
-                _sb().table("profiles").select("id, full_name, id_number, role").in_("id", chunk_ids).execute()
+                _sb().table("profiles").select(_PROFILE_NAME_COLS).in_("id", chunk_ids).execute()
             )
             for p in pres.data or []:
                 profiles_map[str(p["id"])] = p
@@ -1262,7 +1334,7 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
         scoped.append(
             {
                 "id": uid,
-                "full_name": (str(prof.get("full_name") or "").strip() or None),
+                "display_name": profile_display_name(prof),
                 "id_number": (str(prof.get("id_number") or "").strip() or None),
                 "pct": st_pct,
                 "score": s,
@@ -1277,8 +1349,8 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
         month_active = sum(1 for x in scoped if x["hit_month"])
         sp["participation_pct"] = round(100.0 * float(month_active) / float(len(scoped)), 1)
         top = max(scoped, key=lambda x: (x["pct"], x["score"]))
-        if top.get("full_name"):
-            sp["top_name"] = top["full_name"]
+        if top.get("display_name"):
+            sp["top_name"] = top["display_name"]
             sp["top_id_number"] = top.get("id_number")
             sp["top_pct"] = top["pct"]
     base["student_performance"] = sp
@@ -1615,6 +1687,92 @@ def insert_time_in(student_id_number: str, time_in_iso: str) -> dict[str, Any]:
     raise RuntimeError("insert_time_in failed")
 
 
+def _upload_url_for_path(path: str | None) -> str | None:
+    if not path:
+        return None
+    p = str(path).strip().lstrip("/")
+    return f"/uploads/{p}" if not p.startswith("uploads/") else f"/{p}"
+
+
+def enrich_attendance_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Attach photo URLs for time-in / time-out capture paths."""
+    if not row or not isinstance(row, dict):
+        return row
+    tin = _upload_url_for_path(row.get("captured_photo_path"))
+    tout = _upload_url_for_path(row.get("time_out_photo_path"))
+    if tin:
+        row = {**row, "photo_url": tin, "time_in_photo_url": tin}
+    if tout:
+        row = {**row, "time_out_photo_url": tout}
+    return row
+
+
+def insert_time_in_with_capture(
+    student_id_number: str,
+    time_in_iso: str,
+    *,
+    captured_photo_path: str,
+    latitude: float,
+    longitude: float,
+    readable_location_name: str,
+    capture_timestamp: str,
+) -> dict[str, Any]:
+    pid = profile_uuid_for_id_number(student_id_number.strip())
+    if not pid:
+        raise RuntimeError(
+            "No profile UUID for this id_number. Ensure profiles.id exists and matches auth signup."
+        )
+    today = datetime.now(timezone.utc).date().isoformat()
+    capture_fields = {
+        "captured_photo_path": captured_photo_path,
+        "latitude": latitude,
+        "longitude": longitude,
+        "readable_location_name": readable_location_name,
+        "capture_timestamp": capture_timestamp,
+    }
+    # Match live Supabase schema (student_id + capture cols; no event_type / student_id_number).
+    row = {
+        "student_id": pid,
+        "time_in": time_in_iso,
+        "status": "active",
+        "time_out": None,
+        "total_hours": None,
+        "date": today,
+        **capture_fields,
+    }
+    try:
+        res = _sb().table("attendance_logs").insert(row).execute()
+        if res.data:
+            return enrich_attendance_row(res.data[0]) or res.data[0]
+    except Exception as e:
+        msg = str(e)
+        if "PGRST204" in msg and (
+            "capture_timestamp" in msg
+            or "captured_photo_path" in msg
+            or "readable_location_name" in msg
+        ):
+            raise RuntimeError(
+                "Database is missing immersion capture columns. In Supabase SQL Editor, run "
+                "backend/migrations/immersion_attendance_capture.sql then try Time In again."
+            ) from e
+        raise
+    last_err: Exception | None = None
+    for legacy in (
+        {**row, "student_id_number": student_id_number.strip()},
+        {**row, "event_type": "time_in"},
+    ):
+        try:
+            res = _sb().table("attendance_logs").insert(legacy).execute()
+            if res.data:
+                return enrich_attendance_row(res.data[0]) or res.data[0]
+        except Exception as e:
+            last_err = e
+            continue
+    if last_err:
+        raise last_err
+    raise RuntimeError("insert_time_in_with_capture failed")
+
+
 def complete_time_out(attendance_id: str, time_out_iso: str) -> dict[str, Any]:
     attendance = (
         _sb()
@@ -1651,12 +1809,75 @@ def complete_time_out(attendance_id: str, time_out_iso: str) -> dict[str, Any]:
         .eq("id", attendance_id)
         .execute()
     )
-    return updated.data[0] if updated.data else {
+    row_out = updated.data[0] if updated.data else {
         "id": attendance_id,
         "time_out": time_out_iso,
         "total_hours": total_hours,
         "status": "completed",
     }
+    return enrich_attendance_row(row_out) or row_out
+
+
+def complete_time_out_with_capture(
+    attendance_id: str,
+    time_out_iso: str,
+    *,
+    time_out_photo_path: str,
+    latitude: float,
+    longitude: float,
+    readable_location_name: str,
+    capture_timestamp: str,
+) -> dict[str, Any]:
+    attendance = (
+        _sb()
+        .table("attendance_logs")
+        .select("*")
+        .eq("id", attendance_id)
+        .limit(1)
+        .execute()
+    )
+    if not attendance.data:
+        raise RuntimeError("Attendance record not found.")
+
+    row = attendance.data[0]
+    time_in_value = row.get("time_in")
+    if not time_in_value:
+        raise RuntimeError("Attendance record has no time_in.")
+
+    time_in_dt = datetime.fromisoformat(str(time_in_value).replace("Z", "+00:00"))
+    time_out_dt = datetime.fromisoformat(str(time_out_iso).replace("Z", "+00:00"))
+    total_hours = round((time_out_dt - time_in_dt).total_seconds() / 3600, 2)
+    if total_hours < 0:
+        raise RuntimeError("time_out cannot be earlier than time_in.")
+
+    payload = {
+        "time_out": time_out_iso,
+        "total_hours": total_hours,
+        "status": "completed",
+        "time_out_photo_path": time_out_photo_path,
+        "time_out_latitude": latitude,
+        "time_out_longitude": longitude,
+        "time_out_readable_location_name": readable_location_name,
+        "time_out_capture_timestamp": capture_timestamp,
+    }
+    try:
+        updated = _sb().table("attendance_logs").update(payload).eq("id", attendance_id).execute()
+        if updated.data:
+            return enrich_attendance_row(updated.data[0]) or updated.data[0]
+    except Exception as e:
+        msg = str(e)
+        if "PGRST204" in msg and "time_out_" in msg:
+            raise RuntimeError(
+                "Database is missing Time Out capture columns. Run "
+                "backend/migrations/immersion_time_out_capture.sql in Supabase SQL Editor."
+            ) from e
+        basic = _sb().table("attendance_logs").update(
+            {"time_out": time_out_iso, "total_hours": total_hours, "status": "completed"}
+        ).eq("id", attendance_id).execute()
+        if basic.data:
+            return enrich_attendance_row(basic.data[0]) or basic.data[0]
+        raise
+    raise RuntimeError("complete_time_out_with_capture failed")
 
 
 def list_attendance_by_student(student_id_number: str) -> list[dict[str, Any]]:
@@ -1850,7 +2071,10 @@ def list_enrollments_for_student(
         q = (
             _sb()
             .table("enrollments")
-            .select("*, subjects(id, name, color), profiles!enrollments_student_id_fkey(full_name)")
+            .select(
+                "*, subjects(id, name, color), "
+                "profiles!enrollments_student_id_fkey(last_name, first_name, middle_name, name_suffix, id_number)"
+            )
             .eq("student_id", student_uuid)
         )
         # Some PostgREST versions don't accept the inverse FK alias above; fallback below.
@@ -2377,7 +2601,7 @@ def _profile_lookup_by_id_numbers(idns: list[str]) -> dict[str, dict[str, Any]]:
         res = (
             _sb()
             .table("profiles")
-            .select("id, id_number, full_name, role")
+            .select(_PROFILE_NAME_COLS)
             .in_("id_number", cleaned)
             .execute()
         )
@@ -2473,7 +2697,7 @@ def build_full_gradecard(
     for row in subjects_out:
         tidn = row.get("teacher_id_number")
         if tidn and tidn in profile_map:
-            row["teacher_name"] = profile_map[tidn].get("full_name")
+            row["teacher_name"] = profile_display_name(profile_map[tidn])
 
     adviser_profile = profile_map.get(adviser_idn) if adviser_idn else None
 
@@ -2509,7 +2733,11 @@ def build_full_gradecard(
         "student": {
             "id": student_uuid,
             "id_number": student.get("id_number"),
-            "full_name": student.get("full_name"),
+            "display_name": profile_display_name(student),
+            "first_name": student.get("first_name"),
+            "last_name": student.get("last_name"),
+            "middle_name": student.get("middle_name"),
+            "name_suffix": student.get("name_suffix"),
             "email": student.get("email"),
             "role": student.get("role"),
             "grade_level": student.get("grade_level"),
@@ -2520,7 +2748,7 @@ def build_full_gradecard(
         },
         "adviser": ({
             "id_number": adviser_profile.get("id_number"),
-            "full_name": adviser_profile.get("full_name"),
+            "display_name": profile_display_name(adviser_profile),
         } if adviser_profile else None),
         "period": period,
         "subjects": subjects_out,
