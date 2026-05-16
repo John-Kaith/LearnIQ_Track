@@ -3911,6 +3911,10 @@ function setupAdminPage() {
 }
 
 // Teacher dashboard: lesson file selected in UI + server state
+const LESSON_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+const LESSON_UPLOAD_TOO_LARGE_MSG =
+  "File too large (max 100 MB). Export a smaller PDF/PPTX or split the deck.";
+
 let currentFileId = null;
 let currentQuiz = [];
 let teacherAiAbortController = null;
@@ -4470,6 +4474,10 @@ async function uploadFile(file, subjectId = null) {
   const currentUser = getCurrentUserSession();
   if (!currentUser || !currentUser.id_number) {
     throw new Error("Teacher not logged in. Please log in again.");
+  }
+
+  if (file.size > LESSON_UPLOAD_MAX_BYTES) {
+    throw new Error(LESSON_UPLOAD_TOO_LARGE_MSG);
   }
 
   console.log("Uploading file:", file.name);
