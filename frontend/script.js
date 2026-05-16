@@ -3911,9 +3911,9 @@ function setupAdminPage() {
 }
 
 // Teacher dashboard: lesson file selected in UI + server state
-const LESSON_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+const LESSON_UPLOAD_MAX_BYTES = 500 * 1024 * 1024;
 const LESSON_UPLOAD_TOO_LARGE_MSG =
-  "File too large (max 100 MB). Export a smaller PDF/PPTX or split the deck.";
+  "File too large (max 500 MB). Export a smaller PDF/PPTX or split the deck.";
 
 let currentFileId = null;
 let currentQuiz = [];
