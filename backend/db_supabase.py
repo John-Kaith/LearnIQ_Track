@@ -250,6 +250,8 @@ def insert_lesson(
     teacher_id_number: str | None = None,
     subject_id: str | None = None,
     file_base64: str | None = None,
+    *,
+    lesson_id: str | None = None,
 ) -> dict[str, Any]:
     print(f"INSERT LESSON CALLED:")
     print(f"  filename: {filename}")
@@ -257,8 +259,16 @@ def insert_lesson(
     print(f"  teacher_id_number: {teacher_id_number}")
     print(f"  subject_id: {subject_id}")
     print(f"  file_base64: {'yes (' + str(len(file_base64 or '')) + ' chars)' if file_base64 else 'no'}")
+    print(f"  storage_path: {(storage_path or '')[:120] or 'none'}")
+    print(f"  lesson_id (preset): {lesson_id or 'none'}")
 
     effective_storage = None if file_base64 else storage_path
+
+    def _with_id(row: dict[str, Any]) -> dict[str, Any]:
+        lid = (lesson_id or "").strip()
+        if lid:
+            return {**row, "id": lid}
+        return row
 
     # Support both new and older lessons table schemas.
     # Never send storage_path when None — some DBs have no storage_path column (PostgREST PGRST204).
@@ -266,30 +276,36 @@ def insert_lesson(
     if file_base64:
         attempts.extend(
             [
-                {
-                    "filename": filename,
-                    "file_type": file_type,
-                    "extracted_text": extracted_text,
-                    "file_base64": file_base64,
-                    "is_published": False,
-                    "teacher_id_number": teacher_id_number,
-                    "subject_id": subject_id,
-                },
-                {
-                    "filename": filename,
-                    "file_type": file_type,
-                    "extracted_text": extracted_text,
-                    "file_base64": file_base64,
-                    "is_published": False,
-                    "teacher_id_number": teacher_id_number,
-                },
-                {
-                    "filename": filename,
-                    "file_type": file_type,
-                    "extracted_text": extracted_text,
-                    "file_base64": file_base64,
-                    "is_published": False,
-                },
+                _with_id(
+                    {
+                        "filename": filename,
+                        "file_type": file_type,
+                        "extracted_text": extracted_text,
+                        "file_base64": file_base64,
+                        "is_published": False,
+                        "teacher_id_number": teacher_id_number,
+                        "subject_id": subject_id,
+                    }
+                ),
+                _with_id(
+                    {
+                        "filename": filename,
+                        "file_type": file_type,
+                        "extracted_text": extracted_text,
+                        "file_base64": file_base64,
+                        "is_published": False,
+                        "teacher_id_number": teacher_id_number,
+                    }
+                ),
+                _with_id(
+                    {
+                        "filename": filename,
+                        "file_type": file_type,
+                        "extracted_text": extracted_text,
+                        "file_base64": file_base64,
+                        "is_published": False,
+                    }
+                ),
             ]
         )
     else:
@@ -298,47 +314,36 @@ def insert_lesson(
                 return {**row, "storage_path": effective_storage}
             return row
 
-        attempts.extend(
-            [
-                _with_storage(
-                    {
-                        "filename": filename,
-                        "file_type": file_type,
-                        "extracted_text": extracted_text,
-                        "is_published": False,
-                        "teacher_id_number": teacher_id_number,
-                        "subject_id": subject_id,
-                    }
-                ),
-                _with_storage(
-                    {
-                        "filename": filename,
-                        "file_type": file_type,
-                        "extracted_text": extracted_text,
-                        "is_published": False,
-                        "teacher_id_number": teacher_id_number,
-                    }
-                ),
-                {
-                    "filename": filename,
-                    "file_type": file_type,
-                    "extracted_text": extracted_text,
-                    "is_published": False,
-                    "teacher_id_number": teacher_id_number,
-                },
-                {
-                    "filename": filename,
-                    "file_type": file_type,
-                    "extracted_text": extracted_text,
-                    "is_published": False,
-                },
-                {
-                    "filename": filename,
-                    "extracted_text": extracted_text,
-                    "is_published": False,
-                },
-            ]
-        )
+        # Every fallback attempt must keep storage_path when saving to disk (Phase A).
+        disk_rows = [
+            {
+                "filename": filename,
+                "file_type": file_type,
+                "extracted_text": extracted_text,
+                "is_published": False,
+                "teacher_id_number": teacher_id_number,
+                "subject_id": subject_id,
+            },
+            {
+                "filename": filename,
+                "file_type": file_type,
+                "extracted_text": extracted_text,
+                "is_published": False,
+                "teacher_id_number": teacher_id_number,
+            },
+            {
+                "filename": filename,
+                "file_type": file_type,
+                "extracted_text": extracted_text,
+                "is_published": False,
+            },
+            {
+                "filename": filename,
+                "extracted_text": extracted_text,
+                "is_published": False,
+            },
+        ]
+        attempts.extend(_with_id(_with_storage(r)) for r in disk_rows)
     last_error: Exception | None = None
     res = None
     for i, lesson_row in enumerate(attempts):

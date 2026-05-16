@@ -1449,7 +1449,8 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
     if not file_blob and not file_path:
         if fn.endswith((".pptx", ".ppt", ".pdf")):
             return "", (
-                "Lesson file is missing on the server. Please upload the presentation again from the subject page."
+                "Lesson file is missing on the server (not in database and not on disk). "
+                "Re-upload the presentation from the subject page, or restore uploads/lessons from backup."
             )
         return "", "No lesson file found. Upload a PDF or PowerPoint (.pptx) first."
 
@@ -1490,10 +1491,15 @@ def _lesson_file_response(
         lesson.get("filename"),
     )
     if not file_path:
+        sp = (lesson.get("storage_path") or "").strip()
+        hint = f" (storage_path: {sp})" if sp else ""
         return JSONResponse(
             {
-                "error": "Original file is not available on the server. "
-                "Ask your teacher to re-upload the lesson."
+                "error": (
+                    "Original lesson file is missing on the server disk. "
+                    "The teacher may need to re-upload this lesson, or restore the file from backup."
+                    + hint
+                ),
             },
             status_code=404,
         )
@@ -1793,25 +1799,40 @@ async def upload_file(
         )
         text = ""
 
-    b64 = base64.standard_b64encode(raw).decode("ascii")
+    clean_subject_id = (str(subject_id).strip() or None) if subject_id else None
+    lesson_uuid = str(uuid.uuid4())
+    rel_storage = f"lessons/{lesson_uuid}{ext}"
+    dest_path = LESSON_UPLOADS_DIR / f"{lesson_uuid}{ext}"
 
     try:
-        print("CALLING INSERT LESSON...")
-        clean_subject_id = (str(subject_id).strip() or None) if subject_id else None
-        lesson = db_supabase.insert_lesson(
-            filename=file.filename,
-            file_type=file_type,
-            extracted_text=text,
-            storage_path=None,
-            teacher_id_number=teacher_id_number,
-            subject_id=clean_subject_id,
-            file_base64=b64,
-        )
+        print("CALLING INSERT LESSON (disk storage, metadata only)...")
+        dest_path.write_bytes(raw)
+        try:
+            lesson = db_supabase.insert_lesson(
+                filename=file.filename,
+                file_type=file_type,
+                extracted_text=text,
+                storage_path=rel_storage,
+                teacher_id_number=teacher_id_number,
+                subject_id=clean_subject_id,
+                file_base64=None,
+                lesson_id=lesson_uuid,
+            )
+        except Exception:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except OSError as unlink_err:
+                print(f"upload-file: rollback unlink failed: {unlink_err}")
+            raise
         lid = str(lesson["id"])
-        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}, subject_id={clean_subject_id} (DB file)")
+        print(
+            f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}, "
+            f"subject_id={clean_subject_id}, storage_path={rel_storage} (local disk)"
+        )
         return {"file_id": lid, "filename": file.filename, "subject_id": clean_subject_id}
     except Exception as e:
         import traceback
+
         print(f"UPLOAD FAILED: {e}")
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=502)
