@@ -1,6 +1,8 @@
 """Small Supabase helpers for lessons and related tables (beginner-friendly)."""
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 import secrets
 from collections import defaultdict
@@ -247,57 +249,105 @@ def insert_lesson(
     storage_path: str | None,
     teacher_id_number: str | None = None,
     subject_id: str | None = None,
+    file_base64: str | None = None,
 ) -> dict[str, Any]:
     print(f"INSERT LESSON CALLED:")
     print(f"  filename: {filename}")
     print(f"  file_type: {file_type}")
     print(f"  teacher_id_number: {teacher_id_number}")
     print(f"  subject_id: {subject_id}")
+    print(f"  file_base64: {'yes (' + str(len(file_base64 or '')) + ' chars)' if file_base64 else 'no'}")
+
+    effective_storage = None if file_base64 else storage_path
 
     # Support both new and older lessons table schemas.
-    # Try full row first, then retry without columns older schemas may not have.
-    attempts = [
-        {
-            "filename": filename,
-            "file_type": file_type,
-            "extracted_text": extracted_text,
-            "storage_path": storage_path,
-            "is_published": False,
-            "teacher_id_number": teacher_id_number,
-            "subject_id": subject_id,
-        },
-        {
-            "filename": filename,
-            "file_type": file_type,
-            "extracted_text": extracted_text,
-            "storage_path": storage_path,
-            "is_published": False,
-            "teacher_id_number": teacher_id_number,
-        },
-        {
-            "filename": filename,
-            "file_type": file_type,
-            "extracted_text": extracted_text,
-            "is_published": False,
-            "teacher_id_number": teacher_id_number,
-        },
-        {
-            "filename": filename,
-            "file_type": file_type,
-            "extracted_text": extracted_text,
-            "is_published": False,
-        },
-        {
-            "filename": filename,
-            "extracted_text": extracted_text,
-            "is_published": False,
-        },
-    ]
+    # Never send storage_path when None — some DBs have no storage_path column (PostgREST PGRST204).
+    attempts: list[dict[str, Any]] = []
+    if file_base64:
+        attempts.extend(
+            [
+                {
+                    "filename": filename,
+                    "file_type": file_type,
+                    "extracted_text": extracted_text,
+                    "file_base64": file_base64,
+                    "is_published": False,
+                    "teacher_id_number": teacher_id_number,
+                    "subject_id": subject_id,
+                },
+                {
+                    "filename": filename,
+                    "file_type": file_type,
+                    "extracted_text": extracted_text,
+                    "file_base64": file_base64,
+                    "is_published": False,
+                    "teacher_id_number": teacher_id_number,
+                },
+                {
+                    "filename": filename,
+                    "file_type": file_type,
+                    "extracted_text": extracted_text,
+                    "file_base64": file_base64,
+                    "is_published": False,
+                },
+            ]
+        )
+    else:
+        def _with_storage(row: dict[str, Any]) -> dict[str, Any]:
+            if effective_storage is not None:
+                return {**row, "storage_path": effective_storage}
+            return row
+
+        attempts.extend(
+            [
+                _with_storage(
+                    {
+                        "filename": filename,
+                        "file_type": file_type,
+                        "extracted_text": extracted_text,
+                        "is_published": False,
+                        "teacher_id_number": teacher_id_number,
+                        "subject_id": subject_id,
+                    }
+                ),
+                _with_storage(
+                    {
+                        "filename": filename,
+                        "file_type": file_type,
+                        "extracted_text": extracted_text,
+                        "is_published": False,
+                        "teacher_id_number": teacher_id_number,
+                    }
+                ),
+                {
+                    "filename": filename,
+                    "file_type": file_type,
+                    "extracted_text": extracted_text,
+                    "is_published": False,
+                    "teacher_id_number": teacher_id_number,
+                },
+                {
+                    "filename": filename,
+                    "file_type": file_type,
+                    "extracted_text": extracted_text,
+                    "is_published": False,
+                },
+                {
+                    "filename": filename,
+                    "extracted_text": extracted_text,
+                    "is_published": False,
+                },
+            ]
+        )
     last_error: Exception | None = None
     res = None
     for i, lesson_row in enumerate(attempts):
         try:
-            print(f"  Attempt {i+1}: inserting row: {lesson_row}")
+            log_row = {
+                k: (f"<{len(str(v))} chars>" if k == "file_base64" and v else v)
+                for k, v in lesson_row.items()
+            }
+            print(f"  Attempt {i+1}: inserting row (summary): {log_row}")
             res = _sb().table("lessons").insert(lesson_row).execute()
             print(f"  Insert lesson response: {res.data}")
             break
@@ -305,6 +355,18 @@ def insert_lesson(
             print(f"  Attempt {i+1} failed: {e}")
             last_error = e
     if res is None:
+        if file_base64:
+            cause = str(last_error).strip() if last_error else "unknown error"
+            if len(cause) > 800:
+                cause = cause[:800] + "…"
+            raise RuntimeError(
+                "Cannot save the lesson file in the database. "
+                f"Details: {cause} — "
+                "Confirm: (1) SUPABASE_URL in backend/.env is the same project where you ran lessons_file_base64.sql, "
+                "(2) backend uses SUPABASE_SERVICE_ROLE_KEY (not the anon key) so RLS does not block inserts, "
+                "(3) try a smaller PDF if the error mentions size, payload, or 413. "
+                "See the API terminal for the full 'Attempt N failed' line."
+            ) from last_error
         if last_error is not None:
             raise last_error
         raise RuntimeError("Failed to insert lesson.")
@@ -737,10 +799,14 @@ def publish_lesson(lesson_id: str) -> None:
 
 
 def list_published_lessons_with_content() -> list[dict[str, Any]]:
+    lesson_cols = (
+        "id, filename, file_type, extracted_text, is_published, "
+        "created_at, teacher_id_number, subject_id, lesson_content(*)"
+    )
     res = (
         _sb()
         .table("lessons")
-        .select("*, lesson_content(*)")
+        .select(lesson_cols)
         .eq("is_published", True)
         .order("created_at", desc=True)
         .execute()
@@ -1118,10 +1184,14 @@ def update_lesson_extracted_text(lesson_id: str, extracted_text: str) -> None:
 
 
 def get_published_lesson_with_content() -> tuple[dict[str, Any], dict[str, Any]] | None:
+    lesson_cols = (
+        "id, filename, file_type, extracted_text, is_published, "
+        "created_at, teacher_id_number, subject_id, lesson_content(*)"
+    )
     res = (
         _sb()
         .table("lessons")
-        .select("*, lesson_content(*)")
+        .select(lesson_cols)
         .eq("is_published", True)
         .limit(1)
         .execute()
@@ -1967,12 +2037,47 @@ def _upload_url_for_path(path: str | None) -> str | None:
     return f"/uploads/{p}" if not p.startswith("uploads/") else f"/{p}"
 
 
+def _mime_from_image_bytes(prefix: bytes) -> str:
+    if len(prefix) >= 3 and prefix[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(prefix) >= 8 and prefix[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(prefix) >= 12 and prefix[:4] == b"RIFF" and prefix[8:12] == b"WEBP":
+        return "image/webp"
+    if len(prefix) >= 6 and prefix[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return "image/jpeg"
+
+
+def _data_url_from_base64_field(b64: str | None) -> str | None:
+    s = (b64 or "").strip()
+    if not s:
+        return None
+    if s.startswith("data:"):
+        return s
+    try:
+        raw = base64.standard_b64decode(s)
+    except (binascii.Error, ValueError):
+        return None
+    if not raw:
+        return None
+    mime = _mime_from_image_bytes(raw[:32])
+    return f"data:{mime};base64,{s}"
+
+
 def enrich_attendance_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Attach photo URLs for time-in / time-out capture paths."""
+    """Attach photo URLs from disk paths or DB base64 blobs (blobs are not returned in the payload)."""
     if not row or not isinstance(row, dict):
         return row
+    row = {**row}
+    tin_b64 = row.pop("captured_photo_base64", None)
+    tout_b64 = row.pop("time_out_photo_base64", None)
     tin = _upload_url_for_path(row.get("captured_photo_path"))
     tout = _upload_url_for_path(row.get("time_out_photo_path"))
+    if not tin and isinstance(tin_b64, str):
+        tin = _data_url_from_base64_field(tin_b64)
+    if not tout and isinstance(tout_b64, str):
+        tout = _data_url_from_base64_field(tout_b64)
     if tin:
         row = {**row, "photo_url": tin, "time_in_photo_url": tin}
     if tout:
@@ -1984,7 +2089,8 @@ def insert_time_in_with_capture(
     student_id_number: str,
     time_in_iso: str,
     *,
-    captured_photo_path: str,
+    captured_photo_path: str | None = None,
+    captured_photo_base64: str | None = None,
     latitude: float,
     longitude: float,
     readable_location_name: str,
@@ -1996,13 +2102,20 @@ def insert_time_in_with_capture(
             "No profile UUID for this id_number. Ensure profiles.id exists and matches auth signup."
         )
     today = datetime.now(timezone.utc).date().isoformat()
-    capture_fields = {
-        "captured_photo_path": captured_photo_path,
+    path = (captured_photo_path or "").strip()
+    b64 = (captured_photo_base64 or "").strip()
+    if not path and not b64:
+        raise RuntimeError("Immersion time-in requires a captured photo.")
+    capture_fields: dict[str, Any] = {
         "latitude": latitude,
         "longitude": longitude,
         "readable_location_name": readable_location_name,
         "capture_timestamp": capture_timestamp,
     }
+    if b64:
+        capture_fields["captured_photo_base64"] = b64
+    if path:
+        capture_fields["captured_photo_path"] = path
     # Match live Supabase schema (student_id + capture cols; no event_type / student_id_number).
     row = {
         "student_id": pid,
@@ -2022,11 +2135,20 @@ def insert_time_in_with_capture(
         if "PGRST204" in msg and (
             "capture_timestamp" in msg
             or "captured_photo_path" in msg
+            or "captured_photo_base64" in msg
             or "readable_location_name" in msg
         ):
+            hint = (
+                "backend/migrations/immersion_attendance_capture.sql"
+                + (
+                    " and backend/migrations/immersion_attendance_photos_base64.sql"
+                    if "captured_photo_base64" in msg
+                    else ""
+                )
+            )
             raise RuntimeError(
                 "Database is missing immersion capture columns. In Supabase SQL Editor, run "
-                "backend/migrations/immersion_attendance_capture.sql then try Time In again."
+                f"{hint} then try Time In again."
             ) from e
         raise
     last_err: Exception | None = None
@@ -2095,7 +2217,8 @@ def complete_time_out_with_capture(
     attendance_id: str,
     time_out_iso: str,
     *,
-    time_out_photo_path: str,
+    time_out_photo_path: str | None = None,
+    time_out_photo_base64: str | None = None,
     latitude: float,
     longitude: float,
     readable_location_name: str,
@@ -2123,16 +2246,23 @@ def complete_time_out_with_capture(
     if total_hours < 0:
         raise RuntimeError("time_out cannot be earlier than time_in.")
 
-    payload = {
+    path = (time_out_photo_path or "").strip()
+    b64 = (time_out_photo_base64 or "").strip()
+    if not path and not b64:
+        raise RuntimeError("Time Out requires a captured photo.")
+    payload: dict[str, Any] = {
         "time_out": time_out_iso,
         "total_hours": total_hours,
         "status": "completed",
-        "time_out_photo_path": time_out_photo_path,
         "time_out_latitude": latitude,
         "time_out_longitude": longitude,
         "time_out_readable_location_name": readable_location_name,
         "time_out_capture_timestamp": capture_timestamp,
     }
+    if b64:
+        payload["time_out_photo_base64"] = b64
+    if path:
+        payload["time_out_photo_path"] = path
     try:
         updated = _sb().table("attendance_logs").update(payload).eq("id", attendance_id).execute()
         if updated.data:
@@ -2140,9 +2270,12 @@ def complete_time_out_with_capture(
     except Exception as e:
         msg = str(e)
         if "PGRST204" in msg and "time_out_" in msg:
+            hint = "backend/migrations/immersion_time_out_capture.sql"
+            if "time_out_photo_base64" in msg:
+                hint += " and backend/migrations/immersion_attendance_photos_base64.sql"
             raise RuntimeError(
                 "Database is missing Time Out capture columns. Run "
-                "backend/migrations/immersion_time_out_capture.sql in Supabase SQL Editor."
+                f"{hint} in Supabase SQL Editor."
             ) from e
         basic = _sb().table("attendance_logs").update(
             {"time_out": time_out_iso, "total_hours": total_hours, "status": "completed"}

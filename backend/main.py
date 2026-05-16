@@ -1,4 +1,6 @@
+import asyncio
 import base64
+import io
 import json
 import os
 import re
@@ -11,7 +13,7 @@ import requests
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 from supabase import create_client, Client
@@ -130,6 +132,9 @@ def strip_outer_markdown_code_fence(text: str) -> str:
 REVIEWER_SOURCE_MAX_CHARS = 120_000
 LESSON_EXTRACT_MAX_CHARS = 120_000
 LESSON_VISION_MAX_SLIDES = 15
+# Whole-file base64 is stored in Postgres; keep uploads reasonable for insert + JSON latency.
+LESSON_UPLOAD_MAX_BYTES = 40 * 1024 * 1024
+LESSON_TEXT_EXTRACT_TIMEOUT_SEC = 120
 
 REVIEWER_PROMPT_TEMPLATE = (
     "You are an experienced teacher writing a study reviewer for senior high school students.\n\n"
@@ -1236,11 +1241,12 @@ def _pptx_collect_shape_text(shape, text_parts: list[str]) -> None:
             text_parts.append(block)
 
 
-def _pptx_slide_images(file_path: Path, max_slides: int = LESSON_VISION_MAX_SLIDES) -> list[tuple[str, bytes]]:
+def _pptx_slide_images(source: Path | bytes, max_slides: int = LESSON_VISION_MAX_SLIDES) -> list[tuple[str, bytes]]:
     """JPEG/PNG embedded in PPTX (common when slides are exported as pictures)."""
     images: list[tuple[str, bytes]] = []
     try:
-        with zipfile.ZipFile(file_path) as zf:
+        filelike: io.BytesIO | Path = io.BytesIO(source) if isinstance(source, bytes) else source
+        with zipfile.ZipFile(filelike) as zf:
             names = [
                 n
                 for n in zf.namelist()
@@ -1335,53 +1341,117 @@ def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) 
     return ""
 
 
-def extract_lesson_text_with_vision(file_path: Path, filename: str | None = None) -> str:
+def extract_lesson_text_from_bytes(data: bytes, filename: str | None = None) -> str:
+    """Pull plain text from PDF or PPTX bytes (same rules as extract_lesson_text_from_file)."""
+    name = (filename or "").lower()
+    text_parts: list[str] = []
+    buf = io.BytesIO(data)
+
+    if name.endswith(".pdf"):
+        try:
+            reader = PdfReader(buf)
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text_parts.append(extracted)
+        except Exception as e:
+            print(f"extract_lesson_text_from_bytes pdf: {e}")
+    elif name.endswith(".pptx"):
+        try:
+            from pptx import Presentation
+
+            buf.seek(0)
+            prs = Presentation(buf)
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    _pptx_collect_shape_text(shape, text_parts)
+                if slide.has_notes_slide and slide.notes_slide and slide.notes_slide.notes_text_frame:
+                    notes = (slide.notes_slide.notes_text_frame.text or "").strip()
+                    if notes:
+                        text_parts.append(notes)
+        except Exception as e:
+            print(f"extract_lesson_text_from_bytes pptx: {e}")
+    elif name.endswith(".ppt"):
+        print("extract_lesson_text_from_bytes: legacy .ppt not supported; use .pptx or PDF")
+
+    combined = "\n".join(text_parts).strip()
+    if combined:
+        return combined[:LESSON_EXTRACT_MAX_CHARS]
+    return ""
+
+
+def extract_lesson_text_with_vision(source: Path | bytes, filename: str | None = None) -> str:
     """OCR fallback for picture-only PPTX slides via Gemini vision."""
-    name = (filename or file_path.name or "").lower()
+    name = (filename or (source.name if isinstance(source, Path) else "") or "").lower()
     if not name.endswith(".pptx"):
         return ""
-    images = _pptx_slide_images(file_path)
+    images = _pptx_slide_images(source)
     if not images:
         return ""
-    print(f"extract_lesson_text_with_vision: {len(images)} slide image(s) from {file_path.name}")
+    label = filename or (str(source) if isinstance(source, Path) else "pptx-bytes")
+    print(f"extract_lesson_text_with_vision: {len(images)} slide image(s) from {label}")
     ocr = _gemini_ocr_lesson_images(images)
     return ocr[:LESSON_EXTRACT_MAX_CHARS] if ocr else ""
 
 
+def _decode_lesson_file_bytes(lesson: dict) -> bytes | None:
+    """Lesson file stored in lessons.file_base64 (standard base64)."""
+    fb = lesson.get("file_base64")
+    if fb is None or not str(fb).strip():
+        return None
+    try:
+        return base64.standard_b64decode(str(fb).strip())
+    except Exception as e:
+        print(f"_decode_lesson_file_bytes: {e}")
+        return None
+
+
 def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> tuple[str, str | None]:
     """
-    Text used for Gemini prompts. Re-extracts from disk when DB field is empty
-    (e.g. PPTX uploaded before pptx parsing existed).
+    Text used for Gemini prompts. Uses extracted_text, else file bytes in DB, else disk file.
     """
     existing = str(lesson.get("extracted_text") or "").strip()
     if existing:
         return existing, None
 
     lid = str(lesson.get("id") or "")
+    fn = (lesson.get("filename") or "").lower()
+    file_blob = _decode_lesson_file_bytes(lesson)
+
+    if file_blob:
+        fresh = extract_lesson_text_from_bytes(file_blob, lesson.get("filename"))
+        if not fresh.strip() and allow_vision_fallback:
+            fresh = extract_lesson_text_with_vision(file_blob, lesson.get("filename"))
+        if fresh.strip():
+            try:
+                db_supabase.update_lesson_extracted_text(lid, fresh)
+            except Exception as e:
+                print(f"lesson_text_for_ai cache extract: {e}")
+            return fresh, None
+
     file_path = _resolve_lesson_file_path(
         lid,
         lesson.get("storage_path"),
         lesson.get("filename"),
     )
-    fn = (lesson.get("filename") or "").lower()
 
-    if not file_path:
+    if file_path:
+        fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
+        if not fresh.strip() and allow_vision_fallback:
+            fresh = extract_lesson_text_with_vision(file_path, lesson.get("filename"))
+        if fresh.strip():
+            try:
+                db_supabase.update_lesson_extracted_text(lid, fresh)
+            except Exception as e:
+                print(f"lesson_text_for_ai cache extract: {e}")
+            return fresh, None
+
+    if not file_blob and not file_path:
         if fn.endswith((".pptx", ".ppt", ".pdf")):
             return "", (
                 "Lesson file is missing on the server. Please upload the presentation again from the subject page."
             )
         return "", "No lesson file found. Upload a PDF or PowerPoint (.pptx) first."
-
-    fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
-    if not fresh.strip() and allow_vision_fallback:
-        fresh = extract_lesson_text_with_vision(file_path, lesson.get("filename"))
-
-    if fresh.strip():
-        try:
-            db_supabase.update_lesson_extracted_text(lid, fresh)
-        except Exception as e:
-            print(f"lesson_text_for_ai cache extract: {e}")
-        return fresh, None
 
     if fn.endswith(".pptx") or fn.endswith(".ppt"):
         return "", (
@@ -1395,8 +1465,25 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
     return "", "No text extracted from this file. Upload a PDF with selectable text or a PPTX with slide text."
 
 
-def _lesson_file_response(lesson_id: str, lesson: dict) -> FileResponse | JSONResponse:
-    """Stream lesson file inline when available on disk."""
+def _lesson_file_response(
+    lesson_id: str,
+    lesson: dict,
+    *,
+    as_attachment: bool = False,
+) -> FileResponse | JSONResponse | Response:
+    """Stream lesson file: prefer bytes in DB, else disk (uploads/lessons or legacy path)."""
+    raw = _decode_lesson_file_bytes(lesson)
+    if raw is not None:
+        ext = Path(lesson.get("filename") or "lesson.bin").suffix.lower().lstrip(".") or "bin"
+        media_type = _LESSON_FILE_MEDIA.get(ext, "application/octet-stream")
+        filename = lesson.get("filename") or f"lesson.{ext}"
+        disp = "attachment" if as_attachment else "inline"
+        return Response(
+            content=raw,
+            media_type=media_type,
+            headers={"Content-Disposition": f'{disp}; filename="{filename}"'},
+        )
+
     file_path = _resolve_lesson_file_path(
         str(lesson_id),
         lesson.get("storage_path"),
@@ -1422,16 +1509,21 @@ def _lesson_file_response(lesson_id: str, lesson: dict) -> FileResponse | JSONRe
     ext = file_path.suffix.lower().lstrip(".")
     media_type = _LESSON_FILE_MEDIA.get(ext, "application/octet-stream")
     filename = lesson.get("filename") or file_path.name
+    disposition = "attachment" if as_attachment else "inline"
     return FileResponse(
         path=str(file_path),
         media_type=media_type,
         filename=filename,
-        content_disposition_type="inline",
+        content_disposition_type=disposition,
     )
 
 
 @app.get("/lessons/{lesson_id}/file")
-def view_lesson_file(lesson_id: str, teacher_id_number: str = Query(...)):
+def view_lesson_file(
+    lesson_id: str,
+    teacher_id_number: str = Query(...),
+    download: bool = Query(False),
+):
     """Stream the uploaded lesson file (teacher must own the lesson)."""
     err = require_supabase()
     if err is not None:
@@ -1446,7 +1538,7 @@ def view_lesson_file(lesson_id: str, teacher_id_number: str = Query(...)):
         owner = (lesson.get("teacher_id_number") or "").strip()
         if owner and owner != tid:
             return JSONResponse({"error": "You can only view your own lessons."}, status_code=403)
-        return _lesson_file_response(str(lesson_id), lesson)
+        return _lesson_file_response(str(lesson_id), lesson, as_attachment=download)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1455,6 +1547,7 @@ def view_lesson_file(lesson_id: str, teacher_id_number: str = Query(...)):
 def view_student_lesson_file(
     lesson_id: str,
     student_id_number: str = Query(...),
+    download: bool = Query(False),
     authorization: str | None = Header(default=None),
 ):
     """Stream a published lesson file for an enrolled student."""
@@ -1479,7 +1572,7 @@ def view_student_lesson_file(
                 {"error": "You do not have access to this lesson."},
                 status_code=403,
             )
-        return _lesson_file_response(str(lesson_id), lesson)
+        return _lesson_file_response(str(lesson_id), lesson, as_attachment=download)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1667,6 +1760,10 @@ async def upload_file(
     if err is not None:
         return err
 
+    # Recreate dirs if someone deleted `uploads/` while the API is running (mount + any legacy paths).
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
     if not file.filename or not file.filename.lower().endswith((".pdf", ".ppt", ".pptx")):
         return JSONResponse(
             {"error": "Only PDF, PPT, and PPTX files are allowed."},
@@ -1675,14 +1772,28 @@ async def upload_file(
 
     ext = Path(file.filename).suffix.lower()
     file_type = ext.lstrip(".") or "unknown"
-    safe_name = Path(file.filename).name
-    temp_path = f"temp_upload_{safe_name.replace(' ', '_')}"
 
     raw = await file.read()
-    with open(temp_path, "wb") as f:
-        f.write(raw)
+    if len(raw) > LESSON_UPLOAD_MAX_BYTES:
+        mb = LESSON_UPLOAD_MAX_BYTES // (1024 * 1024)
+        return JSONResponse(
+            {"error": f"File too large (max {mb} MB). Export a smaller PDF/PPTX or split the deck."},
+            status_code=413,
+        )
 
-    text = extract_lesson_text_from_file(Path(temp_path), file.filename)
+    try:
+        text = await asyncio.wait_for(
+            asyncio.to_thread(extract_lesson_text_from_bytes, raw, file.filename),
+            timeout=LESSON_TEXT_EXTRACT_TIMEOUT_SEC,
+        )
+    except asyncio.TimeoutError:
+        print(
+            "upload-file: extract_lesson_text_from_bytes timed out; "
+            f"saving with empty extracted_text ({file.filename!r})"
+        )
+        text = ""
+
+    b64 = base64.standard_b64encode(raw).decode("ascii")
 
     try:
         print("CALLING INSERT LESSON...")
@@ -1694,26 +1805,10 @@ async def upload_file(
             storage_path=None,
             teacher_id_number=teacher_id_number,
             subject_id=clean_subject_id,
+            file_base64=b64,
         )
         lid = str(lesson["id"])
-        LESSON_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        stored_name = f"{lid}{ext}"
-        dest_path = LESSON_UPLOADS_DIR / stored_name
-        with open(dest_path, "wb") as out:
-            out.write(raw)
-        db_rel_path = f"lessons/{stored_name}"
-        try:
-            db_supabase.update_lesson_storage_path(lid, db_rel_path)
-        except Exception as storage_err:
-            print(f"update_lesson_storage_path: {storage_err}")
-        try:
-            if Path(temp_path).is_file() and Path(temp_path).resolve() != dest_path.resolve():
-                Path(temp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
-        if clean_subject_id:
-            db_supabase.update_lesson_subject(lid, clean_subject_id)
-        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}, subject_id={clean_subject_id}")
+        print(f"UPLOAD SUCCESS: file_id={lid}, filename={file.filename}, subject_id={clean_subject_id} (DB file)")
         return {"file_id": lid, "filename": file.filename, "subject_id": clean_subject_id}
     except Exception as e:
         import traceback
@@ -2174,20 +2269,17 @@ async def time_in(
         content_type = (photo.content_type or "").lower()
         if content_type and not content_type.startswith("image/"):
             return JSONResponse({"error": "Only image files are allowed for Time In."}, status_code=400)
+        if len(raw) > immersion_upload.MAX_PHOTO_BYTES:
+            return JSONResponse({"error": "Photo is too large (max 6 MB)."}, status_code=400)
 
-        try:
-            rel_path = immersion_upload.save_immersion_photo(
-                student_id, raw, photo.filename, name_prefix="time-in"
-            )
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+        photo_b64 = base64.standard_b64encode(raw).decode("ascii")
 
         now_iso = now_dt.isoformat()
         capture_iso = capture_dt.isoformat()
         row = db_supabase.insert_time_in_with_capture(
             student_id,
             now_iso,
-            captured_photo_path=rel_path,
+            captured_photo_base64=photo_b64,
             latitude=lat,
             longitude=lon,
             readable_location_name=location_label,
@@ -2201,7 +2293,8 @@ async def time_in(
                 {
                     "error": (
                         "Database setup incomplete: run backend/migrations/immersion_attendance_capture.sql "
-                        "in Supabase SQL Editor, wait a few seconds, then try Time In again."
+                        "(and backend/migrations/immersion_attendance_photos_base64.sql if the error mentions "
+                        "captured_photo_base64) in Supabase SQL Editor, wait a few seconds, then try Time In again."
                     ),
                 },
                 status_code=503,
@@ -2276,20 +2369,17 @@ async def time_out(
         content_type = (photo.content_type or "").lower()
         if content_type and not content_type.startswith("image/"):
             return JSONResponse({"error": "Only image files are allowed for Time Out."}, status_code=400)
+        if len(raw) > immersion_upload.MAX_PHOTO_BYTES:
+            return JSONResponse({"error": "Photo is too large (max 6 MB)."}, status_code=400)
 
-        try:
-            rel_path = immersion_upload.save_immersion_photo(
-                student_id, raw, photo.filename, name_prefix="time-out"
-            )
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+        photo_b64 = base64.standard_b64encode(raw).decode("ascii")
 
         now_iso = now_dt.isoformat()
         capture_iso = capture_dt.isoformat()
         updated = db_supabase.complete_time_out_with_capture(
             str(active["id"]),
             now_iso,
-            time_out_photo_path=rel_path,
+            time_out_photo_base64=photo_b64,
             latitude=lat,
             longitude=lon,
             readable_location_name=location_label,
@@ -2303,7 +2393,8 @@ async def time_out(
                 {
                     "error": (
                         "Database setup incomplete: run backend/migrations/immersion_time_out_capture.sql "
-                        "in Supabase SQL Editor, then try Time Out again."
+                        "(and backend/migrations/immersion_attendance_photos_base64.sql if the error mentions "
+                        "time_out_photo_base64) in Supabase SQL Editor, then try Time Out again."
                     ),
                 },
                 status_code=503,

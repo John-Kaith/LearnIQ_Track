@@ -23,6 +23,7 @@ create table if not exists public.lessons (
   extracted_text text,
   is_published boolean not null default false,
   storage_path text,
+  file_base64 text,
   created_at timestamptz default now()
 );
 
@@ -93,11 +94,20 @@ alter table if exists public.attendance_logs
   add column if not exists time_out_readable_location_name text,
   add column if not exists time_out_capture_timestamp timestamptz;
 
+-- Immersion photos in DB (see backend/migrations/immersion_attendance_photos_base64.sql).
+alter table if exists public.attendance_logs
+  add column if not exists captured_photo_base64 text,
+  add column if not exists time_out_photo_base64 text;
+
 alter table if exists public.journals
   add column if not exists attendance_id uuid references public.attendance_logs (id) on delete set null;
 
 alter table if exists public.lessons
   add column if not exists subject_id uuid references public.subjects (id) on delete set null;
+
+-- Lesson file in DB (optional; see backend/migrations/lessons_file_base64.sql).
+alter table if exists public.lessons
+  add column if not exists file_base64 text;
 
 -- Editable profile fields (bio, contact, avatar). Safe for existing installs.
 alter table if exists public.profiles

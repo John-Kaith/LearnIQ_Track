@@ -1672,7 +1672,7 @@ function buildImmersionAttendanceDetailHtml(row) {
   const photoSrc = (url) => {
     if (!url) return "";
     const u = String(url);
-    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    if (u.startsWith("http://") || u.startsWith("https://") || u.startsWith("data:")) return u;
     return apiUrl(u);
   };
   const section = (title, photoUrl, location, coords, ts, pendingNote) => {
@@ -4502,11 +4502,15 @@ async function uploadFile(file, subjectId = null) {
   currentFileId = result.file_id;
   localStorage.setItem(TEACHER_FILE_STORAGE_KEY, result.file_id);
   if (subjectId && result.file_id) {
-    try {
-      await linkLessonToSubject(result.file_id, subjectId);
-    } catch (linkErr) {
-      console.warn("linkLessonToSubject after upload:", linkErr);
-      throw linkErr;
+    const already =
+      result.subject_id != null && String(result.subject_id).trim() === String(subjectId).trim();
+    if (!already) {
+      try {
+        await linkLessonToSubject(result.file_id, subjectId);
+      } catch (linkErr) {
+        console.warn("linkLessonToSubject after upload:", linkErr);
+        throw linkErr;
+      }
     }
   }
   showToast(`File uploaded: ${result.filename}`, "success");
