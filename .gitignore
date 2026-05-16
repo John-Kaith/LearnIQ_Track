@@ -1,0 +1,9 @@
+uploads/
+backend/uploads/
+*.pdf
+*.ppt
+*.pptx
+__pycache__/
+*.pyc
+venv/
+.env
