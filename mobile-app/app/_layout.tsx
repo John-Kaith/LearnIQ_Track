@@ -32,6 +32,14 @@ export default function RootLayout() {
           <Stack.Screen name="(student-tabs)" />
           <Stack.Screen name="(teacher-tabs)" />
           <Stack.Screen name="pending" />
+          <Stack.Screen name="subject/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="lesson/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="reviewer/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="quiz/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="activities/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="journal/create" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="journal/history" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="journal/[id]" options={{ animation: 'slide_from_right' }} />
         </Stack>
         <StatusBar style="light" />
       </ThemeProvider>

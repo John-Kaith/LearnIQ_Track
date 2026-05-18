@@ -999,6 +999,13 @@ function initRoleAwareDashboardSidebar() {
   if (activePageId) applyRoleAwareDashboardSidebar(activePageId);
 }
 
+/** Teacher LearnIQ sidebar footer — session + /me (all teacher-learniq-page layouts). */
+function initTeacherLearniqSidebarProfile() {
+  if (!document.body?.classList?.contains("teacher-learniq-page")) return;
+  hydrateStudentSidebarChip();
+  void hydrateSidebarProfileFromDatabase();
+}
+
 /** Admin sidebar chip (pages under admin-*.html with #admin-sidebar-* ids). */
 function hydrateAdminSidebarFromSession() {
   const nameEl = document.getElementById("admin-sidebar-name");
@@ -1591,7 +1598,7 @@ async function hydrateSidebarProfileFromDatabase() {
 
     if (nameEl) nameEl.textContent = showName;
     if (initialsEl) {
-      const fallback = getUserInitials(full || email);
+      const fallback = getUserInitials(showName || email);
       if (window.LearnIQAvatar) {
         window.LearnIQAvatar.applyToElement(initialsEl, cacheUser, fallback);
       } else {
@@ -4538,46 +4545,75 @@ async function uploadFile(file, subjectId = null) {
   return result;
 }
 
+function _aiCooldownAssert(type, fetchOpts = {}) {
+  if (fetchOpts.skipCooldown) return;
+  if (window.AiGenCooldown?.assertCanGenerate) {
+    window.AiGenCooldown.assertCanGenerate(type);
+  }
+}
+
+function _aiCooldownStart(type, fetchOpts = {}) {
+  if (fetchOpts.skipCooldown) return;
+  if (window.AiGenCooldown?.start) {
+    window.AiGenCooldown.start(type);
+  }
+}
+
 async function generateReviewer(fetchOpts = {}) {
   if (!currentFileId) throw new Error("Choose a lesson file or select a row in the table first.");
+  _aiCooldownAssert("reviewer", fetchOpts);
 
   const response = await fetch(apiUrl("/generate-reviewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: currentFileId }),
+    body: JSON.stringify({
+      file_id: currentFileId,
+      skip_cooldown: Boolean(fetchOpts.skipCooldown),
+    }),
     ...(fetchOpts.signal ? { signal: fetchOpts.signal } : {})
   });
 
   const result = await readApiJson(response);
+  _aiCooldownStart("reviewer", fetchOpts);
   return result.reviewer;
 }
 
 async function generateQuestion(fetchOpts = {}) {
   if (!currentFileId) throw new Error("Choose a lesson file or select a row in the table first.");
+  _aiCooldownAssert("quiz", fetchOpts);
 
   const response = await fetch(apiUrl("/generate-question"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: currentFileId }),
+    body: JSON.stringify({
+      file_id: currentFileId,
+      skip_cooldown: Boolean(fetchOpts.skipCooldown),
+    }),
     ...(fetchOpts.signal ? { signal: fetchOpts.signal } : {})
   });
 
   const result = await readApiJson(response);
   currentQuiz.push(result);
+  _aiCooldownStart("quiz", fetchOpts);
   return result;
 }
 
 async function generateActivities(fetchOpts = {}) {
   if (!currentFileId) throw new Error("Choose a lesson file or select a row in the table first.");
+  _aiCooldownAssert("activity", fetchOpts);
 
   const response = await fetch(apiUrl("/generate-activities"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_id: currentFileId }),
+    body: JSON.stringify({
+      file_id: currentFileId,
+      skip_cooldown: Boolean(fetchOpts.skipCooldown),
+    }),
     ...(fetchOpts.signal ? { signal: fetchOpts.signal } : {})
   });
 
   const result = await readApiJson(response);
+  _aiCooldownStart("activity", fetchOpts);
   return result.activities;
 }
 
@@ -4667,6 +4703,14 @@ async function runTeacherAiPack(previewBody) {
     showToast("Upload a lesson file first, or select one in the table below.", "error");
     return;
   }
+  try {
+    if (window.AiGenCooldown?.assertCanGenerateAll) {
+      window.AiGenCooldown.assertCanGenerateAll(["reviewer", "quiz", "activity"]);
+    }
+  } catch (cooldownErr) {
+    showToast(cooldownErr.message, "error");
+    return;
+  }
   teacherAiAbortController?.abort();
   teacherAiAbortController = new AbortController();
   const { signal } = teacherAiAbortController;
@@ -4682,12 +4726,21 @@ async function runTeacherAiPack(previewBody) {
     cancelBtn.disabled = false;
   }
   try {
+    if (window.AiGenCooldown?.assertCanGenerateAll) {
+      window.AiGenCooldown.assertCanGenerateAll(["reviewer", "quiz", "activity"]);
+    }
     currentQuiz = [];
-    const reviewer = await generateReviewer({ signal });
-    const activities = await generateActivities({ signal });
+    const packOpts = { signal, skipCooldown: true };
+    const reviewer = await generateReviewer(packOpts);
+    const activities = await generateActivities(packOpts);
     const questions = [];
     for (let i = 0; i < 3; i++) {
-      questions.push(await generateQuestion({ signal }));
+      questions.push(await generateQuestion(packOpts));
+    }
+    if (window.AiGenCooldown?.start) {
+      window.AiGenCooldown.start("reviewer");
+      window.AiGenCooldown.start("activity");
+      window.AiGenCooldown.start("quiz");
     }
     updateFullAiPreview(previewBody, reviewer, activities, questions);
     await refreshTeacherLessons();
@@ -4705,9 +4758,9 @@ async function runTeacherAiPack(previewBody) {
       cancelBtn.disabled = true;
     }
     if (btn) {
-      btn.disabled = false;
       btn.innerHTML = prev;
     }
+    window.AiGenCooldown?.refreshButtons?.();
   }
 }
 
@@ -7541,6 +7594,13 @@ function showEmpty(message) {
       return;
     }
 
+    try {
+      _aiCooldownAssert(actionType);
+    } catch (cooldownErr) {
+      showToast(cooldownErr.message, "error");
+      return;
+    }
+
     const endpointUrl =
       actionType === "reviewer"
         ? apiUrl("/generate-reviewer")
@@ -7638,6 +7698,33 @@ function showEmpty(message) {
         studentAnswers = [];
         lessonData = selectedLesson;
       }
+      try {
+        if (typeof recordStudentHistory === "function" && selectedLesson?.file_id) {
+          const base = {
+            lesson_id: selectedLesson.file_id,
+            lesson_title: selectedLesson.title || selectedLesson.filename || "Lesson",
+            subject_name: selectedLesson.subject_name || "",
+          };
+          if (actionType === "quiz") {
+            const qList = Array.isArray(selectedLesson.quiz) ? selectedLesson.quiz : [];
+            recordStudentHistory("quiz", {
+              ...base,
+              score: 0,
+              total: qList.length,
+              questions: [],
+              generated_only: true,
+            });
+          } else if (actionType === "reviewer") {
+            recordStudentHistory("reviewer", base);
+          } else if (actionType === "activity") {
+            const acts = Array.isArray(selectedLesson.activities) ? selectedLesson.activities : [];
+            recordStudentHistory("activity", { ...base, activity_count: acts.length });
+          }
+        }
+      } catch (histErr) {
+        console.warn("recordStudentHistory after AI generate failed:", histErr);
+      }
+      _aiCooldownStart(actionType);
       showContentSection(actionType);
       if (aiStatusEl) aiStatusEl.textContent = config.done;
       showToast(config.done, "success");
@@ -7660,10 +7747,11 @@ function showEmpty(message) {
         cancelAiBtn.hidden = true;
         cancelAiBtn.disabled = true;
       }
-      if (btn) {
+      if (btn && !window.AiGenCooldown?.getRemainingMs?.(actionType)) {
         btn.disabled = false;
         btn.innerHTML = originalText;
       }
+      window.AiGenCooldown?.refreshButtons?.();
     }
   }
 
@@ -7678,6 +7766,13 @@ function showEmpty(message) {
       
       if (!action || !selectedLesson?.file_id) {
         showToast("Please select a lesson first.", "error");
+        return;
+      }
+
+      try {
+        _aiCooldownAssert(action);
+      } catch (cooldownErr) {
+        showToast(cooldownErr.message, "error");
         return;
       }
 
@@ -7750,19 +7845,22 @@ function showEmpty(message) {
         } else if (action === "activity" && result.total_activities) {
           successMessage += ` Total activities: ${result.total_activities}.`;
         }
+        _aiCooldownStart(action);
         showToast(successMessage, "success");
         
       } catch (error) {
         console.error(`Error generating ${action}:`, error);
         showToast(`Failed to generate ${action}: ${error.message}`, "error");
       } finally {
-        // Restore button and reset modal
-        generateBtn.disabled = false;
         generateBtn.innerHTML = originalText;
+        window.AiGenCooldown?.refreshButtons?.();
         closeActionModal();
       }
     });
   }
+
+  window.AiGenCooldown?.registerDefaults?.();
+  window.AiGenCooldown?.refreshButtons?.();
   
   // Handle cancel button click
   if (cancelGenerationBtn) {
@@ -7784,6 +7882,13 @@ function showEmpty(message) {
     studentAiAbortController?.abort();
   });
   document.getElementById("student-generate-reviewer-btn")?.addEventListener("click", () => {
+    if (window.AiGenCooldown?.getRemainingMs?.("reviewer") > 0) {
+      showToast(
+        `Please wait ${Math.ceil(window.AiGenCooldown.getRemainingMs("reviewer") / 1000)}s before generating reviewer again.`,
+        "error"
+      );
+      return;
+    }
     runStudentAiAction("reviewer");
   });
   document.getElementById("student-download-reviewer-pdf-btn")?.addEventListener("click", () => {
@@ -7791,9 +7896,23 @@ function showEmpty(message) {
     downloadReviewerPdfFromElement(reviewerList, selectedLesson?.filename || "reviewer");
   });
   document.getElementById("student-generate-quiz-btn")?.addEventListener("click", () => {
+    if (window.AiGenCooldown?.getRemainingMs?.("quiz") > 0) {
+      showToast(
+        `Please wait ${Math.ceil(window.AiGenCooldown.getRemainingMs("quiz") / 1000)}s before generating quiz again.`,
+        "error"
+      );
+      return;
+    }
     openModal(quizSettingsModal);
   });
   document.getElementById("student-generate-activity-btn")?.addEventListener("click", () => {
+    if (window.AiGenCooldown?.getRemainingMs?.("activity") > 0) {
+      showToast(
+        `Please wait ${Math.ceil(window.AiGenCooldown.getRemainingMs("activity") / 1000)}s before generating activity again.`,
+        "error"
+      );
+      return;
+    }
     openModal(activitySettingsModal);
   });
 
@@ -7929,6 +8048,14 @@ const STUDENT_HISTORY_KEYS = {
 const STUDENT_HISTORY_MAX_PER_TYPE = 100;
 let activeHistoryTab = "quiz";
 let currentHistoryDetailContext = null;
+/** Server-backed history (Supabase); localStorage remains as fallback/cache. */
+let studentHistoryServerCache = {
+  loaded: false,
+  loading: false,
+  quiz: [],
+  reviewer: [],
+  activity: [],
+};
 
 function getStudentHistoryUserKey() {
   try {
@@ -7940,7 +8067,7 @@ function getStudentHistoryUserKey() {
   }
 }
 
-function readStudentHistoryList(type) {
+function readStudentHistoryListLocal(type) {
   try {
     const baseKey = STUDENT_HISTORY_KEYS[type];
     if (!baseKey) return [];
@@ -7951,6 +8078,94 @@ function readStudentHistoryList(type) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function historyEntryDedupKey(type, item) {
+  if (item?.id) return `${type}:${item.id}`;
+  const lid = String(item?.lesson_id || "");
+  const ts = item?.timestamp ? new Date(item.timestamp).getTime() : 0;
+  return `${type}:${lid}:${ts}`;
+}
+
+function readStudentHistoryList(type) {
+  const local = readStudentHistoryListLocal(type);
+  if (!studentHistoryServerCache.loaded) return local;
+  const server = studentHistoryServerCache[type] || [];
+  const seen = new Set();
+  const merged = [];
+  for (const item of [...server, ...local]) {
+    const key = historyEntryDedupKey(type, item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  merged.sort((a, b) => {
+    const ta = a?.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const tb = b?.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return tb - ta;
+  });
+  return merged.slice(0, STUDENT_HISTORY_MAX_PER_TYPE);
+}
+
+async function fetchStudentHistoryFromServer() {
+  if (studentHistoryServerCache.loading) return;
+  const session = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  const idn = String(session?.id_number || "").trim();
+  if (!idn) return;
+  studentHistoryServerCache.loading = true;
+  try {
+    const res = await fetch(
+      apiUrl(`/student/learning-history?student_id_number=${encodeURIComponent(idn)}`)
+    );
+    if (!res.ok) {
+      console.warn("fetchStudentHistoryFromServer:", res.status);
+      return;
+    }
+    const data = await res.json();
+    studentHistoryServerCache.quiz = Array.isArray(data.quiz) ? data.quiz : [];
+    studentHistoryServerCache.reviewer = Array.isArray(data.reviewer) ? data.reviewer : [];
+    studentHistoryServerCache.activity = Array.isArray(data.activity) ? data.activity : [];
+    studentHistoryServerCache.loaded = true;
+    syncServerHistoryToLocalStorage();
+    if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
+    if (document.getElementById("history-list-host")) {
+      setStudentHistoryActiveTab(activeHistoryTab);
+    }
+  } catch (e) {
+    console.warn("fetchStudentHistoryFromServer failed:", e);
+  } finally {
+    studentHistoryServerCache.loading = false;
+  }
+}
+
+function syncServerHistoryToLocalStorage() {
+  ["quiz", "reviewer", "activity"].forEach((type) => {
+    const merged = readStudentHistoryList(type);
+    if (merged.length) writeStudentHistoryList(type, merged);
+  });
+}
+
+async function persistStudentHistoryToServer(type, payload) {
+  if (type === "quiz") return;
+  const session = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  const idn = String(session?.id_number || "").trim();
+  if (!idn || !STUDENT_HISTORY_KEYS[type]) return;
+  try {
+    const res = await fetch(apiUrl("/student/learning-history"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id_number: idn,
+        event_type: type,
+        ...(payload || {}),
+      }),
+    });
+    if (res.ok && studentHistoryServerCache.loaded) {
+      void fetchStudentHistoryFromServer();
+    }
+  } catch (e) {
+    console.warn("persistStudentHistoryToServer failed:", e);
   }
 }
 
@@ -7992,6 +8207,7 @@ function recordStudentHistory(type, payload) {
   list.unshift(entry);
   writeStudentHistoryList(type, list);
   if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
+  void persistStudentHistoryToServer(type, entry);
 }
 
 function formatHistoryTimestamp(iso) {
@@ -8018,7 +8234,11 @@ function buildHistoryItemHtml(type, item, index) {
     const total = Number(item.total || 0);
     const pct = total > 0 ? Math.round((score / total) * 100) : 0;
     iconHtml = '<i class="fa-solid fa-clipboard-question" aria-hidden="true"></i>';
-    summary = `<span class="history-summary-pill">Score <strong>${score}/${total}</strong> &nbsp;<span class="small-note">(${pct}%)</span></span>`;
+    if (item.generated_only) {
+      summary = `<span class="history-summary-pill">Quiz generated <span class="small-note">(${total} question${total === 1 ? "" : "s"})</span></span>`;
+    } else {
+      summary = `<span class="history-summary-pill">Score <strong>${score}/${total}</strong> &nbsp;<span class="small-note">(${pct}%)</span></span>`;
+    }
   } else if (type === "reviewer") {
     iconHtml = '<i class="fa-solid fa-book" aria-hidden="true"></i>';
     summary = '<span class="small-note">Reviewer opened</span>';
@@ -8056,15 +8276,15 @@ function renderStudentHistoryList(type) {
     const labels = {
       quiz: {
         title: "No quiz history yet",
-        body: "When you submit a quiz, it will appear here.",
+        body: "Generate or finish a quiz from My lesson — completed attempts and generated quizzes appear here.",
       },
       reviewer: {
         title: "No reviewer history yet",
-        body: "Open a reviewer from any lesson and it will appear here.",
+        body: "Generate or open a reviewer from My lesson and it will appear here.",
       },
       activity: {
         title: "No activity history yet",
-        body: "Open an activity from any lesson and it will appear here.",
+        body: "Generate or open activities from My lesson and they will appear here.",
       },
     };
     const l = labels[type] || labels.quiz;
@@ -8365,6 +8585,7 @@ function setupStudentHistoryPage() {
   }
   updateStudentHistoryTabCounts();
   setStudentHistoryActiveTab(activeHistoryTab);
+  void fetchStudentHistoryFromServer();
 
   document.querySelectorAll(".workspace-tab[data-history-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -8410,6 +8631,7 @@ if (typeof window !== "undefined") {
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired:", window.location.pathname);
   initRoleAwareDashboardSidebar();
+  initTeacherLearniqSidebarProfile();
   animateProgressBars();
   if (document.getElementById("admin-sidebar-name") || document.getElementById("admin-sidebar-avatar")) {
     hydrateAdminSidebarFromSession();

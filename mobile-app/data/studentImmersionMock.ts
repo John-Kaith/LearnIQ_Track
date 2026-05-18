@@ -1,3 +1,5 @@
+export type AttendanceLogStatus = 'completed' | 'incomplete' | 'partial';
+
 export type AttendanceLogEntry = {
   id: string;
   month: string;
@@ -6,6 +8,8 @@ export type AttendanceLogEntry = {
   timeIn: string;
   timeOut: string;
   totalHours: number;
+  location: string;
+  status: AttendanceLogStatus;
 };
 
 export const studentImmersionMock = {
@@ -32,6 +36,8 @@ export const studentImmersionMock = {
       timeIn: '8:00 AM',
       timeOut: '5:00 PM',
       totalHours: 8.0,
+      location: 'Santa Cruz, Laguna',
+      status: 'completed',
     },
     {
       id: '2',
@@ -41,6 +47,8 @@ export const studentImmersionMock = {
       timeIn: '8:05 AM',
       timeOut: '5:10 PM',
       totalHours: 9.1,
+      location: 'Santa Cruz, Laguna',
+      status: 'completed',
     },
     {
       id: '3',
@@ -50,6 +58,8 @@ export const studentImmersionMock = {
       timeIn: '8:10 AM',
       timeOut: '5:05 PM',
       totalHours: 8.9,
+      location: 'Santa Cruz, Laguna',
+      status: 'completed',
     },
   ] satisfies AttendanceLogEntry[],
   info: {

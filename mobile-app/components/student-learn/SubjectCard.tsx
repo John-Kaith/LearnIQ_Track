@@ -4,7 +4,13 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/colors';
 import type { StudentSubject } from '@/data/studentLearnMock';
 
-export function SubjectCard({ subject }: { subject: StudentSubject }) {
+export function SubjectCard({
+  subject,
+  onOpen,
+}: {
+  subject: StudentSubject;
+  onOpen?: () => void;
+}) {
   const lessonLabel = subject.lessonCount === 1 ? '1 lesson' : `${subject.lessonCount} lessons`;
 
   return (
@@ -25,7 +31,10 @@ export function SubjectCard({ subject }: { subject: StudentSubject }) {
       <View style={styles.footer}>
         <Text style={styles.meta}>Reviewer • Quiz • Activities</Text>
         <Pressable
-          onPress={() => Alert.alert('Open Subject', `Mock open: ${subject.title}`)}
+          onPress={
+            onOpen ??
+            (() => Alert.alert('Open Subject', `Mock open: ${subject.title}`))
+          }
           style={({ pressed }) => [styles.openBtn, pressed && styles.openBtnPressed]}>
           <Text style={styles.openBtnText}>Open Subject</Text>
         </Pressable>

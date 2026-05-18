@@ -38,6 +38,18 @@
             "backgroundColor": "#050b16"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "LearnIQ needs camera access to capture live immersion attendance photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "LearnIQ needs your location to verify immersion attendance."
+        }
       ]
     ],
     "experiments": {

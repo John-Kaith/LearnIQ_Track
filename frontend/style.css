@@ -8075,11 +8075,178 @@ html[data-theme="light"] .admin-lesson-preview-tabs .workspace-tab.is-active {
    - teacher-student-gradecard.html
    ============================================================ */
 
+.btn.ai-gen-on-cooldown {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .gradecard-search {
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem;
   align-items: flex-end;
+}
+
+.gradecard-picker {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.gradecard-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  font-size: 0.88rem;
+}
+
+.gradecard-crumb {
+  background: none;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  color: rgba(148, 163, 184, 0.95);
+  cursor: pointer;
+  font: inherit;
+  border-radius: 6px;
+}
+
+.gradecard-crumb:hover:not(.is-current) {
+  color: rgba(226, 232, 240, 0.98);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.gradecard-crumb.is-current {
+  color: rgba(226, 232, 240, 0.98);
+  font-weight: 600;
+  cursor: default;
+}
+
+.gradecard-crumb-sep {
+  color: rgba(100, 116, 139, 0.9);
+  user-select: none;
+}
+
+.gradecard-step-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gradecard-step-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.gradecard-strand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.gradecard-strand-card {
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+  padding: 1.1rem 1.15rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  color: inherit;
+  font: inherit;
+}
+
+.gradecard-strand-card:hover {
+  border-color: var(--strand-accent, #60a5fa);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.gradecard-strand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  color: #fff;
+  background: var(--strand-accent, #3b82f6);
+}
+
+.gradecard-strand-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.95);
+  margin-top: 0.25rem;
+}
+
+.gradecard-student-filter {
+  max-width: 360px;
+}
+
+.gradecard-student-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.gradecard-student-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(2, 6, 23, 0.35);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.gradecard-student-row:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(30, 58, 138, 0.2);
+}
+
+.gradecard-student-row-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  flex-shrink: 0;
+}
+
+.gradecard-student-row-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.gradecard-student-row-chevron {
+  color: rgba(148, 163, 184, 0.7);
+  flex-shrink: 0;
+}
+
+.gradecard-detail-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.85rem;
 }
 
 .gradecard-sheet {

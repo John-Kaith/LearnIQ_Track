@@ -11,6 +11,12 @@ from typing import Any
 
 JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
+from grading_shs import (
+    compute_weighted_final,
+    format_weights_label,
+    resolve_component_scores,
+    shs_component_weights,
+)
 from supabase_client import supabase
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
@@ -868,6 +874,9 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
 
 
 def _serialize_subject_row(row: dict[str, Any]) -> dict[str, Any]:
+    deped = (row.get("deped_category") or "academic_standard").strip().lower()
+    if deped not in ("core", "academic_standard", "academic_specialized"):
+        deped = "academic_standard"
     return {
         "id": str(row.get("id")) if row.get("id") is not None else None,
         "name": (row.get("name") or "").strip(),
@@ -876,6 +885,7 @@ def _serialize_subject_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row.get("created_at"),
         "join_code": (row.get("join_code") or "").strip() or None,
         "created_by_teacher_id_number": (row.get("created_by_teacher_id_number") or "").strip() or None,
+        "deped_category": deped,
     }
 
 
@@ -906,7 +916,10 @@ def get_subject_by_join_code(join_code: str) -> dict[str, Any] | None:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
+            .select(
+                "id, name, description, color, created_at, join_code, "
+                "created_by_teacher_id_number, deped_category"
+            )
             .eq("join_code", code)
             .limit(1)
             .execute()
@@ -925,7 +938,10 @@ def get_subject_row(subject_id: str) -> dict[str, Any] | None:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
+            .select(
+                "id, name, description, color, created_at, join_code, "
+                "created_by_teacher_id_number, deped_category"
+            )
             .eq("id", subject_id)
             .limit(1)
             .execute()
@@ -943,7 +959,10 @@ def list_subjects() -> list[dict[str, Any]]:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, description, color, created_at, join_code, created_by_teacher_id_number")
+            .select(
+                "id, name, description, color, created_at, join_code, "
+                "created_by_teacher_id_number, deped_category"
+            )
             .order("name")
             .execute()
         )
@@ -994,6 +1013,7 @@ def create_subject(
     description: str | None = None,
     color: str | None = None,
     created_by_teacher_id_number: str | None = None,
+    deped_category: str | None = None,
 ) -> dict[str, Any]:
     """Insert a new subject row and return it."""
     payload: dict[str, Any] = {"name": (name or "").strip()}
@@ -1007,6 +1027,10 @@ def create_subject(
     if owner:
         payload["created_by_teacher_id_number"] = owner
         payload["join_code"] = _allocate_unique_join_code(payload["name"])
+    if deped_category is not None:
+        cat = str(deped_category).strip().lower()
+        if cat in ("core", "academic_standard", "academic_specialized"):
+            payload["deped_category"] = cat
     try:
         res = _sb().table("subjects").insert(payload).execute()
         rows = res.data or []
@@ -1110,7 +1134,13 @@ def count_teachers_by_subject() -> dict[str, int]:
     return {k: len(v) for k, v in teachers.items()}
 
 
-def update_subject(subject_id: str, name: str | None = None, description: str | None = None, color: str | None = None) -> dict[str, Any]:
+def update_subject(
+    subject_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    color: str | None = None,
+    deped_category: str | None = None,
+) -> dict[str, Any]:
     """Update one or more fields on a subject row."""
     payload: dict[str, Any] = {}
     if name is not None:
@@ -1122,6 +1152,10 @@ def update_subject(subject_id: str, name: str | None = None, description: str | 
         payload["description"] = str(description).strip() or None
     if color is not None:
         payload["color"] = str(color).strip() or None
+    if deped_category is not None:
+        cat = str(deped_category).strip().lower()
+        if cat in ("core", "academic_standard", "academic_specialized"):
+            payload["deped_category"] = cat
     if not payload:
         raise ValueError("Nothing to update.")
     try:
@@ -2716,29 +2750,53 @@ def list_published_lessons_for_student(
 
 # ---------- Quiz / activity / attendance aggregations ----------
 
-def _lesson_ids_for_subject(subject_id: str) -> list[str]:
+def _lessons_for_subject(subject_id: str) -> list[dict[str, Any]]:
     try:
         res = (
             _sb()
             .table("lessons")
-            .select("id")
+            .select("id, grading_component")
             .eq("subject_id", subject_id)
             .execute()
         )
-        return [str(r["id"]) for r in (res.data or []) if r.get("id")]
+        return res.data or []
     except Exception as e:
-        print(f"_lesson_ids_for_subject: {e}")
+        print(f"_lessons_for_subject: {e}")
         return []
 
 
-def compute_quiz_average_for_subject(
+def _lesson_ids_for_subject(subject_id: str) -> list[str]:
+    return [str(r["id"]) for r in _lessons_for_subject(subject_id) if r.get("id")]
+
+
+def _lesson_ids_for_grading_component(subject_id: str, component: str) -> list[str]:
+    """Lessons that count toward WW, PT, or QA (null lesson tag uses platform defaults)."""
+    allowed_null = {
+        "written_work": ("written_work", None),
+        "performance_task": ("performance_task", None),
+        "quarterly_assessment": ("quarterly_assessment",),
+    }
+    tags = allowed_null.get(component, (component,))
+    ids: list[str] = []
+    for row in _lessons_for_subject(subject_id):
+        lid = row.get("id")
+        if not lid:
+            continue
+        gc = row.get("grading_component")
+        if gc is None and None in tags:
+            ids.append(str(lid))
+        elif gc in tags:
+            ids.append(str(lid))
+    return ids
+
+
+def _average_quiz_attempts(
     student_uuid: str,
-    subject_id: str,
+    lesson_ids: list[str],
     period: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Return {average: float|None, attempts: int} — average normalized to 0–100."""
+    """Return {average: float|None, attempts: int} from quiz_attempts on given lessons."""
     out = {"average": None, "attempts": 0}
-    lesson_ids = _lesson_ids_for_subject(subject_id)
     if not lesson_ids or not student_uuid:
         return out
     try:
@@ -2773,8 +2831,28 @@ def compute_quiz_average_for_subject(
             out["attempts"] = len(pct_values)
         return out
     except Exception as e:
-        print(f"compute_quiz_average_for_subject: {e}")
+        print(f"_average_quiz_attempts: {e}")
         return out
+
+
+def compute_quiz_average_for_subject(
+    student_uuid: str,
+    subject_id: str,
+    period: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Written Work: quiz attempts on lessons tagged written_work (or untagged)."""
+    lesson_ids = _lesson_ids_for_grading_component(subject_id, "written_work")
+    return _average_quiz_attempts(student_uuid, lesson_ids, period)
+
+
+def compute_quarterly_assessment_for_subject(
+    student_uuid: str,
+    subject_id: str,
+    period: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Quarterly Assessment: quiz attempts on lessons tagged quarterly_assessment."""
+    lesson_ids = _lesson_ids_for_grading_component(subject_id, "quarterly_assessment")
+    return _average_quiz_attempts(student_uuid, lesson_ids, period)
 
 
 def compute_activity_average_for_subject(
@@ -2782,9 +2860,9 @@ def compute_activity_average_for_subject(
     subject_id: str,
     period: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Return {average: float|None, attempts: int} from activity_attempts."""
+    """Performance Tasks: activity attempts on PT-tagged lessons (or untagged)."""
     out = {"average": None, "attempts": 0}
-    lesson_ids = _lesson_ids_for_subject(subject_id)
+    lesson_ids = _lesson_ids_for_grading_component(subject_id, "performance_task")
     if not lesson_ids or not student_uuid:
         return out
     try:
@@ -2867,6 +2945,439 @@ def compute_attendance_stats(
     return out
 
 
+# ---------- Student learning history (History page) ----------
+
+
+def _lesson_title_and_subject(lesson_id: str) -> tuple[str, str, dict[str, Any] | None]:
+    lesson = get_lesson_row(lesson_id) if lesson_id else None
+    title = (lesson.get("filename") if lesson else None) or "Lesson"
+    subject_name = ""
+    if lesson and lesson.get("subject_id"):
+        sub = get_subject_row(str(lesson["subject_id"]))
+        if sub:
+            subject_name = (sub.get("name") or "").strip()
+    return title, subject_name, lesson
+
+
+def _quiz_questions_snapshot_from_attempt(
+    content_row: dict[str, Any] | None,
+    answers_raw: Any,
+) -> list[dict[str, Any]]:
+    quiz = (content_row or {}).get("quiz") if content_row else []
+    if not isinstance(quiz, list):
+        quiz = []
+    answers: list[Any] = []
+    if isinstance(answers_raw, list):
+        answers = answers_raw
+    elif isinstance(answers_raw, dict):
+        answers = list(answers_raw.values())
+    out: list[dict[str, Any]] = []
+    for i, q in enumerate(quiz):
+        if not isinstance(q, dict):
+            continue
+        your = answers[i] if i < len(answers) else None
+        ans_letter = str(q.get("answer") or "").strip().upper()
+        out.append(
+            {
+                "question": str(q.get("question") or ""),
+                "choices": [str(c) for c in (q.get("choices") or [])],
+                "answer": ans_letter,
+                "student_answer": str(your).strip().upper() if your is not None else None,
+            }
+        )
+    return out
+
+
+def list_student_quiz_history(
+    student_id_number: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Quiz attempts for History page (from quiz_attempts + lesson_content)."""
+    idn = (student_id_number or "").strip()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid and not idn:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    try:
+        q = _sb().table("quiz_attempts").select("*")
+        if student_uuid:
+            q = q.eq("student_id", student_uuid)
+        elif idn:
+            q = q.eq("student_id_number", idn)
+        res = q.order("created_at", desc=True).limit(limit).execute()
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_student_quiz_history: {e}")
+        return []
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        lid = str(r.get("lesson_id") or "")
+        if not lid:
+            continue
+        title, subject_name, _lesson = _lesson_title_and_subject(lid)
+        _, lc = get_lesson_with_content(lid)
+        score = int(r.get("score") or 0)
+        total = int(r.get("total_questions") or 0)
+        ts = r.get("submitted_at") or r.get("created_at")
+        out.append(
+            {
+                "id": str(r.get("id") or ""),
+                "lesson_id": lid,
+                "lesson_title": title,
+                "subject_name": subject_name,
+                "score": score,
+                "total": total,
+                "questions": _quiz_questions_snapshot_from_attempt(lc, r.get("answers")),
+                "timestamp": ts,
+            }
+        )
+    return out
+
+
+def insert_student_learning_event(
+    student_id_number: str,
+    event_type: str,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Persist reviewer / activity history event."""
+    idn = (student_id_number or "").strip()
+    et = (event_type or "").strip().lower()
+    if et not in ("reviewer", "activity"):
+        raise ValueError("event_type must be reviewer or activity")
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    lesson_id = payload.get("lesson_id")
+    meta = {
+        k: payload[k]
+        for k in payload
+        if k not in ("lesson_id", "lesson_title", "subject_name", "timestamp")
+    }
+    row: dict[str, Any] = {
+        "event_type": et,
+        "lesson_id": str(lesson_id) if lesson_id else None,
+        "lesson_title": (payload.get("lesson_title") or "").strip() or None,
+        "subject_name": (payload.get("subject_name") or "").strip() or None,
+        "metadata": meta or {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if student_uuid:
+        row["student_id"] = student_uuid
+    if idn:
+        row["student_id_number"] = idn
+    try:
+        res = _sb().table("student_learning_events").insert(row).execute()
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"insert_student_learning_event: {e}")
+        raise
+
+
+def list_student_learning_events(
+    student_id_number: str,
+    event_type: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    idn = (student_id_number or "").strip()
+    et = (event_type or "").strip().lower()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid and not idn:
+        return []
+    try:
+        q = _sb().table("student_learning_events").select("*").eq("event_type", et)
+        if student_uuid:
+            q = q.eq("student_id", student_uuid)
+        elif idn:
+            q = q.eq("student_id_number", idn)
+        res = q.order("created_at", desc=True).limit(limit).execute()
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_student_learning_events: {e}")
+        return []
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        out.append(
+            {
+                "id": str(r.get("id") or ""),
+                "lesson_id": str(r.get("lesson_id") or "") or None,
+                "lesson_title": r.get("lesson_title") or "Lesson",
+                "subject_name": r.get("subject_name") or "",
+                "timestamp": r.get("created_at"),
+                **meta,
+            }
+        )
+    return out
+
+
+def _has_reviewer_content(reviewer: Any) -> bool:
+    if isinstance(reviewer, list):
+        return any(str(x).strip() for x in reviewer)
+    return bool(str(reviewer or "").strip())
+
+
+def _merge_history_by_lesson(
+    primary: list[dict[str, Any]],
+    backfill: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep primary entries; add backfill only for lesson_ids not already present."""
+    seen = {str(x.get("lesson_id") or "") for x in primary if x.get("lesson_id")}
+    merged = list(primary)
+    for item in backfill:
+        lid = str(item.get("lesson_id") or "")
+        if not lid or lid in seen:
+            continue
+        seen.add(lid)
+        merged.append(item)
+    merged.sort(
+        key=lambda x: str(x.get("timestamp") or ""),
+        reverse=True,
+    )
+    return merged[:100]
+
+
+def backfill_student_history_from_lessons(student_id_number: str) -> dict[str, list[dict[str, Any]]]:
+    """
+    Include lessons with saved reviewer/quiz/activities so past AI generations appear
+    even if no history event was recorded at the time.
+    """
+    idn = (student_id_number or "").strip()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid:
+        return {"quiz": [], "reviewer": [], "activity": []}
+
+    lessons = list_published_lessons_for_student(student_uuid)
+    quiz_out: list[dict[str, Any]] = []
+    reviewer_out: list[dict[str, Any]] = []
+    activity_out: list[dict[str, Any]] = []
+
+    for lesson in lessons:
+        lid = str(lesson.get("id") or lesson.get("file_id") or "")
+        if not lid:
+            continue
+        title = (lesson.get("filename") or lesson.get("title") or "Lesson").strip()
+        subject_name = (lesson.get("subject_name") or "").strip()
+        ts = lesson.get("created_at") or lesson.get("updated_at")
+        reviewer = lesson.get("reviewer")
+        quiz = lesson.get("quiz") if isinstance(lesson.get("quiz"), list) else []
+        activities = lesson.get("activities") if isinstance(lesson.get("activities"), list) else []
+
+        if _has_reviewer_content(reviewer):
+            reviewer_out.append(
+                {
+                    "id": f"backfill-reviewer:{lid}",
+                    "lesson_id": lid,
+                    "lesson_title": title,
+                    "subject_name": subject_name,
+                    "timestamp": ts,
+                    "from_lesson_content": True,
+                }
+            )
+        if quiz:
+            quiz_out.append(
+                {
+                    "id": f"backfill-quiz:{lid}",
+                    "lesson_id": lid,
+                    "lesson_title": title,
+                    "subject_name": subject_name,
+                    "score": 0,
+                    "total": len(quiz),
+                    "questions": [],
+                    "generated_only": True,
+                    "timestamp": ts,
+                    "from_lesson_content": True,
+                }
+            )
+        if activities:
+            activity_out.append(
+                {
+                    "id": f"backfill-activity:{lid}",
+                    "lesson_id": lid,
+                    "lesson_title": title,
+                    "subject_name": subject_name,
+                    "timestamp": ts,
+                    "activity_count": len(activities),
+                    "from_lesson_content": True,
+                }
+            )
+
+    return {
+        "quiz": quiz_out,
+        "reviewer": reviewer_out,
+        "activity": activity_out,
+    }
+
+
+def get_student_learning_history(student_id_number: str) -> dict[str, list[dict[str, Any]]]:
+    quiz = list_student_quiz_history(student_id_number)
+    reviewer = list_student_learning_events(student_id_number, "reviewer")
+    activity = list_student_learning_events(student_id_number, "activity")
+    backfill = backfill_student_history_from_lessons(student_id_number)
+    return {
+        "quiz": _merge_history_by_lesson(quiz, backfill.get("quiz") or []),
+        "reviewer": _merge_history_by_lesson(reviewer, backfill.get("reviewer") or []),
+        "activity": _merge_history_by_lesson(activity, backfill.get("activity") or []),
+    }
+
+
+# ---------- Teacher gradecard roster (strands → students) ----------
+
+SHS_STRANDS = ("STEM", "ABM", "HUMSS", "TVL-HE")
+_STRAND_ALIASES = {"HUMMS": "HUMSS", "TVLHE": "TVL-HE", "TVL": "TVL-HE"}
+
+
+def normalize_profile_strand(strand: str | None) -> str | None:
+    raw = (strand or "").strip().upper().replace(" ", "-")
+    if not raw:
+        return None
+    return _STRAND_ALIASES.get(raw, raw)
+
+
+def _teacher_owned_subject_ids(teacher_id_number: str) -> list[str]:
+    tid = (teacher_id_number or "").strip()
+    if not tid:
+        return []
+    return [
+        str(s["id"])
+        for s in list_subjects_for_teacher_owner(tid)
+        if s.get("id")
+    ]
+
+
+def _student_uuids_enrolled_in_teacher_subjects(
+    teacher_id_number: str,
+    grading_period_id: str | None = None,
+) -> set[str]:
+    """Distinct students enrolled in any subject owned by this teacher."""
+    subject_ids = _teacher_owned_subject_ids(teacher_id_number)
+    if not subject_ids:
+        return set()
+    try:
+        q = (
+            _sb()
+            .table("enrollments")
+            .select("student_id")
+            .in_("subject_id", subject_ids)
+        )
+        if grading_period_id:
+            q = q.eq("grading_period_id", grading_period_id)
+        res = q.execute()
+        return {
+            str(r["student_id"])
+            for r in (res.data or [])
+            if r.get("student_id")
+        }
+    except Exception as e:
+        print(f"_student_uuids_enrolled_in_teacher_subjects: {e}")
+        return set()
+
+
+def _fetch_student_profiles_by_uuids(uuids: set[str] | list[str]) -> list[dict[str, Any]]:
+    ids = [str(u) for u in uuids if u]
+    if not ids:
+        return []
+    cols = (
+        "id, last_name, first_name, middle_name, name_suffix, id_number, "
+        "email, role, approval_status, grade_level, strand, section"
+    )
+    out: list[dict[str, Any]] = []
+    chunk = 80
+    for i in range(0, len(ids), chunk):
+        batch = ids[i : i + chunk]
+        try:
+            res = (
+                _sb()
+                .table("profiles")
+                .select(cols)
+                .in_("id", batch)
+                .eq("role", "student")
+                .execute()
+            )
+            out.extend(res.data or [])
+        except Exception as e:
+            print(f"_fetch_student_profiles_by_uuids: {e}")
+    return out
+
+
+def list_gradecard_strands_for_teacher(teacher_id_number: str) -> list[dict[str, Any]]:
+    """SHS strands with counts of enrolled students the teacher can grade."""
+    student_uuids = _student_uuids_enrolled_in_teacher_subjects(teacher_id_number)
+    profiles = _fetch_student_profiles_by_uuids(student_uuids)
+    counts: dict[str, int] = {s: 0 for s in SHS_STRANDS}
+    unassigned = 0
+    for p in profiles:
+        status = str(p.get("approval_status") or "").strip().lower()
+        if status and status not in ("approved", "active"):
+            continue
+        norm = normalize_profile_strand(p.get("strand"))
+        if norm in counts:
+            counts[norm] += 1
+        else:
+            unassigned += 1
+    rows = [
+        {
+            "strand": s,
+            "label": s,
+            "student_count": counts[s],
+        }
+        for s in SHS_STRANDS
+    ]
+    if unassigned:
+        rows.append({"strand": "__unassigned__", "label": "No strand set", "student_count": unassigned})
+    return rows
+
+
+def list_gradecard_students_for_teacher(
+    teacher_id_number: str,
+    strand: str,
+    *,
+    search: str | None = None,
+) -> list[dict[str, Any]]:
+    """Students in a strand enrolled in the teacher's subjects."""
+    norm_strand = normalize_profile_strand(strand)
+    if strand == "__unassigned__":
+        norm_strand = None
+        match_unassigned = True
+    else:
+        match_unassigned = False
+        if not norm_strand or norm_strand not in SHS_STRANDS:
+            return []
+
+    student_uuids = _student_uuids_enrolled_in_teacher_subjects(teacher_id_number)
+    profiles = _fetch_student_profiles_by_uuids(student_uuids)
+    needle = (search or "").strip().lower()
+    out: list[dict[str, Any]] = []
+
+    for p in profiles:
+        status = str(p.get("approval_status") or "").strip().lower()
+        if status and status not in ("approved", "active"):
+            continue
+        p_strand = normalize_profile_strand(p.get("strand"))
+        if match_unassigned:
+            if p_strand in SHS_STRANDS:
+                continue
+        elif p_strand != norm_strand:
+            continue
+
+        row = serialize_public_profile(p)
+        if needle:
+            hay = " ".join(
+                [
+                    row.get("display_name") or "",
+                    row.get("id_number") or "",
+                    row.get("email") or "",
+                    row.get("section") or "",
+                ]
+            ).lower()
+            if needle not in hay:
+                continue
+        out.append(row)
+
+    out.sort(key=lambda x: (x.get("display_name") or x.get("id_number") or "").lower())
+    return out
+
+
 # ---------- student_grades (per-subject rows) ----------
 
 def get_student_grade(
@@ -2893,11 +3404,85 @@ def get_student_grade(
         return None
 
 
+def merge_and_compute_student_grade(
+    student_uuid: str,
+    student_strand: str | None,
+    subject_id: str,
+    grading_period_id: str,
+    partial: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge teacher input with auto scores and DepEd weights; return upsert payload."""
+    period = get_grading_period(grading_period_id)
+    existing = get_student_grade(student_uuid, subject_id, grading_period_id) or {}
+
+    subj = get_subject_row(subject_id) or {}
+    deped_category = (subj.get("deped_category") or "academic_standard").strip().lower()
+    weights = shs_component_weights(student_strand, deped_category)
+
+    q = compute_quiz_average_for_subject(student_uuid, subject_id, period)
+    a = compute_activity_average_for_subject(student_uuid, subject_id, period)
+    qa_auto = compute_quarterly_assessment_for_subject(student_uuid, subject_id, period)
+
+    def _pick(key: str, auto: float | None) -> float | None:
+        if key in partial and partial[key] is not None:
+            return float(partial[key])
+        if existing.get(key) is not None:
+            return float(existing[key])
+        return auto
+
+    ww = _pick("written_work_score", q["average"])
+    pt = _pick("performance_task_score", a["average"])
+    qa = _pick("quarterly_assessment_score", qa_auto["average"])
+
+    computed_final = compute_weighted_final(ww, pt, qa, weights)
+    final_is_manual = bool(
+        partial["final_is_manual"]
+        if "final_is_manual" in partial
+        else existing.get("final_is_manual")
+    )
+    if final_is_manual and partial.get("final_grade") is not None:
+        final_grade = float(partial["final_grade"])
+    elif final_is_manual and existing.get("final_grade") is not None:
+        final_grade = float(existing["final_grade"])
+    elif computed_final is not None:
+        final_grade = computed_final
+        final_is_manual = False
+    elif partial.get("final_grade") is not None:
+        final_grade = float(partial["final_grade"])
+    else:
+        final_grade = existing.get("final_grade")
+
+    out: dict[str, Any] = {
+        "student_id": student_uuid,
+        "subject_id": subject_id,
+        "grading_period_id": grading_period_id,
+        "teacher_id_number": partial.get("teacher_id_number") or existing.get("teacher_id_number"),
+        "written_work_score": ww,
+        "performance_task_score": pt,
+        "quarterly_assessment_score": qa,
+        "quiz_average": ww,
+        "activity_average": pt,
+        "attendance_percent": partial.get("attendance_percent") or existing.get("attendance_percent"),
+        "final_grade": final_grade,
+        "final_is_manual": final_is_manual,
+        "remarks": partial.get("remarks") if "remarks" in partial else existing.get("remarks"),
+        "teacher_comments": (
+            partial.get("teacher_comments")
+            if "teacher_comments" in partial
+            else existing.get("teacher_comments")
+        ),
+    }
+    if partial.get("finalized_at"):
+        out["finalized_at"] = partial["finalized_at"]
+    return out
+
+
 def upsert_student_grade(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Insert or update a per-subject grade row.
     Required: student_id, subject_id, grading_period_id.
-    Optional: quiz_average, activity_average, attendance_percent, final_grade,
-              remarks, teacher_comments, teacher_id_number, finalized_at.
+    Optional: written_work_score, performance_task_score, quarterly_assessment_score,
+              quiz_average, activity_average, attendance_percent, final_grade,
+              final_is_manual, remarks, teacher_comments, teacher_id_number, finalized_at.
     """
     sid = payload.get("student_id")
     sub = payload.get("subject_id")
@@ -2910,10 +3495,14 @@ def upsert_student_grade(payload: dict[str, Any]) -> dict[str, Any] | None:
         "subject_id": sub,
         "grading_period_id": per,
         "teacher_id_number": payload.get("teacher_id_number"),
+        "written_work_score": payload.get("written_work_score"),
+        "performance_task_score": payload.get("performance_task_score"),
+        "quarterly_assessment_score": payload.get("quarterly_assessment_score"),
         "quiz_average": payload.get("quiz_average"),
         "activity_average": payload.get("activity_average"),
         "attendance_percent": payload.get("attendance_percent"),
         "final_grade": payload.get("final_grade"),
+        "final_is_manual": payload.get("final_is_manual"),
         "remarks": payload.get("remarks"),
         "teacher_comments": payload.get("teacher_comments"),
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -3120,7 +3709,7 @@ def _fetch_subjects_map(subject_ids: list[str]) -> dict[str, dict[str, Any]]:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, color, description")
+            .select("id, name, color, description, deped_category")
             .in_("id", subject_ids)
             .execute()
         )
@@ -3227,25 +3816,51 @@ def build_full_gradecard(
 
         q = compute_quiz_average_for_subject(student_uuid, sid, period)
         a = compute_activity_average_for_subject(student_uuid, sid, period)
+        qa_lesson = compute_quarterly_assessment_for_subject(student_uuid, sid, period)
         att = compute_attendance_stats(student_uuid, student_id_number, period)
 
         teacher_idn = existing.get("teacher_id_number") or _fetch_teacher_for_subject(student_uuid, sid)
         if teacher_idn:
             teacher_idns_needed.add(teacher_idn)
 
-        # Auto-compute a suggested "final" from averages if no teacher override yet
-        components: list[float] = []
-        for val in (q["average"], a["average"], att["percent"]):
-            if val is not None:
-                components.append(float(val))
-        computed_final = round(sum(components) / len(components), 2) if components else None
+        deped_category = (subj.get("deped_category") or "academic_standard").strip().lower()
+        weights = shs_component_weights(student.get("strand"), deped_category)
+
+        ww, pt, qa = resolve_component_scores(
+            auto_ww=q["average"],
+            auto_pt=a["average"],
+            auto_qa=qa_lesson["average"],
+            stored=existing,
+        )
+        computed_final = compute_weighted_final(ww, pt, qa, weights)
+        final_is_manual = bool(existing.get("final_is_manual"))
+        if final_is_manual and existing.get("final_grade") is not None:
+            display_final = float(existing["final_grade"])
+        elif computed_final is not None:
+            display_final = computed_final
+        elif existing.get("final_grade") is not None:
+            display_final = float(existing["final_grade"])
+        else:
+            display_final = None
 
         subjects_out.append({
             "subject_id": sid,
             "subject_name": subj.get("name"),
             "subject_color": subj.get("color"),
+            "deped_category": deped_category,
+            "weights": weights,
+            "weights_label": format_weights_label(weights),
             "teacher_id_number": teacher_idn,
             "teacher_name": None,  # filled below
+            "written_work_score": ww,
+            "written_work_auto": q["average"],
+            "written_work_attempts": q["attempts"],
+            "performance_task_score": pt,
+            "performance_task_auto": a["average"],
+            "performance_task_attempts": a["attempts"],
+            "quarterly_assessment_score": qa,
+            "quarterly_assessment_auto": qa_lesson["average"],
+            "quarterly_assessment_attempts": qa_lesson["attempts"],
             "quiz_average": q["average"],
             "quiz_attempts": q["attempts"],
             "activity_average": a["average"],
@@ -3254,8 +3869,11 @@ def build_full_gradecard(
             "attendance_present": att["present"],
             "attendance_absent": att["absent"],
             "attendance_tardy": att["tardy"],
-            "final_grade": existing.get("final_grade") if existing.get("final_grade") is not None else computed_final,
-            "final_is_override": existing.get("final_grade") is not None,
+            "computed_final": computed_final,
+            "final_grade": display_final,
+            "final_is_manual": final_is_manual,
+            "final_is_override": final_is_manual,
+            "grade_complete": computed_final is not None,
             "remarks": existing.get("remarks"),
             "teacher_comments": existing.get("teacher_comments"),
             "finalized_at": existing.get("finalized_at"),

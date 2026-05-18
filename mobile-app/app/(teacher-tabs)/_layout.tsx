@@ -1,24 +1,83 @@
 import { Tabs } from 'expo-router';
+import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/colors';
+import { TeacherTabIcon } from '@/components/navigation/TeacherTabIcon';
+
+const TAB_ACTIVE = '#4F8CFF';
+const TAB_INACTIVE = '#7B8BA8';
+const TAB_CONTENT_HEIGHT = 56;
 
 export default function TeacherTabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarActiveTintColor: TAB_ACTIVE,
+        tabBarInactiveTintColor: TAB_INACTIVE,
+        tabBarLabelStyle: styles.label,
+        tabBarItemStyle: styles.item,
         tabBarStyle: {
-          backgroundColor: Colors.backgroundSoft,
-          borderTopColor: Colors.border,
+          ...styles.bar,
+          height: TAB_CONTENT_HEIGHT + bottomPad,
+          paddingBottom: bottomPad,
         },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarHideOnKeyboard: true,
       }}>
-      <Tabs.Screen name="dashboard" options={{ title: '🏠 Dashboard' }} />
-      <Tabs.Screen name="subjects" options={{ title: '📚 Subjects' }} />
-      <Tabs.Screen name="immersion" options={{ title: '📍 Immersion' }} />
-      <Tabs.Screen name="profile" options={{ title: '👤 Profile' }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ focused }) => <TeacherTabIcon name="home" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="subjects"
+        options={{
+          title: 'Subjects',
+          tabBarIcon: ({ focused }) => <TeacherTabIcon name="subjects" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="immersion"
+        options={{
+          title: 'Immersion',
+          tabBarIcon: ({ focused }) => <TeacherTabIcon name="immersion" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ focused }) => <TeacherTabIcon name="profile" focused={focused} />,
+        }}
+      />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  bar: {
+    backgroundColor: 'rgba(8, 14, 28, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.14)',
+    paddingTop: 8,
+    paddingHorizontal: 4,
+    elevation: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+  },
+  item: {
+    paddingTop: 2,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+});

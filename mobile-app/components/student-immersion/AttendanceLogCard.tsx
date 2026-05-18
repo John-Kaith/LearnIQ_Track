@@ -2,7 +2,16 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import type { AttendanceLogEntry } from '@/data/studentImmersionMock';
+import type { AttendanceLogEntry, AttendanceLogStatus } from '@/data/studentImmersionMock';
+
+const STATUS_STYLES: Record<
+  AttendanceLogStatus,
+  { label: string; bg: string; color: string }
+> = {
+  completed: { label: 'Completed', bg: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' },
+  incomplete: { label: 'Incomplete', bg: 'rgba(248, 113, 113, 0.15)', color: '#f87171' },
+  partial: { label: 'Partial', bg: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24' },
+};
 
 export function AttendanceLogCard({
   log,
@@ -11,6 +20,8 @@ export function AttendanceLogCard({
   log: AttendanceLogEntry;
   onPress?: () => void;
 }) {
+  const badge = STATUS_STYLES[log.status];
+
   return (
     <Pressable
       onPress={onPress}
@@ -24,8 +35,17 @@ export function AttendanceLogCard({
         <Text style={styles.times}>
           Time In: {log.timeIn} • Time Out: {log.timeOut}
         </Text>
+        <View style={styles.locationRow}>
+          <Feather name="map-pin" size={11} color={Colors.textMuted} />
+          <Text style={styles.location} numberOfLines={1}>
+            {log.location}
+          </Text>
+        </View>
       </View>
       <View style={styles.right}>
+        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.statusText, { color: badge.color }]}>{badge.label}</Text>
+        </View>
         <Text style={styles.hours}>{log.totalHours.toFixed(1)} hrs</Text>
         <Feather name="chevron-right" size={18} color={Colors.textMuted} />
       </View>
@@ -78,10 +98,30 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
+    marginBottom: 4,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  location: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    flex: 1,
   },
   right: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 6,
+  },
+  statusBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   hours: {
     color: Colors.primary,

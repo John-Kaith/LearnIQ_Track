@@ -8,11 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css?v=2026051302" />
+  <link rel="stylesheet" href="style.css?v=2026051802" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js?v=2026051302" defer></script>
-  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026051302" defer></script>
+  <script src="script.js?v=2026051802" defer></script>
+  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026051802" defer></script>
 </head>
 <body class="teacher-learniq-page teacher-student-gradecard-page">
   <div class="dashboard-shell container">
@@ -55,68 +55,82 @@
       <section class="glass-card panel-header">
         <div class="panel-title">
           <h1><i class="fa-solid fa-id-card"></i> Student Gradecard</h1>
-          <p>Search for a student you teach and review their performance across your subjects.</p>
+          <p>Choose a strand, pick a student, then review and encode their gradecard.</p>
         </div>
         <div class="panel-header-actions">
-          <span class="badge badge-soft"><i class="fa-solid fa-flask"></i> Template view</span>
+          <span class="badge badge-soft"><i class="fa-solid fa-scale-balanced"></i> DepEd SHS grading</span>
         </div>
       </section>
 
-      <!-- Student selector -->
-      <section class="glass-card content-card">
-        <div class="gradecard-search">
-          <label class="form-field" style="flex:1; min-width: 240px;">
-            <span class="small-note">Find student</span>
+      <section class="glass-card content-card gradecard-picker" id="gradecard-picker">
+        <nav class="gradecard-breadcrumb" id="gradecard-breadcrumb" aria-label="Gradecard navigation"></nav>
+
+        <div id="gradecard-strand-step" class="gradecard-step">
+          <div class="gradecard-step-head">
+            <h2><i class="fa-solid fa-layer-group"></i> Select strand</h2>
+            <p class="small-note">Students enrolled in your subjects, grouped by SHS strand.</p>
+          </div>
+          <div id="gradecard-strand-grid" class="gradecard-strand-grid" role="list"></div>
+        </div>
+
+        <div id="gradecard-students-step" class="gradecard-step" hidden>
+          <div class="gradecard-step-head gradecard-step-head-row">
+            <div>
+              <h2 id="gradecard-students-title"><i class="fa-solid fa-users"></i> Students</h2>
+              <p class="small-note" id="gradecard-students-subtitle">Pick a student to open their gradecard.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="gradecard-back-strands-btn">
+              <i class="fa-solid fa-arrow-left"></i> All strands
+            </button>
+          </div>
+          <label class="form-field gradecard-student-filter">
+            <span class="small-note">Filter in this strand</span>
             <input
-              id="gradecard-search-input"
-              type="text"
+              id="gradecard-student-filter"
+              type="search"
               class="form-input"
-              placeholder="Search by name or ID number…"
+              placeholder="Search name or ID…"
               autocomplete="off" />
           </label>
-          <label class="form-field" style="flex:1; min-width: 240px;">
-            <span class="small-note">Subject</span>
-            <select id="gradecard-subject-select" class="form-select">
-              <option value="all">All my subjects</option>
-            </select>
-          </label>
-          <label class="form-field" style="flex:1; min-width: 200px;">
-            <span class="small-note">Term</span>
-            <select id="gradecard-term-select" class="form-select">
-              <option value="current">Current term (2026 Q2)</option>
-              <option value="prev">Previous term (2026 Q1)</option>
-              <option value="full">Full school year</option>
-            </select>
-          </label>
-          <button type="button" id="gradecard-print-btn" class="btn btn-secondary">
-            <i class="fa-solid fa-print"></i> Print
-          </button>
+          <div id="gradecard-student-list" class="gradecard-student-list" role="list"></div>
         </div>
       </section>
 
-      <!-- Gradecard preview (template) -->
-      <article class="glass-card gradecard-sheet" id="gradecard-sheet">
+      <section class="gradecard-detail-toolbar glass-card content-card" id="gradecard-detail-toolbar" hidden>
+        <button type="button" class="btn btn-secondary btn-sm" id="gradecard-back-students-btn">
+          <i class="fa-solid fa-arrow-left"></i> Back to students
+        </button>
+        <label class="form-field" style="flex:1; min-width: 200px; max-width: 280px;">
+          <span class="small-note">Term</span>
+          <select id="gradecard-term-select" class="form-select">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <button type="button" id="gradecard-print-btn" class="btn btn-secondary">
+          <i class="fa-solid fa-print"></i> Print
+        </button>
+      </section>
+
+      <article class="glass-card gradecard-sheet" id="gradecard-sheet" hidden>
         <header class="gradecard-header">
           <div class="gradecard-school">
             <div class="gradecard-school-logo"><span>LQ</span></div>
             <div>
               <strong>LearnIQ Academy</strong>
-              <p class="small-note">Teacher Gradecard View · 2026 — 2027 · Q2</p>
+              <p class="small-note" id="gradecard-period-label">Teacher Gradecard View</p>
             </div>
           </div>
           <div class="gradecard-id-block">
             <p class="small-note">Reference</p>
-            <strong id="gradecard-ref">GR-2026Q2-000000</strong>
+            <strong id="gradecard-ref">—</strong>
           </div>
         </header>
 
         <section class="gradecard-student">
-          <div class="gradecard-avatar" id="gradecard-avatar">JD</div>
+          <div class="gradecard-avatar" id="gradecard-avatar">—</div>
           <div class="gradecard-student-info">
-            <h3 id="gradecard-student-name">Sample Student Name</h3>
-            <p class="small-note" id="gradecard-student-meta">
-              ID No. 2026-XXXXX · Grade 12 · STEM · Section A
-            </p>
+            <h3 id="gradecard-student-name">—</h3>
+            <p class="small-note" id="gradecard-student-meta">—</p>
             <p class="small-note" id="gradecard-student-adviser">Adviser: —</p>
           </div>
           <div class="gradecard-summary">
@@ -132,16 +146,17 @@
         </section>
 
         <section class="gradecard-section">
-          <h4><i class="fa-solid fa-table-list"></i> Performance breakdown</h4>
+          <h4><i class="fa-solid fa-table-list"></i> Performance breakdown (WW / PT / QA)</h4>
+          <p class="small-note" style="margin-bottom:0.75rem;">Weights follow DepEd Table 5. Enter QA when ready; final computes when WW, PT, and QA are all set.</p>
           <div class="table-responsive">
             <table class="data-table gradecard-table">
               <thead>
                 <tr>
                   <th>Subject</th>
-                  <th class="num">Quizzes taken</th>
-                  <th class="num">Quiz avg</th>
-                  <th class="num">Activities done</th>
-                  <th class="num">Attendance</th>
+                  <th class="num">WW</th>
+                  <th class="num">PT</th>
+                  <th class="num">QA</th>
+                  <th class="num">Weights</th>
                   <th class="num">Final</th>
                   <th>Remarks</th>
                 </tr>
@@ -150,8 +165,7 @@
                 <tr>
                   <td colspan="7" class="empty-state">
                     <i class="fa-solid fa-id-card"></i>
-                    <p>Search for a student above to load their gradecard.</p>
-                    <p class="small-note">This is a template view — data will be populated once the gradecard API is connected.</p>
+                    <p>Select a student to view their gradecard.</p>
                   </td>
                 </tr>
               </tbody>
@@ -185,7 +199,7 @@
               id="gradecard-comments-text"
               class="form-input gradecard-comments-text"
               rows="3"
-              placeholder="Type remarks for this student (template — not saved yet)…"></textarea>
+              placeholder="Comments for this student…"></textarea>
           </label>
         </section>
 

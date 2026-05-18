@@ -44,7 +44,7 @@
     if (body) {
       body.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             <i class="fa-solid fa-id-card"></i>
             <p>${escapeHtml(text || "Search for a student above to load their gradecard.")}</p>
             <p class="small-note">Tip: type the school ID number (e.g. <code>2026-12345</code>) or the student's full name then press Enter.</p>
@@ -182,7 +182,7 @@
     if (!subjects.length) {
       body.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             <i class="fa-solid fa-id-card"></i>
             <p>No subject activity recorded for <strong>${escapeHtml(student.display_name || student.id_number || "this student")}</strong> in this period.</p>
             <p class="small-note">Enroll this student in subjects or wait for them to submit quizzes/activities.</p>
@@ -196,13 +196,15 @@
         const finalBadge = s.final_is_override
           ? `<span class="badge badge-soft" style="margin-left:0.35rem;" title="Set by teacher"><i class="fa-solid fa-pen"></i></span>`
           : "";
+        const incomplete = !s.grade_complete;
         return `
           <tr>
             <td><strong>${escapeHtml(s.subject_name || "Subject")}</strong></td>
             <td>${escapeHtml(s.teacher_name || s.teacher_id_number || "—")}</td>
-            <td class="num">${fmtNumber(s.quiz_average)}<br /><span class="small-note">${s.quiz_attempts || 0} attempts</span></td>
-            <td class="num">${fmtNumber(s.activity_average)}<br /><span class="small-note">${s.activity_attempts || 0} done</span></td>
-            <td class="num">${fmtPercent(s.attendance_percent)}</td>
+            <td class="num">${fmtNumber(s.written_work_score)}</td>
+            <td class="num">${fmtNumber(s.performance_task_score)}</td>
+            <td class="num">${fmtNumber(s.quarterly_assessment_score)}${incomplete ? '<br /><span class="small-note">needs QA</span>' : ""}</td>
+            <td class="num"><span class="badge badge-soft">${escapeHtml(s.weights_label || "—")}</span></td>
             <td class="num"><strong>${fmtNumber(s.final_grade)}</strong>${finalBadge}</td>
             <td>${escapeHtml(s.remarks || "—")}</td>
           </tr>`;

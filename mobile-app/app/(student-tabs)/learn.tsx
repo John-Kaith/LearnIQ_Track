@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import { Colors } from '@/constants/colors';
 import { studentLearnMock, type StudentSubject } from '@/data/studentLearnMock';
 
 export default function StudentLearnScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [subjects, setSubjects] = useState<StudentSubject[]>(studentLearnMock.subjects);
 
@@ -36,7 +38,13 @@ export default function StudentLearnScreen() {
         <MySubjectsHeader onRefresh={handleRefresh} />
 
         {subjects.map((subject) => (
-          <SubjectCard key={subject.id} subject={subject} />
+          <SubjectCard
+            key={subject.id}
+            subject={subject}
+            onOpen={() =>
+              router.push({ pathname: '/subject/[id]', params: { id: subject.id } })
+            }
+          />
         ))}
       </ScrollView>
     </View>

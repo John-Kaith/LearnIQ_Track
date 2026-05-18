@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import time
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -33,7 +34,32 @@ UPLOADS_DIR = immersion_upload.UPLOAD_ROOT
 LESSON_UPLOADS_DIR = UPLOADS_DIR / "lessons"
 API_KEY = os.getenv("API_KEY")
 
+AI_GENERATION_COOLDOWN_SEC = 30
+_ai_generation_cooldown_until: dict[str, float] = {}
+
 IMMERSION_CAPTURE_MAX_SKEW_MINUTES = 15
+
+
+def _ai_gen_cooldown_key(kind: str, file_id: str) -> str:
+    return f"{kind}:{str(file_id or '').strip()}"
+
+
+def check_ai_generation_cooldown(kind: str, file_id: str) -> JSONResponse | None:
+    key = _ai_gen_cooldown_key(kind, file_id)
+    until = _ai_generation_cooldown_until.get(key, 0.0)
+    now = time.time()
+    if now < until:
+        remaining = max(1, int(until - now + 0.999))
+        return JSONResponse(
+            {"error": f"Please wait {remaining}s before generating {kind} again."},
+            status_code=429,
+        )
+    return None
+
+
+def start_ai_generation_cooldown(kind: str, file_id: str) -> None:
+    key = _ai_gen_cooldown_key(kind, file_id)
+    _ai_generation_cooldown_until[key] = time.time() + AI_GENERATION_COOLDOWN_SEC
 
 # Supabase Auth client
 supabase_url = os.getenv("SUPABASE_URL")
@@ -1007,6 +1033,7 @@ def _subject_response(row: dict) -> dict:
         "color": row.get("color") or "",
         "join_code": row.get("join_code"),
         "created_by_teacher_id_number": row.get("created_by_teacher_id_number"),
+        "deped_category": row.get("deped_category") or "academic_standard",
     }
 
 
@@ -1042,12 +1069,14 @@ async def create_subject_endpoint(body: dict):
     description = body.get("description")
     color = body.get("color")
     created_by = (body.get("created_by_teacher_id_number") or body.get("teacher_id_number") or "").strip() or None
+    deped_category = body.get("deped_category")
     try:
         row = db_supabase.create_subject(
             name=name,
             description=description,
             color=color,
             created_by_teacher_id_number=created_by,
+            deped_category=deped_category,
         )
         out = _subject_response(row)
         out["published_lesson_count"] = 0
@@ -1138,14 +1167,16 @@ async def update_subject_endpoint(subject_id: str, body: dict):
             name=body.get("name"),
             description=body.get("description"),
             color=body.get("color"),
+            deped_category=body.get("deped_category"),
         )
         sid = row.get("id") if isinstance(row, dict) else subject_id
-        return {
-            "id": str(sid) if sid is not None else subject_id,
-            "name": (row.get("name") if isinstance(row, dict) else None) or body.get("name"),
-            "description": (row.get("description") if isinstance(row, dict) else None) or body.get("description") or "",
-            "color": (row.get("color") if isinstance(row, dict) else None) or body.get("color") or "",
-        }
+        return _subject_response(row if isinstance(row, dict) else {
+            "id": sid,
+            "name": body.get("name"),
+            "description": body.get("description"),
+            "color": body.get("color"),
+            "deped_category": body.get("deped_category"),
+        })
     except ValueError as ve:
         return JSONResponse({"error": str(ve)}, status_code=400)
     except Exception as e:
@@ -1856,6 +1887,11 @@ async def generate_reviewer(body: dict):
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
+    if not body.get("skip_cooldown"):
+        cd_err = check_ai_generation_cooldown("reviewer", str(file_id))
+        if cd_err is not None:
+            return cd_err
+
     text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     if text_err:
         print("AI GENERATION ERROR: empty extracted_text")
@@ -1890,6 +1926,8 @@ async def generate_reviewer(body: dict):
         print("AI GENERATION ERROR (db write reviewer):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
+    if not body.get("skip_cooldown"):
+        start_ai_generation_cooldown("reviewer", str(file_id))
     return {"reviewer": reviewer_text}
 
 
@@ -1910,6 +1948,11 @@ async def generate_question(body: dict):
     lesson = db_supabase.get_lesson_row(str(file_id)) if file_id else None
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
+
+    if not body.get("skip_cooldown"):
+        cd_err = check_ai_generation_cooldown("quiz", str(file_id))
+        if cd_err is not None:
+            return cd_err
 
     text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     if text_err:
@@ -1973,6 +2016,8 @@ async def generate_question(body: dict):
         print("AI GENERATION ERROR (db write quiz):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
+    if not body.get("skip_cooldown"):
+        start_ai_generation_cooldown("quiz", str(file_id))
     return {"questions": questions_data, "count": len(questions_data)}
 
 
@@ -1996,6 +2041,11 @@ async def generate_activities(body: dict):
     if not lesson:
         print(f"[DEBUG] Lesson not found for file_id: {file_id}")
         return JSONResponse({"error": "File not found"}, status_code=404)
+
+    if not body.get("skip_cooldown"):
+        cd_err = check_ai_generation_cooldown("activity", str(file_id))
+        if cd_err is not None:
+            return cd_err
 
     text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
     print(f"[DEBUG] Extracted text length: {len(text)}")
@@ -2102,6 +2152,8 @@ async def generate_activities(body: dict):
         print(f"[DEBUG] Database save error: {e}")
         return JSONResponse({"error": str(e)}, status_code=502)
 
+    if not body.get("skip_cooldown"):
+        start_ai_generation_cooldown("activity", str(file_id))
     print(f"[DEBUG] Returning activities (normalized): {normalized_activities}")
     return {"activities": normalized_activities, "total_activities": len(normalized_activities)}
 
@@ -2163,6 +2215,67 @@ def get_content(file_id: str):
 
 
 # --- Quiz, attendance, journals ---
+
+
+@app.get("/student/learning-history")
+def student_learning_history_endpoint(
+    student_id_number: str = Query(...),
+):
+    """Quiz / reviewer / activity history from database (History page)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    try:
+        data = db_supabase.get_student_learning_history(sid)
+        return {
+            "student_id_number": sid,
+            "quiz": data.get("quiz") or [],
+            "reviewer": data.get("reviewer") or [],
+            "activity": data.get("activity") or [],
+            "counts": {
+                "quiz": len(data.get("quiz") or []),
+                "reviewer": len(data.get("reviewer") or []),
+                "activity": len(data.get("activity") or []),
+            },
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/student/learning-history")
+async def student_learning_history_post_endpoint(body: dict = Body(...)):
+    """Record reviewer or activity history event."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+    sid = str(payload.get("student_id_number") or "").strip()
+    event_type = str(payload.get("event_type") or payload.get("type") or "").strip().lower()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    if event_type not in ("reviewer", "activity"):
+        return JSONResponse(
+            {"error": "event_type must be reviewer or activity"},
+            status_code=400,
+        )
+    try:
+        row = db_supabase.insert_student_learning_event(sid, event_type, payload)
+        return {"ok": True, "event": row}
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        msg = str(e)
+        if "student_learning_events" in msg and "does not exist" in msg.lower():
+            return JSONResponse(
+                {
+                    "error": "Run backend/migrations/student_learning_events.sql in Supabase first.",
+                },
+                status_code=503,
+            )
+        return JSONResponse({"error": msg}, status_code=502)
 
 
 @app.post("/quiz-attempt")
@@ -2609,6 +2722,49 @@ def current_grading_period_endpoint():
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.get("/teacher/gradecard/strands")
+def teacher_gradecard_strands_endpoint(
+    teacher_id_number: str = Query(...),
+):
+    """Strand tiles with student counts (teacher's enrolled students only)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid = str(teacher_id_number or "").strip()
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    try:
+        strands = db_supabase.list_gradecard_strands_for_teacher(tid)
+        return {"strands": strands, "count": len(strands)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/gradecard/students")
+def teacher_gradecard_students_endpoint(
+    teacher_id_number: str = Query(...),
+    strand: str = Query(...),
+    q: str | None = Query(default=None),
+):
+    """Students in a strand enrolled in the teacher's subjects."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid = str(teacher_id_number or "").strip()
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    st = str(strand or "").strip()
+    if not st:
+        return JSONResponse({"error": "strand is required"}, status_code=400)
+    try:
+        students = db_supabase.list_gradecard_students_for_teacher(
+            tid, st, search=q
+        )
+        return {"strand": st, "students": students, "count": len(students)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get("/gradecard")
 def get_gradecard_endpoint(
     student_id_number: str = Query(...),
@@ -2660,21 +2816,30 @@ async def save_student_grade_endpoint(body: dict = Body(...)):
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
 
-    db_payload = {
-        "student_id": student_uuid,
-        "subject_id": str(subject_id),
-        "grading_period_id": period_id,
+    profile = db_supabase.get_profile_by_id_number(student_id_number) or {}
+    partial: dict = {
         "teacher_id_number": payload.get("teacher_id_number"),
-        "quiz_average": payload.get("quiz_average"),
-        "activity_average": payload.get("activity_average"),
+        "written_work_score": payload.get("written_work_score"),
+        "performance_task_score": payload.get("performance_task_score"),
+        "quarterly_assessment_score": payload.get("quarterly_assessment_score"),
         "attendance_percent": payload.get("attendance_percent"),
         "final_grade": payload.get("final_grade"),
+        "final_is_manual": payload.get("final_is_manual"),
         "remarks": payload.get("remarks"),
         "teacher_comments": payload.get("teacher_comments"),
         "finalized_at": payload.get("finalized_at"),
     }
+    if payload.get("final_is_override") is True and "final_is_manual" not in payload:
+        partial["final_is_manual"] = True
 
     try:
+        db_payload = db_supabase.merge_and_compute_student_grade(
+            student_uuid,
+            profile.get("strand"),
+            str(subject_id),
+            period_id,
+            partial,
+        )
         row = db_supabase.upsert_student_grade(db_payload)
         return {"ok": True, "grade": row}
     except Exception as e:
