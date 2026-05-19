@@ -11,10 +11,10 @@
   <link rel="stylesheet" href="style.css" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=202605207" defer></script>
   <script src="js/pages/admin-users.entry.js" defer></script>
 </head>
-<body>
+<body data-sidebar-active="users">
   <main class="page-shell container">
     <div class="dashboard-shell">
       <aside class="sidebar glass-card fade-up">
@@ -28,22 +28,9 @@
           </div>
           <p class="small-note">Review approvals, activity, and system health from one view.</p>
         </div>
-        <nav class="side-links">
-          <a href="admin-approval.html"><i class="fa-solid fa-gauge"></i> Dashboard</a>
-          <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
-          <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
-          <a href="admin-users.html" class="active"><i class="fa-solid fa-users"></i> Users</a>
-          <a href="admin-subjects.html"><i class="fa-solid fa-book-open"></i> Subjects</a>
-          <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
-          <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
-          <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
-          <a href="admin-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
-          <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
-          <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
-          <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
-          <a href="admin-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
-        <div class="sidebar-footer">
+        <nav class="side-links" aria-label="Admin navigation"></nav>
+
+<div class="sidebar-footer">
           <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
             <span class="avatar" id="admin-sidebar-avatar">PC</span>
             <div class="user-chip-text">
@@ -90,7 +77,6 @@
                   <th>ID Number</th>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Status</th>
                   <th>Created</th>
                 </tr>
               </thead>

@@ -11,9 +11,9 @@
   <link rel="stylesheet" href="style.css" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=202605207" defer></script>
 </head>
-<body>
+<body data-sidebar-active="dashboard">
   <main class="page-shell container">
     <div class="dashboard-shell">
       <aside class="sidebar glass-card fade-up">
@@ -28,23 +28,9 @@
           <p class="small-note">Review approvals, activity, and system health from one view.</p>
         </div>
 
-        <nav class="side-links">
-          <a href="admin-approval.html" class="active"><i class="fa-solid fa-gauge"></i> Dashboard</a>
-          <a href="admin-student-approvals.html"><i class="fa-solid fa-user-check"></i> Student Approvals</a>
-          <a href="admin-teacher-approvals.html"><i class="fa-solid fa-chalkboard-user"></i> Teacher Approvals</a>
-          <a href="admin-users.html"><i class="fa-solid fa-users"></i> Users</a>
-          <a href="admin-subjects.html"><i class="fa-solid fa-book-open"></i> Subjects</a>
-          <a href="admin-approval.html#ai-results"><i class="fa-solid fa-robot"></i> AI Results</a>
-          <a href="admin-uploaded-files.html"><i class="fa-solid fa-cloud-arrow-up"></i> Uploaded Files</a>
-          <a href="admin-leaderboard.html"><i class="fa-solid fa-ranking-star"></i> Leaderboard</a>
-          <a href="admin-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
-          <a href="admin-attendance-logs.html"><i class="fa-solid fa-calendar-check"></i> Attendance Logs</a>
-          <a href="admin-journals.html"><i class="fa-solid fa-book"></i> Journals</a>
-          <a href="admin-reports.html"><i class="fa-solid fa-file-lines"></i> Reports</a>
-          <a href="admin-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
+        <nav class="side-links" aria-label="Admin navigation"></nav>
 
-        <div class="sidebar-footer">
+<div class="sidebar-footer">
           <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
             <span class="avatar" id="admin-sidebar-avatar">PC</span>
             <div class="user-chip-text">
@@ -60,7 +46,7 @@
         <section class="glass-card panel-header fade-up delay-1">
           <div class="panel-title">
             <h1>Welcome back, Admin</h1>
-            <p>Review approval requests, track daily registrations, and check system health.</p>
+            <p>Track registrations, lesson activity, and system health.</p>
           </div>
         </section>
 
@@ -71,27 +57,6 @@
               <strong id="metric-total-students" class="metric-value">0</strong>
             </div>
             <i class="fa-solid fa-user-graduate"></i>
-          </article>
-          <article class="stat-card glass-card">
-            <div>
-              <span class="widget-label">Pending Approvals</span>
-              <strong id="metric-pending-approvals" class="metric-value">0</strong>
-            </div>
-            <i class="fa-solid fa-hourglass-half"></i>
-          </article>
-          <article class="stat-card glass-card">
-            <div>
-              <span class="widget-label">Approved Accounts</span>
-              <strong id="metric-approved-accounts" class="metric-value">0</strong>
-            </div>
-            <i class="fa-solid fa-user-check"></i>
-          </article>
-          <article class="stat-card glass-card">
-            <div>
-              <span class="widget-label">Rejected Accounts</span>
-              <strong id="metric-rejected-accounts" class="metric-value">0</strong>
-            </div>
-            <i class="fa-solid fa-user-slash"></i>
           </article>
           <article class="stat-card glass-card">
             <div>
@@ -124,7 +89,7 @@
           <div class="upload-hint upload-readonly-hint">
             <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
             <strong>Class lesson files</strong>
-            <span class="small-note">Teachers upload PDFs and slides on the Teacher Dashboard. Principals manage accounts and approvals here.</span>
+            <span class="small-note">Teachers upload PDFs and slides on the Teacher Dashboard. Principals manage accounts here.</span>
           </div>
           <button type="button" class="btn btn-primary" disabled aria-disabled="true"><i class="fa-solid fa-upload"></i> Upload File</button>
           <p class="file-meta small-note">Go to Teacher Dashboard to upload lesson materials.</p>
@@ -138,7 +103,6 @@
             </div>
           </div>
           <div class="button-group">
-            <button id="approve-all-btn" class="btn btn-primary">Approve All Pending</button>
             <button id="export-reports-btn" class="btn btn-secondary">Export Reports</button>
             <button id="view-students-btn" class="btn btn-ghost">View All Students</button>
             <button id="upload-file-btn" class="btn btn-secondary">Upload New File</button>
@@ -151,25 +115,20 @@
             <section class="glass-card chart-card fade-up delay-2">
               <div class="panel-header">
                 <div>
-                  <h2>Approval Statistics</h2>
-                  <p class="small-note">Track registration outcomes and the current approval funnel.</p>
+                  <h2>Users by role</h2>
+                  <p class="small-note">Students and teachers registered in the system.</p>
                 </div>
               </div>
               <div class="chart-row">
                 <div class="chart-item">
-                  <span>Pending</span>
-                  <div class="progress-bar"><span id="chart-pending" data-progress="0"></span></div>
-                  <small class="metric-note"><span class="dot violet"></span> Pending approvals</small>
+                  <span>Students</span>
+                  <div class="progress-bar"><span id="chart-students" data-progress="0"></span></div>
+                  <small class="metric-note"><span class="dot violet"></span> Student accounts</small>
                 </div>
                 <div class="chart-item">
-                  <span>Approved</span>
-                  <div class="progress-bar"><span id="chart-approved" data-progress="0"></span></div>
-                  <small class="metric-note"><span class="dot blue"></span> Approved accounts</small>
-                </div>
-                <div class="chart-item">
-                  <span>Rejected</span>
-                  <div class="progress-bar"><span id="chart-rejected" data-progress="0"></span></div>
-                  <small class="metric-note"><span class="dot violet"></span> Rejected accounts</small>
+                  <span>Teachers</span>
+                  <div class="progress-bar"><span id="chart-teachers" data-progress="0"></span></div>
+                  <small class="metric-note"><span class="dot blue"></span> Teacher accounts</small>
                 </div>
               </div>
             </section>
@@ -178,7 +137,7 @@
               <div class="panel-header">
                 <div>
                   <h3>User Management</h3>
-                  <p class="small-note">Browse current users and process pending registrations.</p>
+                  <p class="small-note">Browse all registered users.</p>
                 </div>
               </div>
               <div class="search-box">
@@ -193,9 +152,7 @@
                       <th>ID Number</th>
                       <th>Email</th>
                       <th>Role</th>
-                      <th>Status</th>
                       <th>Created</th>
-                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody id="admin-table-body"></tbody>
@@ -209,7 +166,7 @@
               <div class="panel-header">
                 <div>
                   <h3>Recent Activity</h3>
-                  <p class="small-note">Latest approvals, uploads, AI generations, and journal entries.</p>
+                  <p class="small-note">Latest registrations, uploads, AI generations, and journal entries.</p>
                 </div>
               </div>
               <ul class="activity-list" id="recent-activity-list"></ul>
@@ -365,8 +322,8 @@
                   <span class="value" id="report-active-today">0</span>
                 </div>
                 <div class="stat">
-                  <span class="label">Pending Approval:</span>
-                  <span class="value" id="report-pending">0</span>
+                  <span class="label">Total Students:</span>
+                  <span class="value" id="report-total-students">0</span>
                 </div>
               </div>
             </div>
@@ -418,13 +375,6 @@
           <div class="settings-grid">
             <div class="setting-group">
               <h3>User Management</h3>
-              <div class="setting-item">
-                <label>
-                  <input type="checkbox" id="auto-approve-students" />
-                  Auto-approve student registrations
-                </label>
-                <p class="small-note">Automatically approve new student accounts without manual review.</p>
-              </div>
               <div class="setting-item">
                 <label>
                   <input type="checkbox" id="require-email-verification" checked />

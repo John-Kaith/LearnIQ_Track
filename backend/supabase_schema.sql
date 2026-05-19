@@ -6,11 +6,10 @@ create table if not exists public.profiles (
   first_name text not null,
   middle_name text,
   name_suffix text,
-  id_number text not null unique,
+  lrn text not null unique,
   email text not null unique,
   password text not null,
   role text not null default 'student',
-  approval_status text not null default 'pending',
   created_at timestamptz default now()
 );
 

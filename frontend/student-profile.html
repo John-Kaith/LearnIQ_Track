@@ -8,10 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026052201" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="script.js" defer></script>
+  <script src="js/pages/student-learning-iq.js?v=2026052202" defer></script>
 </head>
 <body class="profile-page">
   <div class="dashboard-shell container">
@@ -109,6 +110,72 @@
           <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
         </article>
       </div>
+
+      <section class="learning-iq-section" id="learning-iq-section" aria-labelledby="learning-iq-heading">
+        <article class="learning-iq-card lq-surface-premium" id="learning-iq-card">
+          <header class="learning-iq-header">
+            <div class="learning-iq-header-text">
+              <h2 id="learning-iq-heading" class="learning-iq-title lq-heading">
+                <i class="fa-solid fa-brain" aria-hidden="true"></i> Learning IQ
+              </h2>
+              <p class="learning-iq-subtitle lq-subtitle">
+                Your academic learning intelligence based on lessons, quizzes, and consistency.
+              </p>
+            </div>
+            <span class="learning-iq-ai-badge lq-badge lq-badge--accent" title="LearnIQ-generated insight">
+              <i class="fa-solid fa-sparkles" aria-hidden="true"></i> LearnIQ
+            </span>
+          </header>
+
+          <div class="learning-iq-main">
+            <div class="learning-iq-score-block" aria-label="Learning IQ score">
+              <div class="learning-iq-score-ring">
+                <span class="learning-iq-score lq-text-gradient" id="learning-iq-score">—</span>
+              </div>
+              <p class="learning-iq-level-label" id="learning-iq-level-label">—</p>
+            </div>
+
+            <div class="learning-iq-bar-block">
+              <div class="learning-iq-bar-head">
+                <span class="small-note">Learning progress</span>
+                <strong class="learning-iq-bar-pct" id="learning-iq-bar-pct">—</strong>
+              </div>
+              <div
+                class="learning-iq-bar-track"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-labelledby="learning-iq-heading"
+              >
+                <div class="learning-iq-bar-fill learning-iq-bar-fill--strong" id="learning-iq-bar-fill"></div>
+              </div>
+              <div class="learning-iq-level-scale" aria-hidden="true">
+                <span>Focus</span>
+                <span>Steady</span>
+                <span>Strong</span>
+                <span>Elite</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="learning-iq-insight">
+            <div class="learning-iq-insight-col">
+              <h3 class="learning-iq-insight-title">Strengths</h3>
+              <ul class="learning-iq-insight-list learning-iq-insight-list--strengths" id="learning-iq-strengths"></ul>
+            </div>
+            <div class="learning-iq-insight-col">
+              <h3 class="learning-iq-insight-title">Room to grow</h3>
+              <ul class="learning-iq-insight-list learning-iq-insight-list--grow" id="learning-iq-improvements"></ul>
+            </div>
+          </div>
+
+          <p class="learning-iq-encouragement" id="learning-iq-encouragement"></p>
+
+          <p class="learning-iq-disclaimer small-note">
+            LearnIQ Learning IQ is generated from your lesson activity, quizzes, and study patterns — not a clinical or psychological IQ test.
+          </p>
+        </article>
+      </section>
 
       <article class="glass-card content-card profile-details-card" id="profile-details-card">
         <div class="profile-details-head">

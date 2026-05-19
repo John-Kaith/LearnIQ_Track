@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Registration | Admin · LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css?v=202605206" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js?v=202605212" defer></script>
+</head>
+<body class="admin-teacher-registration-page" data-sidebar-active="teacher-registration">
+  <main class="page-shell container">
+    <div class="dashboard-shell">
+      <aside class="sidebar glass-card fade-up">
+        <div class="sidebar-header">
+          <div class="brand" style="gap:0.85rem;">
+            <span class="brand-mark">LQ</span>
+            <span>
+              <strong>LearnIQ Track</strong>
+              <small>Admin Control Center</small>
+            </span>
+          </div>
+          <p class="small-note">Review approvals, activity, and system health from one view.</p>
+        </div>
+
+        <nav class="side-links" aria-label="Admin navigation"></nav>
+
+        <div class="sidebar-footer">
+          <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
+            <span class="avatar" id="admin-sidebar-avatar">PC</span>
+            <div class="user-chip-text">
+              <strong id="admin-sidebar-name">Admin</strong>
+              <small id="admin-sidebar-role">Admin / Principal</small>
+            </div>
+          </a>
+          <button id="sidebar-logout" type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()" title="End your admin session">
+            <i class="fa-solid fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <section class="main-panel">
+        <section class="glass-card panel-header fade-up delay-1">
+          <div class="panel-title">
+            <h1>Teacher Registration</h1>
+            <p>Create a new teacher account for your school. Public sign-up is disabled; register teachers here.</p>
+          </div>
+        </section>
+
+        <section class="glass-card fade-up admin-teacher-reg-card">
+          <div class="section-heading left-align compact" style="margin-bottom: 1rem;">
+            <span class="pill"><i class="fa-solid fa-chalkboard-user"></i> New teacher</span>
+            <h2 style="margin: 0.35rem 0 0; font-size: 1.15rem;">Teacher registration form</h2>
+          </div>
+
+          <form id="admin-teacher-reg-form" class="auth-form admin-teacher-reg-form">
+            <div class="two-field-grid">
+              <label>
+                <span>Last name</span>
+                <input id="atr-last-name" type="text" placeholder="Dela Cruz" autocomplete="family-name" required />
+              </label>
+              <label>
+                <span>First name</span>
+                <input id="atr-first-name" type="text" placeholder="Juan" autocomplete="given-name" required />
+              </label>
+            </div>
+            <div class="two-field-grid">
+              <label>
+                <span>Middle name</span>
+                <input id="atr-middle-name" type="text" placeholder="Optional" autocomplete="additional-name" />
+              </label>
+              <label>
+                <span>Suffix</span>
+                <input id="atr-name-suffix" type="text" placeholder="e.g. Jr., Sr., III" autocomplete="off" />
+              </label>
+            </div>
+
+            <label>
+              <span>Teacher ID / Employee ID</span>
+              <input id="atr-id" type="text" placeholder="e.g. T-2024-001" required />
+            </label>
+
+            <label>
+              <span>Email</span>
+              <input id="atr-email" type="email" placeholder="name@school.edu" required autocomplete="email" />
+            </label>
+
+            <label class="password-field">
+              <span>Password</span>
+              <div class="password-input-container">
+                <input id="atr-password" type="password" placeholder="Optional" autocomplete="new-password" />
+                <button type="button" class="password-toggle-btn" onclick="togglePassword('atr-password', this)">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+            </label>
+
+            <button class="btn btn-primary btn-block" type="submit">Create teacher account</button>
+          </form>
+
+          <p id="atr-message" class="auth-card-note" style="display: none; margin-top: 1rem;"></p>
+
+          <div class="feature-stack" style="margin-top: 1.25rem;">
+            <div><i class="fa-solid fa-envelope"></i><span>Teacher can sign in after confirming email</span></div>
+            <div><i class="fa-solid fa-shield-halved"></i><span>Account is active once registered</span></div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

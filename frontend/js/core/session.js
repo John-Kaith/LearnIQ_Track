@@ -52,7 +52,6 @@ function setCurrentUserSession(user) {
     grade_level: user.grade_level || "",
     strand: user.strand || "",
     role: user.role || "student",
-    approval_status: user.approval_status || "approved",
     access_token: user.access_token,
     refresh_token: user.refresh_token,
   };

@@ -13,8 +13,10 @@
     view: "strands",
     periods: [],
     currentPeriodId: null,
+    strands: [],
     selectedStrand: null,
     selectedStrandLabel: null,
+    selectedGradeLevel: "11",
     students: [],
     activeStudentIdNumber: null,
     lastData: null,
@@ -27,6 +29,116 @@
   function getTeacherIdNumber() {
     const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
     return u && u.id_number ? String(u.id_number).trim() : "";
+  }
+
+  function normalizeGradeLevel(raw) {
+    const s = String(raw || "").trim().toLowerCase();
+    const m = s.match(/\b(11|12)\b/);
+    return m ? m[1] : "";
+  }
+
+  function updateGradeTabUI() {
+    document.querySelectorAll("[data-gradecard-grade]").forEach((btn) => {
+      const g = btn.getAttribute("data-gradecard-grade");
+      btn.classList.toggle("is-active", g === STATE.selectedGradeLevel);
+      btn.setAttribute("aria-selected", g === STATE.selectedGradeLevel ? "true" : "false");
+    });
+  }
+
+  function strandCountForGrade(row) {
+    if (!row) return 0;
+    return STATE.selectedGradeLevel === "12"
+      ? Number(row.grade_12_count) || 0
+      : Number(row.grade_11_count) || 0;
+  }
+
+  function updateGradeTabCounts() {
+    let c11 = 0;
+    let c12 = 0;
+    STATE.strands.forEach((row) => {
+      c11 += Number(row.grade_11_count) || 0;
+      c12 += Number(row.grade_12_count) || 0;
+    });
+    const el11 = $("gradecard-grade-count-11");
+    const el12 = $("gradecard-grade-count-12");
+    if (el11) {
+      el11.textContent = String(c11);
+      el11.hidden = false;
+    }
+    if (el12) {
+      el12.textContent = String(c12);
+      el12.hidden = false;
+    }
+  }
+
+  function updateStrandStepNote() {
+    const note = document.querySelector("#gradecard-strand-step .gradecard-step-head .small-note");
+    if (note) {
+      note.textContent = `Grade ${STATE.selectedGradeLevel} students enrolled in your subjects, grouped by SHS strand.`;
+    }
+  }
+
+  function renderStrandGrid() {
+    const grid = $("gradecard-strand-grid");
+    if (!grid) return;
+    if (!STATE.strands.length) {
+      grid.innerHTML = `<p class="empty-state">No strands found. Enroll students in your subjects first.</p>`;
+      return;
+    }
+
+    const rows = STATE.strands.filter((row) => {
+      const code = row.strand || "";
+      if (code === "__unassigned__") return strandCountForGrade(row) > 0;
+      return true;
+    });
+
+    if (!rows.length) {
+      grid.innerHTML = `
+        <p class="empty-state">No Grade ${escapeHtml(STATE.selectedGradeLevel)} students enrolled in your subjects yet.</p>`;
+      return;
+    }
+
+    grid.innerHTML = rows
+      .map((row) => {
+        const code = row.strand || "";
+        const meta = STRAND_META[code] || STRAND_META.__unassigned__;
+        const label = row.label || code;
+        const count = strandCountForGrade(row);
+        return `
+          <button
+            type="button"
+            class="gradecard-strand-card"
+            role="listitem"
+            data-strand="${escapeHtml(code)}"
+            data-label="${escapeHtml(label)}"
+            style="--strand-accent:${meta.color}">
+            <span class="gradecard-strand-icon"><i class="fa-solid ${meta.icon}"></i></span>
+            <strong>${escapeHtml(label)}</strong>
+            <span class="small-note">${escapeHtml(meta.blurb)}</span>
+            <span class="gradecard-strand-count">${count} student${count === 1 ? "" : "s"}</span>
+          </button>`;
+      })
+      .join("");
+
+    grid.querySelectorAll(".gradecard-strand-card").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectStrand(btn.getAttribute("data-strand"), btn.getAttribute("data-label"));
+      });
+    });
+  }
+
+  async function selectGradeLevel(grade) {
+    const g = normalizeGradeLevel(grade);
+    if (g !== "11" && g !== "12") return;
+    if (STATE.selectedGradeLevel === g) return;
+    STATE.selectedGradeLevel = g;
+    updateGradeTabUI();
+    updateStrandStepNote();
+    renderStrandGrid();
+    if (STATE.view === "students" && STATE.selectedStrand) {
+      const filter = $("gradecard-student-filter");
+      await loadStudents(filter?.value || "");
+    }
   }
 
   function fmtNumber(v) {
@@ -143,6 +255,7 @@
     if (filter) filter.value = "";
     renderBreadcrumb();
     syncUrl();
+    renderStrandGrid();
   }
 
   function showStudentsView() {
@@ -212,40 +325,10 @@
       const res = await fetch(apiUrl(`/teacher/gradecard/strands?${params}`));
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      const strands = Array.isArray(data.strands) ? data.strands : [];
-      if (!strands.length) {
-        grid.innerHTML = `<p class="empty-state">No strands found. Enroll students in your subjects first.</p>`;
-        return;
-      }
-      grid.innerHTML = strands
-        .map((row) => {
-          const code = row.strand || "";
-          const meta = STRAND_META[code] || STRAND_META.__unassigned__;
-          const label = row.label || code;
-          const count = Number(row.student_count) || 0;
-          return `
-            <button
-              type="button"
-              class="gradecard-strand-card"
-              role="listitem"
-              data-strand="${escapeHtml(code)}"
-              data-label="${escapeHtml(label)}"
-              style="--strand-accent:${meta.color}">
-              <span class="gradecard-strand-icon"><i class="fa-solid ${meta.icon}"></i></span>
-              <strong>${escapeHtml(label)}</strong>
-              <span class="small-note">${escapeHtml(meta.blurb)}</span>
-              <span class="gradecard-strand-count">${count} student${count === 1 ? "" : "s"}</span>
-            </button>`;
-        })
-        .join("");
-      grid.querySelectorAll(".gradecard-strand-card").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          selectStrand(
-            btn.getAttribute("data-strand"),
-            btn.getAttribute("data-label")
-          );
-        });
-      });
+      STATE.strands = Array.isArray(data.strands) ? data.strands : [];
+      updateGradeTabCounts();
+      updateStrandStepNote();
+      renderStrandGrid();
     } catch (err) {
       console.error("loadStrands:", err);
       grid.innerHTML = `<p class="empty-state">Could not load strands: ${escapeHtml(err.message)}</p>`;
@@ -260,7 +343,9 @@
       title.innerHTML = `<i class="fa-solid fa-users"></i> ${escapeHtml(STATE.selectedStrandLabel)}`;
     }
     const sub = $("gradecard-students-subtitle");
-    if (sub) sub.textContent = "Students enrolled in your subjects under this strand.";
+    if (sub) {
+      sub.textContent = `Grade ${STATE.selectedGradeLevel} students enrolled in your subjects under this strand.`;
+    }
     showStudentsView();
     await loadStudents();
   }
@@ -276,6 +361,7 @@
       const params = new URLSearchParams({
         teacher_id_number: tid,
         strand: STATE.selectedStrand,
+        grade_level: STATE.selectedGradeLevel,
       });
       const q = (filterText || "").trim();
       if (q) params.set("q", q);
@@ -287,7 +373,7 @@
         list.innerHTML = `
           <div class="empty-state">
             <i class="fa-solid fa-user-group"></i>
-            <p>No students in this strand enrolled in your subjects yet.</p>
+            <p>No ${escapeHtml(STATE.selectedGradeLevel === "12" ? "Grade 12" : "Grade 11")} students in this strand enrolled in your subjects yet.</p>
           </div>`;
         return;
       }
@@ -590,6 +676,12 @@
     $("gradecard-back-strands-btn")?.addEventListener("click", showStrandsView);
     $("gradecard-back-students-btn")?.addEventListener("click", showStudentsView);
 
+    document.querySelectorAll("[data-gradecard-grade]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectGradeLevel(btn.getAttribute("data-gradecard-grade"));
+      });
+    });
+
     let filterTimer = null;
     $("gradecard-student-filter")?.addEventListener("input", (ev) => {
       clearTimeout(filterTimer);
@@ -615,12 +707,16 @@
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
+    if (typeof ensureTeacherSidebarNav === "function") {
+      ensureTeacherSidebarNav();
+    }
     if (typeof initTeacherLearniqSidebarProfile === "function") {
       initTeacherLearniqSidebarProfile();
     } else if (typeof hydrateStudentSidebarChip === "function") {
       hydrateStudentSidebarChip();
     }
     bindControls();
+    updateGradeTabUI();
     renderEmptyState();
     await loadGradingPeriods();
     await loadStrands();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign Up | LearnIQ Track</title>
+  <title>Teacher Sign Up | LearnIQ Track</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -23,23 +23,14 @@
           <span class="brand-mark">LQ</span>
           <span>
             <strong>LearnIQ Track</strong>
-            <small>Account registration with approval flow</small>
+            <small>Teacher account registration</small>
           </span>
         </a>
-        <h1>Create your account</h1>
-        <p>Choose your account type and register using your official ID. All accounts require admin approval before access.</p>
+        <h1>Create your teacher account</h1>
+        <p>Register as a teacher using your official ID. Student accounts are created by teachers from the Teacher dashboard.</p>
 
-        <div class="role-selector">
-          <div class="role-card selected" data-role="student">
-            <div class="role-icon">
-              <i class="fa-solid fa-graduation-cap"></i>
-            </div>
-            <div class="role-content">
-              <h3>Student</h3>
-              <p>Access lessons, quizzes, activities, and immersion tracker</p>
-            </div>
-          </div>
-          <div class="role-card" data-role="teacher">
+        <div class="role-selector" hidden aria-hidden="true">
+          <div class="role-card selected" data-role="teacher">
             <div class="role-icon">
               <i class="fa-solid fa-chalkboard-teacher"></i>
             </div>
@@ -60,7 +51,7 @@
       <article class="glass-card auth-form-card fade-up delay-1">
         <div class="section-heading left-align compact">
           <span class="pill"><i class="fa-solid fa-user-plus"></i> Sign Up</span>
-          <h2 id="signup-heading">Student registration</h2>
+          <h2 id="signup-heading">Teacher registration</h2>
         </div>
 
         <form id="signup-form" class="auth-form">
@@ -88,8 +79,8 @@
           </div>
 
           <label>
-            <span id="id-label">Student ID Number</span>
-            <input id="signup-id" type="text" placeholder="e.g. 2024-12345" required />
+            <span id="id-label">Teacher ID Number</span>
+            <input id="signup-id" type="text" placeholder="e.g. T-2024-001" required />
           </label>
 
           <label>
@@ -97,10 +88,10 @@
             <input id="signup-email" type="email" placeholder="name@school.edu" required autocomplete="email" />
           </label>
 
-          <div id="signup-student-shs-fields" class="two-field-grid signup-role-fields">
+          <div id="signup-student-shs-fields" class="two-field-grid signup-role-fields" hidden aria-hidden="true">
             <label>
               <span>Year level</span>
-              <select id="signup-grade-level" required>
+              <select id="signup-grade-level">
                 <option value="">Select year</option>
                 <option value="11">11</option>
                 <option value="12">12</option>
@@ -108,7 +99,7 @@
             </label>
             <label>
               <span>Strand</span>
-              <select id="signup-strand" required>
+              <select id="signup-strand">
                 <option value="">Select strand</option>
                 <option value="ABM">ABM</option>
                 <option value="HUMSS">HUMSS</option>

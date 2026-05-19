@@ -490,7 +490,6 @@ function setCurrentUserSession(user) {
     grade_level: user.grade_level || "",
     strand: user.strand || "",
     role: user.role || "student",
-    approval_status: user.approval_status || "approved",
     access_token: user.access_token,
     refresh_token: user.refresh_token
   };
@@ -946,7 +945,12 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
       { id: "ai-result", href: "ai-result.html", icon: "fa-wand-sparkles", label: "Full lesson review" },
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
       { id: "gradecard", href: "teacher-student-gradecard.html", icon: "fa-id-card", label: "Student Gradecard" },
-      { id: "module", href: "module-selection.html", icon: "fa-th-large", label: "Module Selection" },
+      {
+        id: "student-registration",
+        href: "teacher-student-registration.html",
+        icon: "fa-user-plus",
+        label: "Student Registration",
+      },
       { id: "settings", href: "teacher-settings.html", icon: "fa-gear", label: "Settings" },
     ],
   },
@@ -957,6 +961,7 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
     items: [
       { id: "learniq-dashboard", href: "learniq-dashboard.html", icon: "fa-graduation-cap", label: "LearnIQ Dashboard" },
       { id: "subjects", href: "subjects.html", icon: "fa-book-open", label: "My lesson" },
+      { id: "archived", href: "student-archived.html", icon: "fa-box-archive", label: "Archived" },
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
       { id: "history", href: "history.html", icon: "fa-clock-rotate-left", label: "History" },
       { id: "module", href: "module-selection.html", icon: "fa-th-large", label: "Module Selection" },
@@ -965,26 +970,93 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
   },
 };
 
-/** Shared pages (leaderboard, history) show student nav in HTML; swap for teachers from session. */
-function applyRoleAwareDashboardSidebar(activePageId) {
-  const navHost = document.querySelector(".side-links");
-  if (!navHost || !activePageId) return;
+const TEACHER_ONLY_PAGE_PATHS = new Set([
+  "teacher-learniq-dashboard.html",
+  "teacher-dashboard.html",
+  "teacher-subjects.html",
+  "teacher-subject-lessons.html",
+  "ai-result.html",
+  "teacher-student-gradecard.html",
+  "teacher-student-registration.html",
+  "teacher-settings.html",
+]);
 
+const TEACHER_PATH_TO_SIDEBAR_ID = {
+  "teacher-learniq-dashboard.html": "dashboard",
+  "teacher-dashboard.html": "dashboard",
+  "teacher-subjects.html": "subjects",
+  "teacher-subject-lessons.html": "subjects",
+  "ai-result.html": "ai-result",
+  "leaderboard.html": "leaderboard",
+  "teacher-student-gradecard.html": "gradecard",
+  "teacher-student-registration.html": "student-registration",
+  "teacher-settings.html": "settings",
+};
+
+const STUDENT_PATH_TO_SIDEBAR_ID = {
+  "learniq-dashboard.html": "learniq-dashboard",
+  "my-lesson.html": "learniq-dashboard",
+  "subjects.html": "subjects",
+  "student-archived.html": "archived",
+  "leaderboard.html": "leaderboard",
+  "history.html": "history",
+  "module-selection.html": "module",
+  "student-settings.html": "settings",
+  "student-profile.html": "settings",
+};
+
+function getDashboardSidebarActivePageId() {
+  const fromDataset = (document.body?.dataset?.sidebarActive || "").trim();
+  if (fromDataset) return fromDataset;
+  const path = (window.location.pathname || "").split("/").pop() || "";
+  return TEACHER_PATH_TO_SIDEBAR_ID[path] || STUDENT_PATH_TO_SIDEBAR_ID[path] || "";
+}
+
+function isTeacherSidebarPage() {
+  const path = (window.location.pathname || "").split("/").pop() || "";
+  return TEACHER_ONLY_PAGE_PATHS.has(path) || document.body?.classList?.contains("teacher-learniq-page");
+}
+
+function isAdminAppPage() {
+  const path = (window.location.pathname || "").split("/").pop() || "";
+  return path.startsWith("admin-") && path.endsWith(".html");
+}
+
+function resolveDashboardSidebarRole() {
+  if (isAdminAppPage()) return "admin";
   const user = getCurrentUserSession();
-  const role = user && user.role ? String(user.role).trim().toLowerCase() : "student";
-  const config = role === "teacher" ? DASHBOARD_SIDEBAR_BY_ROLE.teacher : DASHBOARD_SIDEBAR_BY_ROLE.student;
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (role === "teacher") return "teacher";
+  if (role === "admin") return "admin";
+  if (role === "student") return "student";
+  if (isTeacherSidebarPage()) return "teacher";
+  return "student";
+}
 
+function redirectAdminFromTeacherOnlyPages() {
+  if (!isTeacherSidebarPage() || isAdminAppPage()) return;
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (role !== "admin") return;
+  window.location.replace("admin-approval.html");
+}
+
+function renderTeacherSidebar(activePageId) {
+  const navHost = document.querySelector(".side-links");
+  const pageId = activePageId || getDashboardSidebarActivePageId();
+  if (!navHost || !pageId) return;
+
+  const config = DASHBOARD_SIDEBAR_BY_ROLE.teacher;
   const brandSmall = document.querySelector(".sidebar-header .brand small");
   if (brandSmall) brandSmall.textContent = config.brandSubtitle;
-
-  document.body.classList.toggle("teacher-learniq-page", Boolean(config.bodyClass));
+  document.body.classList.add("teacher-learniq-page");
 
   const profileLink = document.querySelector(".sidebar-footer .user-chip-profile-link");
   if (profileLink && config.profileLinkId) profileLink.id = config.profileLinkId;
 
   navHost.innerHTML = config.items
     .map((item) => {
-      const isActive = item.id === activePageId;
+      const isActive = item.id === pageId;
       return `<a href="${escapeHtml(item.href)}"${isActive ? ' class="active"' : ""}><i class="fa-solid ${escapeHtml(
         item.icon
       )}"></i> ${escapeHtml(item.label)}</a>`;
@@ -994,9 +1066,163 @@ function applyRoleAwareDashboardSidebar(activePageId) {
   hydrateStudentSidebarChip();
 }
 
+function ensureTeacherSidebarNav() {
+  if (!isTeacherSidebarPage()) return;
+  if (resolveDashboardSidebarRole() === "admin") return;
+  renderTeacherSidebar(getDashboardSidebarActivePageId());
+}
+
+if (typeof window !== "undefined") {
+  window.ensureTeacherSidebarNav = ensureTeacherSidebarNav;
+  window.renderTeacherSidebar = renderTeacherSidebar;
+}
+
+/** Shared pages (leaderboard, history) show student nav in HTML; swap for teachers from session. */
+function applyRoleAwareDashboardSidebar(activePageId) {
+  if (isAdminAppPage()) return;
+
+  const sidebarRole = resolveDashboardSidebarRole();
+  if (sidebarRole === "admin") return;
+
+  const pageId = activePageId || getDashboardSidebarActivePageId();
+  if (!pageId) return;
+
+  if (isTeacherSidebarPage() || sidebarRole === "teacher") {
+    renderTeacherSidebar(pageId);
+    return;
+  }
+
+  const navHost = document.querySelector(".side-links");
+  if (!navHost) return;
+
+  const config = DASHBOARD_SIDEBAR_BY_ROLE.student;
+  const brandSmall = document.querySelector(".sidebar-header .brand small");
+  if (brandSmall) brandSmall.textContent = config.brandSubtitle;
+  document.body.classList.remove("teacher-learniq-page");
+
+  const profileLink = document.querySelector(".sidebar-footer .user-chip-profile-link");
+  if (profileLink && config.profileLinkId) profileLink.id = config.profileLinkId;
+
+  navHost.innerHTML = config.items
+    .map((item) => {
+      const isActive = item.id === pageId;
+      return `<a href="${escapeHtml(item.href)}" data-nav-id="${escapeHtml(item.id)}"${
+        isActive ? ' class="active"' : ""
+      }><i class="fa-solid ${escapeHtml(item.icon)}"></i> ${escapeHtml(item.label)}</a>`;
+    })
+    .join("");
+
+  hydrateStudentSidebarChip();
+}
+
 function initRoleAwareDashboardSidebar() {
-  const activePageId = document.body?.dataset?.sidebarActive;
-  if (activePageId) applyRoleAwareDashboardSidebar(activePageId);
+  if (isAdminAppPage()) return;
+  const pageId = getDashboardSidebarActivePageId();
+  if (pageId) applyRoleAwareDashboardSidebar(pageId);
+}
+
+function refreshDashboardSidebarForSession() {
+  const pageId = getDashboardSidebarActivePageId();
+  if (!pageId) return;
+  if (isAdminAppPage()) {
+    renderAdminSidebar(pageId);
+    return;
+  }
+  applyRoleAwareDashboardSidebar(pageId);
+}
+
+const ADMIN_SIDEBAR_ITEMS = [
+  { id: "dashboard", href: "admin-approval.html", icon: "fa-gauge", label: "Dashboard" },
+  { id: "student-approvals", href: "admin-student-approvals.html", icon: "fa-user-graduate", label: "Students" },
+  { id: "teacher-approvals", href: "admin-teacher-approvals.html", icon: "fa-chalkboard-user", label: "Teachers" },
+  {
+    id: "teacher-registration",
+    href: "admin-teacher-registration.html",
+    icon: "fa-chalkboard-user",
+    label: "Teacher Registration",
+  },
+  {
+    id: "student-registration",
+    href: "admin-student-registration.html",
+    icon: "fa-user-plus",
+    label: "Student Registration",
+  },
+  { id: "users", href: "admin-users.html", icon: "fa-users", label: "Users" },
+  { id: "subjects", href: "admin-subjects.html", icon: "fa-book-open", label: "Subjects" },
+  { id: "ai-results", href: "admin-approval.html#ai-results", icon: "fa-robot", label: "AI Results" },
+  { id: "files", href: "admin-uploaded-files.html", icon: "fa-cloud-arrow-up", label: "Uploaded Files" },
+  { id: "leaderboard", href: "admin-leaderboard.html", icon: "fa-ranking-star", label: "Leaderboard" },
+  { id: "gradecard", href: "admin-student-gradecard.html", icon: "fa-id-card", label: "Student Gradecard" },
+  { id: "attendance", href: "admin-attendance-logs.html", icon: "fa-calendar-check", label: "Attendance Logs" },
+  { id: "journals", href: "admin-journals.html", icon: "fa-book", label: "Journals" },
+  { id: "reports", href: "admin-reports.html", icon: "fa-file-lines", label: "Reports" },
+  { id: "settings", href: "admin-settings.html", icon: "fa-gear", label: "Settings" },
+];
+
+const ADMIN_PATH_TO_SIDEBAR_ID = {
+  "admin-approval.html": "dashboard",
+  "admin-student-approvals.html": "student-approvals",
+  "admin-teacher-approvals.html": "teacher-approvals",
+  "admin-teacher-registration.html": "teacher-registration",
+  "admin-student-registration.html": "student-registration",
+  "admin-users.html": "users",
+  "admin-subjects.html": "subjects",
+  "admin-uploaded-files.html": "files",
+  "admin-leaderboard.html": "leaderboard",
+  "admin-student-gradecard.html": "gradecard",
+  "admin-attendance-logs.html": "attendance",
+  "admin-journals.html": "journals",
+  "admin-reports.html": "reports",
+  "admin-settings.html": "settings",
+  "admin-profile.html": "settings",
+};
+
+function getAdminSidebarActivePageId() {
+  const fromDataset = (document.body?.dataset?.sidebarActive || "").trim();
+  if (fromDataset) return fromDataset;
+  const path = (window.location.pathname || "").split("/").pop() || "";
+  if (path === "admin-approval.html" && window.location.hash === "#ai-results") {
+    return "ai-results";
+  }
+  return ADMIN_PATH_TO_SIDEBAR_ID[path] || "";
+}
+
+function renderAdminSidebar(activePageId) {
+  const navHost = document.querySelector(".side-links");
+  const pageId = activePageId || getAdminSidebarActivePageId();
+  if (!navHost || !pageId) return;
+
+  document.body.classList.remove("teacher-learniq-page");
+
+  navHost.innerHTML = ADMIN_SIDEBAR_ITEMS.map((item) => {
+    const isActive = item.id === pageId;
+    return `<a href="${escapeHtml(item.href)}"${isActive ? ' class="active"' : ""}><i class="fa-solid ${escapeHtml(
+      item.icon
+    )}"></i> ${escapeHtml(item.label)}</a>`;
+  }).join("");
+}
+
+function initAdminSidebar() {
+  if (!isAdminAppPage()) return;
+  renderAdminSidebar(getAdminSidebarActivePageId());
+  hydrateAdminSidebarFromSession();
+  if (!window.__adminSidebarHashBound) {
+    window.__adminSidebarHashBound = true;
+    window.addEventListener("hashchange", () => {
+      if (isAdminAppPage()) renderAdminSidebar(getAdminSidebarActivePageId());
+    });
+  }
+}
+
+function ensureAdminSidebarNav() {
+  if (!isAdminAppPage()) return;
+  renderAdminSidebar(getAdminSidebarActivePageId());
+}
+
+if (typeof window !== "undefined") {
+  window.ensureAdminSidebarNav = ensureAdminSidebarNav;
+  window.renderAdminSidebar = renderAdminSidebar;
+  window.isAdminAppPage = isAdminAppPage;
 }
 
 /** Teacher LearnIQ sidebar footer — session + /me (all teacher-learniq-page layouts). */
@@ -1607,6 +1833,9 @@ async function hydrateSidebarProfileFromDatabase() {
     }
     if (trackEl) trackEl.textContent = idn ? `ID ${idn}` : "";
     if (linkEl && idn) linkEl.href = `student-profile.html?id_number=${encodeURIComponent(idn)}`;
+    if (typeof refreshDashboardSidebarForSession === "function") {
+      refreshDashboardSidebarForSession();
+    }
   } catch (e) {
     console.error("me:", e);
   }
@@ -2311,27 +2540,18 @@ function ensureSampleUsers() {
   return [];
 }
 
-/** Fallback if /admin/stats is unavailable; matches Supabase role / approval_status shape. */
+/** Fallback if /admin/stats is unavailable. */
 function getAdminDashboardStatsFromUsers(users) {
   const role = (u) => String(u.role || "").trim().toLowerCase();
-  const status = (u) => String(u.approval_status || u.status || "pending").trim().toLowerCase();
   const totalStudents = users.filter((u) => role(u) === "student").length;
   const totalTeachers = users.filter((u) => role(u) === "teacher").length;
-  const pendingApprovals = users.filter(
-    (u) => status(u) === "pending" && (role(u) === "student" || role(u) === "teacher")
-  ).length;
-  const approvedAccounts = users.filter((u) => status(u) === "approved").length;
-  const rejectedAccounts = users.filter((u) => status(u) === "rejected").length;
-  return { totalStudents, totalTeachers, pendingApprovals, approvedAccounts, rejectedAccounts };
+  return { totalStudents, totalTeachers };
 }
 
 async function renderMetrics() {
   const empty = {
     totalStudents: 0,
     totalTeachers: 0,
-    pendingApprovals: 0,
-    approvedAccounts: 0,
-    rejectedAccounts: 0,
     uploadedFilesCount: 0,
     activeUsersToday: 0,
   };
@@ -2343,9 +2563,6 @@ async function renderMetrics() {
       updateMetricsDisplay({
         totalStudents: d.total_students ?? 0,
         totalTeachers: d.total_teachers ?? 0,
-        pendingApprovals: d.pending_approvals ?? 0,
-        approvedAccounts: d.approved_accounts ?? 0,
-        rejectedAccounts: d.rejected_accounts ?? 0,
         uploadedFilesCount: d.uploaded_files ?? 0,
         activeUsersToday: d.active_users_today ?? 0,
       });
@@ -2380,26 +2597,19 @@ function setMetricText(id, value) {
 function updateMetricsDisplay(stats) {
   setMetricText("metric-total-students", stats.totalStudents);
   setMetricText("metric-total-teachers", stats.totalTeachers);
-  setMetricText("metric-pending-approvals", stats.pendingApprovals);
-  setMetricText("metric-approved-accounts", stats.approvedAccounts);
-  setMetricText("metric-rejected-accounts", stats.rejectedAccounts);
   setMetricText("metric-uploaded-files", stats.uploadedFilesCount ?? 0);
   setMetricText("metric-active-users", stats.activeUsersToday ?? 0);
 
   const denom = Math.max(1, (stats.totalStudents || 0) + (stats.totalTeachers || 0));
-  const chartPending = document.getElementById("chart-pending");
-  const chartApproved = document.getElementById("chart-approved");
-  const chartRejected = document.getElementById("chart-rejected");
-  if (chartPending) {
-    chartPending.dataset.progress = `${Math.min(100, Math.round((stats.pendingApprovals / denom) * 100))}%`;
+  const chartStudents = document.getElementById("chart-students");
+  const chartTeachers = document.getElementById("chart-teachers");
+  if (chartStudents) {
+    chartStudents.dataset.progress = `${Math.min(100, Math.round(((stats.totalStudents || 0) / denom) * 100))}%`;
   }
-  if (chartApproved) {
-    chartApproved.dataset.progress = `${Math.min(100, Math.round((stats.approvedAccounts / denom) * 100))}%`;
+  if (chartTeachers) {
+    chartTeachers.dataset.progress = `${Math.min(100, Math.round(((stats.totalTeachers || 0) / denom) * 100))}%`;
   }
-  if (chartRejected) {
-    chartRejected.dataset.progress = `${Math.min(100, Math.round((stats.rejectedAccounts / denom) * 100))}%`;
-  }
-  if (chartPending || chartApproved || chartRejected) {
+  if (chartStudents || chartTeachers) {
     animateProgressBars();
   }
 }
@@ -2454,17 +2664,6 @@ function renderRecentActivity() {
   void refreshAdminRecentActivity();
 }
 
-function approveAllPending() {
-  const users = ensureSampleUsers();
-  const updated = users.map((user) =>
-    user.status === "Pending" ? { ...user, status: "Approved" } : user
-  );
-  saveUsers(updated);
-  renderAdminTable(document.querySelector("#admin-search")?.value || "");
-  renderMetrics();
-  showToast("All pending students have been approved.", "success");
-}
-
 function exportReports() {
   showToast("Admin reports exported successfully.", "info");
 }
@@ -2476,7 +2675,6 @@ function uploadDashboardFile(file) {
 }
 
 function setupDashboardActions() {
-  document.getElementById("approve-all-btn")?.addEventListener("click", approveAllPending);
   document.getElementById("export-reports-btn")?.addEventListener("click", exportReports);
   document.getElementById("view-students-btn")?.addEventListener("click", () => {
     document.getElementById("admin-table")?.scrollIntoView({ behavior: "smooth" });
@@ -2573,7 +2771,7 @@ function applySignupRoleUi(role) {
     signupHeading.textContent = isStudent ? "Student registration" : "Teacher registration";
   }
   if (idLabel) {
-    idLabel.textContent = isStudent ? "Student ID Number" : "Teacher ID / Employee ID";
+    idLabel.textContent = isStudent ? "Learner Reference Number (LRN)" : "Teacher ID / Employee ID";
   }
   if (studentShsFields) studentShsFields.hidden = !isStudent;
 
@@ -2601,13 +2799,298 @@ function setupRoleSelection() {
   });
 }
 
+function registrationSuccessMessage(result, wasAutoGenerated) {
+  const base = (result && result.message) || "Account created.";
+  if (!wasAutoGenerated) return base;
+  if (result && result.credentials_emailed) {
+    const to = (result.email || "their email").trim();
+    return `${base} Check ${to} for LRN/email and password.`;
+  }
+  if (result && result.credentials_email_error) {
+    return `${base} (${result.credentials_email_error})`;
+  }
+  return `${base} Set SMTP_USER and SMTP_PASSWORD in backend/.env to email credentials via Gmail.`;
+}
+
+function setupAdminTeacherRegistrationPage() {
+  ensureAdminSidebarNav();
+  const form = document.getElementById("admin-teacher-reg-form");
+  const messageEl = document.getElementById("atr-message");
+  if (!form) return;
+
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (!user?.access_token) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (role !== "admin") {
+    window.location.href = "login.html";
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!messageEl) return;
+
+    const idNumber = document.getElementById("atr-id")?.value.trim() || "";
+    const email = (document.getElementById("atr-email")?.value || "").trim().toLowerCase();
+    const passwordRaw = document.getElementById("atr-password")?.value || "";
+    const wasAutoPassword = !passwordRaw.trim();
+    const lastName = (document.getElementById("atr-last-name")?.value || "").trim();
+    const firstName = (document.getElementById("atr-first-name")?.value || "").trim();
+    const middleName = (document.getElementById("atr-middle-name")?.value || "").trim();
+    const nameSuffix = (document.getElementById("atr-name-suffix")?.value || "").trim();
+
+    if (!idNumber || !email) {
+      showAuthMessage("All required fields must be filled in.", messageEl, "error");
+      return;
+    }
+    if (!lastName || !firstName) {
+      showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+
+    const payload = {
+      id_number: idNumber,
+      email,
+      password: passwordRaw.trim(),
+      auto_generate_password: wasAutoPassword,
+      role: "teacher",
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: middleName,
+      name_suffix: nameSuffix,
+    };
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loader"></span> Submitting…';
+    }
+
+    try {
+      const response = await fetch(apiUrl("/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Registration failed");
+      }
+      const result = await response.json();
+      form.reset();
+      showAuthMessage(registrationSuccessMessage(result, wasAutoPassword), messageEl, "success");
+      showToast("Teacher registration submitted.", "success");
+    } catch (error) {
+      showAuthMessage(error.message || "Registration failed. Please try again.", messageEl, "error");
+      showToast(`Registration failed: ${error.message}`, "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  });
+}
+
+function setupAdminStudentRegistrationPage() {
+  ensureAdminSidebarNav();
+  const form = document.getElementById("admin-student-reg-form");
+  const messageEl = document.getElementById("asr-message");
+  if (!form) return;
+
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (!user?.access_token) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (role !== "admin") {
+    window.location.href = "login.html";
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!messageEl) return;
+
+    const idNumber = document.getElementById("asr-id")?.value.trim() || "";
+    const email = (document.getElementById("asr-email")?.value || "").trim().toLowerCase();
+    const passwordRaw = document.getElementById("asr-password")?.value || "";
+    const wasAutoPassword = !passwordRaw.trim();
+    const lastName = (document.getElementById("asr-last-name")?.value || "").trim();
+    const firstName = (document.getElementById("asr-first-name")?.value || "").trim();
+    const middleName = (document.getElementById("asr-middle-name")?.value || "").trim();
+    const nameSuffix = (document.getElementById("asr-name-suffix")?.value || "").trim();
+    const gradeLevel = (document.getElementById("asr-grade-level")?.value || "").trim();
+    const strand = (document.getElementById("asr-strand")?.value || "").trim();
+
+    if (!idNumber || !email) {
+      showAuthMessage("All required fields must be filled in.", messageEl, "error");
+      return;
+    }
+    if (!lastName || !firstName) {
+      showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+    if (!gradeLevel || !strand) {
+      showAuthMessage("Year level and strand are required.", messageEl, "error");
+      return;
+    }
+
+    const payload = {
+      id_number: idNumber,
+      email,
+      password: passwordRaw.trim(),
+      auto_generate_password: wasAutoPassword,
+      role: "student",
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: middleName,
+      name_suffix: nameSuffix,
+      grade_level: gradeLevel,
+      strand,
+    };
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loader"></span> Submitting…';
+    }
+
+    try {
+      const response = await fetch(apiUrl("/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Registration failed");
+      }
+      const result = await response.json();
+      form.reset();
+      showAuthMessage(registrationSuccessMessage(result, wasAutoPassword), messageEl, "success");
+      showToast("Student registration submitted.", "success");
+    } catch (error) {
+      showAuthMessage(error.message || "Registration failed. Please try again.", messageEl, "error");
+      showToast(`Registration failed: ${error.message}`, "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  });
+}
+
+function setupTeacherStudentRegistrationPage() {
+  ensureTeacherSidebarNav();
+  const form = document.getElementById("teacher-student-reg-form");
+  const messageEl = document.getElementById("tsr-message");
+  if (!form) return;
+
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (!user?.access_token) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (role !== "teacher" && role !== "admin") {
+    window.location.href = role === "student" ? "learniq-dashboard.html" : "login.html";
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!messageEl) return;
+
+    const idNumber = document.getElementById("tsr-id")?.value.trim() || "";
+    const email = (document.getElementById("tsr-email")?.value || "").trim().toLowerCase();
+    const passwordRaw = document.getElementById("tsr-password")?.value || "";
+    const wasAutoPassword = !passwordRaw.trim();
+    const lastName = (document.getElementById("tsr-last-name")?.value || "").trim();
+    const firstName = (document.getElementById("tsr-first-name")?.value || "").trim();
+    const middleName = (document.getElementById("tsr-middle-name")?.value || "").trim();
+    const nameSuffix = (document.getElementById("tsr-name-suffix")?.value || "").trim();
+    const gradeLevel = (document.getElementById("tsr-grade-level")?.value || "").trim();
+    const strand = (document.getElementById("tsr-strand")?.value || "").trim();
+
+    if (!idNumber || !email) {
+      showAuthMessage("All required fields must be filled in.", messageEl, "error");
+      return;
+    }
+    if (!lastName || !firstName) {
+      showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+    if (!gradeLevel || !strand) {
+      showAuthMessage("Year level and strand are required.", messageEl, "error");
+      return;
+    }
+
+    const payload = {
+      id_number: idNumber,
+      email,
+      password: passwordRaw.trim(),
+      auto_generate_password: wasAutoPassword,
+      role: "student",
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: middleName,
+      name_suffix: nameSuffix,
+      grade_level: gradeLevel,
+      strand,
+    };
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loader"></span> Submitting…';
+    }
+
+    try {
+      const response = await fetch(apiUrl("/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Registration failed");
+      }
+      const result = await response.json();
+      form.reset();
+      showAuthMessage(registrationSuccessMessage(result, wasAutoPassword), messageEl, "success");
+      showToast("Student registration submitted.", "success");
+    } catch (error) {
+      showAuthMessage(error.message || "Registration failed. Please try again.", messageEl, "error");
+      showToast(`Registration failed: ${error.message}`, "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  });
+}
+
 function setupSignupPage() {
   const signupForm = document.querySelector("#signup-form");
   const signupMessage = document.querySelector("#signup-message");
   if (!signupForm) return;
 
-  // Setup role selection
-  setupRoleSelection();
+  const roleSelector = document.querySelector(".role-selector");
+  if (roleSelector && roleSelector.hidden) {
+    applySignupRoleUi("teacher");
+  } else {
+    setupRoleSelection();
+  }
 
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -2625,11 +3108,11 @@ function setupSignupPage() {
     const strand = (document.querySelector("#signup-strand")?.value || "").trim();
 
     const selectedRole = document.querySelector(".role-card.selected");
-    if (!selectedRole) {
+    const role = selectedRole?.dataset?.role || "teacher";
+    if (!selectedRole && document.querySelector(".role-selector:not([hidden])")) {
       showAuthMessage("Please select an account type.", signupMessage, "error");
       return;
     }
-    const role = selectedRole.dataset.role;
     const isStudent = role === "student";
 
     if (!idNumber || !email || !password || !confirmPassword) {
@@ -2681,7 +3164,7 @@ function setupSignupPage() {
 
       const result = await response.json();
       signupForm.reset();
-      showAuthMessage(result.message || "Your account is pending approval by the Admin/Principal.", signupMessage, "success");
+      showAuthMessage(result.message || "Account created. You can sign in after confirming your email.", signupMessage, "success");
       showToast(
         isStudent ? "Student registration submitted for review." : "Teacher registration submitted for review.",
         "success"
@@ -2693,39 +3176,39 @@ function setupSignupPage() {
   });
 }
 
+function buildLoginPayload(identifierRaw, password) {
+  const identifier = (identifierRaw || "").trim();
+  const payload = { password, identifier };
+  if (identifier.includes("@")) {
+    payload.login_method = "email";
+    payload.email = identifier.toLowerCase();
+  } else {
+    payload.login_method = "lrn";
+    payload.lrn = identifier;
+    payload.id_number = identifier;
+  }
+  return payload;
+}
+
 function setupLoginPage() {
-  console.log("SETUP LOGIN PAGE RUNNING");
-  console.log("CURRENT PATHNAME:", window.location.pathname);
-  console.log("SCRIPT LOADED, SETUP LOGIN PAGE INVOKED");
-  const form = document.getElementById("login-form");
-  console.log("LOGIN FORM:", form);
   const loginForm = document.querySelector("#login-form");
   const loginMessage = document.querySelector("#login-message");
-  
-  if (!loginForm) {
-    console.error("Login form not found!");
-    return;
-  }
+
+  if (!loginForm) return;
 
   loginForm.addEventListener("submit", async (event) => {
-    console.log("LOGIN SUBMIT DETECTED");
     event.preventDefault();
-    console.log("event.preventDefault() executed");
 
-    const email = document.querySelector("#login-email").value.trim().toLowerCase();
-    const password = document.querySelector("#login-password").value;
+    const identifier =
+      document.getElementById("login-email")?.value ||
+      document.getElementById("login-identifier")?.value ||
+      "";
+    const password = document.getElementById("login-password")?.value || "";
     const endpointUrl = apiUrl("/login");
-    const payload = {
-      email: email,
-      password: password
-    };
-    console.log("STARTING LOGIN FETCH");
-    console.log("LOGIN EMAIL:", email);
-    console.log("LOGIN PAYLOAD:", payload);
-    console.log("LOGIN ENDPOINT URL:", endpointUrl);
+    const payload = buildLoginPayload(identifier, password);
 
-    if (!email || !password) {
-      const errorMsg = "Email and password are required.";
+    if (!identifier.trim() || !password) {
+      const errorMsg = "LRN or email and password are required.";
       if (loginMessage) {
         showAuthMessage(errorMsg, loginMessage, "error");
       } else {
@@ -2872,7 +3355,7 @@ async function renderAdminTable(filter = "") {
   try {
     const response = await fetch(apiUrl("/users"));
     if (!response.ok) {
-      tableBody.innerHTML = `<tr><td colspan="7">Failed to load users from server.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5">Failed to load users from server.</td></tr>`;
       return;
     }
     
@@ -2885,31 +3368,22 @@ async function renderAdminTable(filter = "") {
         (getProfileDisplayName(user).toLowerCase().includes(filterValue)) ||
         (user.id_number && user.id_number.toLowerCase().includes(filterValue))
       )
-      .map((user) => {
-        const actions = (user.role === "student" || user.role === "teacher") && user.approval_status === "pending" ?
-          `<div class="table-actions">
-            <button class="btn btn-secondary" data-action="approve" data-id="${user.id_number}">Approve</button>
-            <button class="btn btn-ghost" data-action="reject" data-id="${user.id_number}">Reject</button>
-          </div>` :
-          "—";
-
-        return `
+      .map(
+        (user) => `
           <tr>
-            <td>${getProfileDisplayName(user) || "N/A"}</td>
-            <td>${user.id_number || "N/A"}</td>
-            <td>${user.email || "N/A"}</td>
-            <td>${user.role || "N/A"}</td>
-            <td>${formatStatusBadge(user.approval_status || "pending")}</td>
+            <td>${escapeHtml(getProfileDisplayName(user) || "N/A")}</td>
+            <td>${escapeHtml(user.id_number || "N/A")}</td>
+            <td>${escapeHtml(user.email || "N/A")}</td>
+            <td>${escapeHtml(user.role || "N/A")}</td>
             <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
-            <td>${actions}</td>
           </tr>
-        `;
-      });
+        `
+      );
 
-    tableBody.innerHTML = rows.join("") || `<tr><td colspan="7">No matching student registrations found.</td></tr>`;
+    tableBody.innerHTML = rows.join("") || `<tr><td colspan="5">No matching users found.</td></tr>`;
   } catch (error) {
     console.error("Failed to render admin table:", error);
-    tableBody.innerHTML = `<tr><td colspan="7">Error loading user data.</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="5">Error loading user data.</td></tr>`;
   }
 }
 
@@ -3050,17 +3524,10 @@ function setupAdminNavigation() {
   });
 }
 
-/** Tab: "pending" | "approved" | "rejected" | "total" — set via `window.__studentApprovalsTab` on Student Approvals page. */
+/** All students list (admin Students page). */
 async function loadPendingApprovals() {
   const tableBody = document.querySelector("#approval-table-body");
   if (!tableBody) return;
-
-  const status = String(window.__studentApprovalsTab || "pending")
-    .toLowerCase()
-    .trim();
-  const safeStatus =
-    status === "approved" || status === "rejected" || status === "total" ? status : "pending";
-  window.__studentApprovalsTab = safeStatus;
 
   const searchEl = document.querySelector("#approval-search");
   const q = (searchEl?.value || "").trim().toLowerCase();
@@ -3068,17 +3535,12 @@ async function loadPendingApprovals() {
   try {
     const response = await fetch(apiUrl("/users"));
     if (!response.ok) {
-      tableBody.innerHTML = '<tr><td colspan="6">Failed to load students.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="4">Failed to load students.</td></tr>';
       return;
     }
 
     const users = await response.json();
     let students = users.filter((u) => String(u.role || "").toLowerCase() === "student");
-    if (safeStatus !== "total") {
-      students = students.filter(
-        (u) => String(u.approval_status || "pending").toLowerCase() === safeStatus
-      );
-    }
 
     if (q) {
       students = students.filter((u) => {
@@ -3094,21 +3556,6 @@ async function loadPendingApprovals() {
         const nameCell = idNum
           ? `<span class="profile-row-name">${escapeHtml(getProfileDisplayName(user) || "N/A")}</span>`
           : escapeHtml(getProfileDisplayName(user) || "N/A");
-        const stRaw = String(user.approval_status || "pending").toLowerCase();
-        const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
-        const statusCell = formatStatusBadge(stLabel);
-        const showActions =
-          safeStatus === "pending" || (safeStatus === "total" && stRaw === "pending");
-        const actions = showActions
-          ? `<div class="table-actions">
-            <button type="button" class="btn btn-secondary" data-action="approve" data-id="${escapeHtml(
-              idNum
-            )}">Approve</button>
-            <button type="button" class="btn btn-ghost" data-action="reject" data-id="${escapeHtml(
-              idNum
-            )}">Reject</button>
-          </div>`
-          : '<span class="small-note">—</span>';
         const rowAttrs = idNum
           ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
               getProfileDisplayName(user) || "user"
@@ -3120,38 +3567,21 @@ async function loadPendingApprovals() {
         <td>${escapeHtml(user.id_number || "N/A")}</td>
         <td>${escapeHtml(user.email || "N/A")}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
-        <td>${statusCell}</td>
-        <td>${actions}</td>
       </tr>`;
       })
       .join("");
 
-    const emptyMsg =
-      safeStatus === "pending"
-        ? "No pending student registrations."
-        : safeStatus === "approved"
-        ? "No approved students."
-        : safeStatus === "rejected"
-        ? "No rejected students."
-        : "No student profiles in the database.";
-    tableBody.innerHTML = rows || `<tr><td colspan="6">${emptyMsg}</td></tr>`;
+    tableBody.innerHTML = rows || `<tr><td colspan="4">No student profiles in the database.</td></tr>`;
   } catch (error) {
-    console.error("Failed to load student approvals:", error);
-    tableBody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
+    console.error("Failed to load students:", error);
+    tableBody.innerHTML = '<tr><td colspan="4">Error loading data.</td></tr>';
   }
 }
 
-/** Tab: "pending" | "approved" | "rejected" | "total" — set via `window.__teacherApprovalsTab` before calling. */
+/** All teachers list (admin Teachers page). */
 async function loadTeacherApprovals() {
   const tableBody = document.querySelector("#teacher-approval-table-body");
   if (!tableBody) return;
-
-  const status = String(window.__teacherApprovalsTab || "pending")
-    .toLowerCase()
-    .trim();
-  const safeStatus =
-    status === "approved" || status === "rejected" || status === "total" ? status : "pending";
-  window.__teacherApprovalsTab = safeStatus;
 
   const searchEl = document.querySelector("#teacher-approval-search");
   const q = (searchEl?.value || "").trim().toLowerCase();
@@ -3159,17 +3589,12 @@ async function loadTeacherApprovals() {
   try {
     const response = await fetch(apiUrl("/users"));
     if (!response.ok) {
-      tableBody.innerHTML = '<tr><td colspan="6">Failed to load teachers.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="4">Failed to load teachers.</td></tr>';
       return;
     }
 
     const users = await response.json();
     let teachers = users.filter((u) => String(u.role || "").toLowerCase() === "teacher");
-    if (safeStatus !== "total") {
-      teachers = teachers.filter(
-        (u) => String(u.approval_status || "pending").toLowerCase() === safeStatus
-      );
-    }
 
     if (q) {
       teachers = teachers.filter((u) => {
@@ -3185,21 +3610,6 @@ async function loadTeacherApprovals() {
         const nameCell = idNum
           ? `<span class="profile-row-name">${escapeHtml(getProfileDisplayName(user) || "N/A")}</span>`
           : escapeHtml(getProfileDisplayName(user) || "N/A");
-        const stRaw = String(user.approval_status || "pending").toLowerCase();
-        const stLabel = stRaw ? stRaw.charAt(0).toUpperCase() + stRaw.slice(1) : "Pending";
-        const statusCell = formatStatusBadge(stLabel);
-        const showActions =
-          safeStatus === "pending" || (safeStatus === "total" && stRaw === "pending");
-        const actions = showActions
-          ? `<div class="table-actions">
-            <button type="button" class="btn btn-secondary" data-action="approve" data-id="${escapeHtml(
-              idNum
-            )}">Approve</button>
-            <button type="button" class="btn btn-ghost" data-action="reject" data-id="${escapeHtml(
-              idNum
-            )}">Reject</button>
-          </div>`
-          : '<span class="small-note">—</span>';
         const rowAttrs = idNum
           ? ` class="profile-row" data-profile-id="${encId}" tabindex="0" role="button" aria-label="View profile of ${escapeHtml(
               getProfileDisplayName(user) || "user"
@@ -3211,24 +3621,14 @@ async function loadTeacherApprovals() {
         <td>${escapeHtml(user.id_number || "N/A")}</td>
         <td>${escapeHtml(user.email || "N/A")}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
-        <td>${statusCell}</td>
-        <td>${actions}</td>
       </tr>`;
       })
       .join("");
 
-    const emptyMsg =
-      safeStatus === "pending"
-        ? "No pending teacher registrations."
-        : safeStatus === "approved"
-        ? "No approved teachers."
-        : safeStatus === "rejected"
-        ? "No rejected teachers."
-        : "No teacher profiles in the database.";
-    tableBody.innerHTML = rows || `<tr><td colspan="6">${emptyMsg}</td></tr>`;
+    tableBody.innerHTML = rows || `<tr><td colspan="4">No teacher profiles in the database.</td></tr>`;
   } catch (error) {
-    console.error("Failed to load teacher approvals:", error);
-    tableBody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
+    console.error("Failed to load teachers:", error);
+    tableBody.innerHTML = '<tr><td colspan="4">Error loading data.</td></tr>';
   }
 }
 
@@ -3314,8 +3714,6 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
     const fullName = getProfileDisplayName(p) || "Unnamed user";
     const role = String(p.role || "").trim();
     const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : "—";
-    const ap = String(p.approval_status || "pending").toLowerCase();
-    const apLabel = ap ? ap.charAt(0).toUpperCase() + ap.slice(1) : "Pending";
     const initials = _profileInitials(fullName);
     const avatarUrl = String(
       p.avatar_data || p.avatar_url || p.profile_picture || p.photo_url || ""
@@ -3325,10 +3723,9 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
       : `<span>${escapeHtml(initials)}</span>`;
 
     const coreRows = [
-      ["ID number", escapeHtml(p.id_number || "—")],
+      ["LRN", escapeHtml(p.lrn || p.id_number || "—")],
       ["Email", escapeHtml(p.email || "—")],
       ["Role", escapeHtml(roleLabel)],
-      ["Approval", formatStatusBadge(apLabel)],
       ["Created", escapeHtml(_formatProfileDate(p.created_at, true))],
       ["Profile UUID", `<code class="profile-uuid">${escapeHtml(p.id ? String(p.id) : "—")}</code>`],
     ];
@@ -3381,7 +3778,6 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
             <span class="profile-chip profile-chip-role">
               <i class="fa-solid fa-id-badge"></i> ${escapeHtml(roleLabel)}
             </span>
-            <span class="profile-chip-status">${formatStatusBadge(apLabel)}</span>
           </div>
         </div>
       </div>
@@ -3427,7 +3823,6 @@ function renderAdminUsersTable() {
       u.id_number,
       u.email,
       u.role,
-      u.approval_status,
     ]
       .map((v) => String(v || "").toLowerCase())
       .join(" ");
@@ -3438,7 +3833,7 @@ function renderAdminUsersTable() {
     const msg = adminUsersCache.length
       ? "No users match the current filter."
       : "No users found.";
-    tableBody.innerHTML = `<tr><td colspan="6">${msg}</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="5">${msg}</td></tr>`;
     return;
   }
 
@@ -3450,7 +3845,6 @@ function renderAdminUsersTable() {
         <td>${escapeHtml(user.id_number || 'N/A')}</td>
         <td>${escapeHtml(user.email || 'N/A')}</td>
         <td>${escapeHtml(user.role || 'N/A')}</td>
-        <td>${formatStatusBadge(user.approval_status || 'pending')}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
       </tr>
     `
@@ -3804,7 +4198,7 @@ async function loadReports() {
       const d = await res.json().catch(() => ({}));
       if (!d.error) {
         setText("report-total-users", d.total_accounts ?? 0);
-        setText("report-pending", d.pending_approvals ?? 0);
+        setText("report-total-students", d.total_students ?? 0);
         setText("report-active-today", d.active_users_today ?? 0);
         setText("report-lessons", d.lessons_total ?? 0);
         setText("report-published", d.lessons_published ?? 0);
@@ -3821,7 +4215,10 @@ async function loadReports() {
     if (response.ok) {
       const users = await response.json();
       setText("report-total-users", users.length);
-      setText("report-pending", users.filter((u) => u.approval_status === "pending").length);
+      setText(
+        "report-total-students",
+        users.filter((u) => String(u.role || "").toLowerCase() === "student").length
+      );
       setText("report-active-today", 0);
       setText("report-lessons", 0);
       setText("report-published", 0);
@@ -3837,47 +4234,6 @@ function loadSettings() {
   console.log('Settings section loaded');
 }
 
-async function updateAdminUserStatus(idNumber, newStatus) {
-  try {
-    const payload = {
-      id_number: idNumber,
-      approval_status: newStatus
-    };
-    console.log("Sending approval request:", payload);
-    
-    const response = await fetch(apiUrl("/users"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error || "Failed to update user status");
-    }
-
-    const refreshTasks = [];
-    if (document.querySelector("#admin-table-body")) {
-      refreshTasks.push(renderAdminTable(document.querySelector("#admin-search")?.value || ""));
-    }
-    if (document.getElementById("metric-total-students")) {
-      refreshTasks.push(renderMetrics());
-    }
-    refreshTasks.push(refreshAdminRecentActivity());
-    if (document.querySelector("#approval-table-body") && typeof loadPendingApprovals === "function") {
-      refreshTasks.push(loadPendingApprovals());
-    }
-    if (document.querySelector("#teacher-approval-table-body") && typeof loadTeacherApprovals === "function") {
-      refreshTasks.push(loadTeacherApprovals());
-    }
-    await Promise.all(refreshTasks);
-    showToast(`User marked ${newStatus.toLowerCase()} successfully.`, "success");
-  } catch (error) {
-    console.error("Failed to update user status:", error);
-    showToast(`Failed to update user: ${error.message}`, "error");
-  }
-}
-
 function setupAdminPage() {
   const adminTableBody = document.querySelector("#admin-table-body");
   if (!adminTableBody) return;
@@ -3888,20 +4244,6 @@ function setupAdminPage() {
   renderSystemStatus();
   setupDashboardActions();
   setupAdminNavigation();
-
-  adminTableBody.addEventListener("click", (event) => {
-    const target = event.target;
-    const action = target.dataset.action;
-    const idNumber = target.dataset.id;
-    if (!action || !idNumber) return;
-
-    if (action === "approve") {
-      updateAdminUserStatus(idNumber, "approved");
-    }
-    if (action === "reject") {
-      updateAdminUserStatus(idNumber, "rejected");
-    }
-  });
 
   const adminSearchInput = document.getElementById("admin-search");
   const adminResetButton = document.getElementById("admin-reset");
@@ -4837,6 +5179,8 @@ function getTeacherDashboardUploadSubjectId() {
 }
 
 function setupTeacherDashboard() {
+  redirectAdminFromTeacherOnlyPages();
+  ensureTeacherSidebarNav();
   const subjectId = getTeacherDashboardSubjectFilter();
   if (
     subjectId &&
@@ -5098,7 +5442,10 @@ function buildTeacherJoinCodeBlockHtml(subject) {
     </div>`;
 }
 
-function buildSubjectCardHtml(subject) {
+function buildSubjectCardHtml(subject, options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
+  const showMenu = opts.showMenu !== false;
+  const archivedView = !!opts.archivedView;
   const safeId = String(subject.id).replace(/'/g, "\\'");
   const color = subject.color || "#60a5fa";
   const name = subject.name || "Untitled subject";
@@ -5106,23 +5453,113 @@ function buildSubjectCardHtml(subject) {
   const count = Number(subject.published_lesson_count || 0);
   const lessonsLabel = count === 1 ? "1 lesson" : `${count} lessons`;
   const targetUrl = `my-lesson.html?subject_id=${encodeURIComponent(subject.id)}`;
+  const status = String(subject.enrollment_status || "active").toLowerCase();
+  const statusPill =
+    status === "archived"
+      ? '<span class="lesson-card-pill subject-status-pill"><i class="fa-solid fa-box-archive"></i> Archived</span>'
+      : status === "unenrolled"
+      ? '<span class="lesson-card-pill subject-status-pill"><i class="fa-solid fa-user-minus"></i> Unenrolled</span>'
+      : "";
+  const menuHtml = showMenu
+    ? `
+      <div class="subject-card-menu-wrap">
+        <button type="button" class="subject-card-menu-btn" aria-label="Subject options" aria-haspopup="menu" aria-expanded="false" data-subject-menu-toggle="${safeId}">
+          <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+        </button>
+        <div class="subject-card-menu" role="menu" hidden data-subject-menu="${safeId}">
+          <button type="button" role="menuitem" data-subject-action="archive" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}">
+            <i class="fa-solid fa-box-archive" aria-hidden="true"></i> Archive
+          </button>
+          <button type="button" role="menuitem" data-subject-action="unenroll" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}">
+            <i class="fa-solid fa-user-minus" aria-hidden="true"></i> Unenroll
+          </button>
+        </div>
+      </div>`
+    : "";
+  const openBtn =
+    archivedView && status === "unenrolled"
+      ? `<span class="btn btn-secondary btn-small" aria-disabled="true">Unenrolled</span>`
+      : `<a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>`;
   return `
-    <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+    <article class="lesson-card subject-card-themed subject-card-with-menu" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
       <div class="lesson-info">
         <h4>${escapeHtml(name)}</h4>
         <div class="lesson-card-meta-row">
           <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${lessonsLabel}</span>
           <span class="lesson-card-pill"><i class="fa-solid fa-bookmark"></i> Subject</span>
+          ${statusPill}
         </div>
         <p class="lesson-card-tagline">${escapeHtml(description)}</p>
         <p class="lesson-card-features small-note">Reviewer • Quiz • Activities</p>
       </div>
+      ${menuHtml}
       <div class="lesson-actions">
-        <a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>
+        ${openBtn}
       </div>
     </article>
   `;
+}
+
+function closeAllSubjectCardMenus() {
+  document.querySelectorAll(".subject-card-menu").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-subject-menu-toggle]").forEach((btn) => {
+    btn.setAttribute("aria-expanded", "false");
+  });
+}
+
+async function confirmSubjectEnrollmentAction(subjectName, action) {
+  const title =
+    action === "archive" ? "Archive this subject?" : "Unenroll from this subject?";
+  const message =
+    action === "archive"
+      ? "Are you sure you want to archive this subject?"
+      : `Are you sure you want to unenroll from ${subjectName || "this subject"}? It will be removed from My subjects.`;
+  if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+    return window.LearnIQConfirm.show({
+      title,
+      message,
+      confirmText: action === "archive" ? "Archive" : "Unenroll",
+      cancelText: "Cancel",
+      variant: action === "unenroll" ? "danger" : "default",
+    });
+  }
+  return window.confirm(`${title}\n\n${message}`);
+}
+
+async function patchStudentSubjectEnrollment(subjectId, action) {
+  const studentId = getStudentIdNumberForApi();
+  if (!studentId) throw new Error("Please sign in as a student.");
+  const response = await fetch(
+    apiUrl(`/student/subjects/${encodeURIComponent(subjectId)}/enrollment`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student_id_number: studentId, action }),
+    }
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "Could not update enrollment.");
+  }
+  return data;
+}
+
+function applyLessonCountsToSubjects(subjects, lessons) {
+  const liveCounts = lessons.reduce((acc, l) => {
+    const sid = l.subject_id ? String(l.subject_id) : "";
+    if (sid) acc[sid] = (acc[sid] || 0) + 1;
+    return acc;
+  }, {});
+  return subjects.map((s) => ({
+    ...s,
+    published_lesson_count:
+      liveCounts[String(s.id)] != null
+        ? liveCounts[String(s.id)]
+        : s.published_lesson_count || 0,
+  }));
 }
 
 async function renderSubjectsPage() {
@@ -5134,6 +5571,7 @@ async function renderSubjectsPage() {
   if (!listEl || !selectionEl || !emptyEl) return;
 
   if (joinPanel) joinPanel.hidden = false;
+  closeAllSubjectCardMenus();
 
   const studentId = getStudentIdNumberForApi();
   if (!studentId) {
@@ -5150,10 +5588,7 @@ async function renderSubjectsPage() {
     const lessonsUrl = apiUrl(
       `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
     );
-    const [subjectsRes, lessonsRes] = await Promise.all([
-      fetch(subjectsUrl),
-      fetch(lessonsUrl),
-    ]);
+    const [subjectsRes, lessonsRes] = await Promise.all([fetch(subjectsUrl), fetch(lessonsUrl)]);
 
     let subjects = [];
     if (subjectsRes.ok) {
@@ -5167,18 +5602,7 @@ async function renderSubjectsPage() {
       lessons = Array.isArray(data.lessons) ? data.lessons : [];
     }
 
-    const liveCounts = lessons.reduce((acc, l) => {
-      const sid = l.subject_id ? String(l.subject_id) : "";
-      if (sid) acc[sid] = (acc[sid] || 0) + 1;
-      return acc;
-    }, {});
-    subjects = subjects.map((s) => ({
-      ...s,
-      published_lesson_count:
-        liveCounts[String(s.id)] != null
-          ? liveCounts[String(s.id)]
-          : (s.published_lesson_count || 0),
-    }));
+    subjects = applyLessonCountsToSubjects(subjects, lessons);
 
     if (subjects.length === 0) {
       selectionEl.hidden = true;
@@ -5192,7 +5616,7 @@ async function renderSubjectsPage() {
 
     emptyEl.hidden = true;
     selectionEl.hidden = false;
-    listEl.innerHTML = subjects.map(buildSubjectCardHtml).join("");
+    listEl.innerHTML = subjects.map((s) => buildSubjectCardHtml(s, { showMenu: true })).join("");
   } catch (e) {
     console.log("DEBUG: renderSubjectsPage failed:", e);
     selectionEl.hidden = true;
@@ -5206,6 +5630,7 @@ async function renderSubjectsPage() {
 function setupSubjectsPage() {
   console.log("PAGE INIT RUNNING: setupSubjectsPage() called");
   hydrateStudentSidebarChip();
+  initRoleAwareDashboardSidebar();
   void hydrateSidebarProfileFromDatabase();
 
   const joinForm = document.getElementById("student-join-subject-form");
@@ -5247,7 +5672,190 @@ function setupSubjectsPage() {
     renderSubjectsPage();
   });
 
+  if (!window.__subjectsPageMenuBound) {
+    window.__subjectsPageMenuBound = true;
+    document.addEventListener("click", async (event) => {
+      const toggle = event.target.closest("[data-subject-menu-toggle]");
+      if (toggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = toggle.getAttribute("data-subject-menu-toggle");
+        const menu = document.querySelector(`[data-subject-menu="${subjectId}"]`);
+        const wasOpen = menu && !menu.hidden;
+        closeAllSubjectCardMenus();
+        if (menu && !wasOpen) {
+          menu.hidden = false;
+          toggle.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
+      const actionBtn = event.target.closest("[data-subject-action]");
+      if (actionBtn) {
+        event.preventDefault();
+        closeAllSubjectCardMenus();
+        const action = actionBtn.getAttribute("data-subject-action");
+        const subjectId = actionBtn.getAttribute("data-subject-id");
+        const subjectName = actionBtn.getAttribute("data-subject-name") || "";
+        if (!subjectId || !action) return;
+        const ok = await confirmSubjectEnrollmentAction(subjectName, action);
+        if (!ok) return;
+        try {
+          await patchStudentSubjectEnrollment(subjectId, action);
+          showToast(
+            action === "archive"
+              ? "Subject archived. It stays in My subjects."
+              : "Unenrolled. View it under Archived in the sidebar.",
+            "success"
+          );
+          await renderSubjectsPage();
+        } catch (err) {
+          showToast(err.message || "Could not update subject.", "error");
+        }
+        return;
+      }
+
+      if (!event.target.closest(".subject-card-menu-wrap")) {
+        closeAllSubjectCardMenus();
+      }
+    });
+  }
+
   void renderSubjectsPage();
+}
+
+function buildArchivedLessonCardHtml(lesson, subjectId, canOpen) {
+  const lid = String(lesson.file_id || "").replace(/'/g, "\\'");
+  const sid = String(subjectId || "").replace(/'/g, "\\'");
+  const teacherName = lesson.teacher_name || lesson.teacher_id_number || "Teacher";
+  const createdLabel = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString() : "";
+  const title = escapeHtml(lesson.filename || "Untitled lesson");
+  if (!canOpen) {
+    return `
+      <article class="lesson-card archived-lesson-card is-disabled">
+        <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
+        <div class="lesson-info">
+          <h4>${title}</h4>
+          <p class="small-note archived-lessons-empty">Lesson unavailable — you unenrolled from this subject.</p>
+        </div>
+      </article>`;
+  }
+  const openUrl = `my-lesson.html?subject_id=${encodeURIComponent(subjectId)}`;
+  return `
+    <article class="lesson-card archived-lesson-card">
+      <div class="lesson-card-icon"><i class="fa-solid fa-file-lines"></i></div>
+      <div class="lesson-info">
+        <h4>${title}</h4>
+        <div class="lesson-card-meta-row">
+          <span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ${escapeHtml((lesson.file_type || "file").toUpperCase())}</span>
+          ${createdLabel ? `<span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ${createdLabel}</span>` : ""}
+          <span class="lesson-card-pill"><i class="fa-solid fa-user"></i> ${escapeHtml(teacherName)}</span>
+        </div>
+        <p class="lesson-card-features small-note">Reviewer • Quiz • Activities</p>
+      </div>
+      <div class="lesson-actions lesson-actions-split">
+        <button type="button" class="btn btn-secondary btn-small" onclick="event.stopPropagation(); viewStudentLessonFile('${lid}')">View</button>
+        <a class="btn btn-primary btn-small" href="${openUrl}">Open</a>
+      </div>
+    </article>`;
+}
+
+function buildArchivedSubjectBlockHtml(subject, lessons) {
+  const status = String(subject.enrollment_status || "archived").toLowerCase();
+  const canOpen = status === "archived";
+  const sid = String(subject.id);
+  const subjectLessons = lessons.filter((l) => String(l.subject_id || "") === sid);
+  const cardHtml = buildSubjectCardHtml(subject, { showMenu: false, archivedView: true });
+  const lessonsHtml =
+    subjectLessons.length > 0
+      ? subjectLessons
+          .map((l) => buildArchivedLessonCardHtml(l, sid, canOpen))
+          .join("")
+      : `<p class="small-note archived-lessons-empty">${
+          canOpen
+            ? "No published lessons for this subject yet."
+            : "You unenrolled — lessons are no longer available."
+        }</p>`;
+  return `
+    <section class="archived-subject-block" data-subject-id="${escapeHtml(sid)}">
+      ${cardHtml}
+      <div class="archived-subject-lessons">
+        <h4>Lessons</h4>
+        <div class="lesson-grid">${lessonsHtml}</div>
+      </div>
+    </section>`;
+}
+
+async function renderStudentArchivedPage() {
+  const root = document.getElementById("archived-subjects-root");
+  const emptyEl = document.getElementById("archived-empty");
+  const contentEl = document.getElementById("archived-content");
+  const emptyText = document.getElementById("archived-empty-text");
+  if (!root || !emptyEl || !contentEl) return;
+
+  const studentId = getStudentIdNumberForApi();
+  if (!studentId) {
+    emptyEl.hidden = false;
+    contentEl.hidden = true;
+    if (emptyText) emptyText.textContent = "Please sign in as a student to view archived subjects.";
+    root.innerHTML = "";
+    return;
+  }
+
+  try {
+    const archivedUrl = apiUrl(
+      `/student/subjects/archived?student_id_number=${encodeURIComponent(studentId)}`
+    );
+    const lessonsUrl = apiUrl(
+      `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
+    );
+    const [archivedRes, lessonsRes] = await Promise.all([fetch(archivedUrl), fetch(lessonsUrl)]);
+
+    let subjects = [];
+    if (archivedRes.ok) {
+      const data = await archivedRes.json();
+      subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    }
+
+    let lessons = [];
+    if (lessonsRes.ok) {
+      const data = await lessonsRes.json();
+      lessons = Array.isArray(data.lessons) ? data.lessons : [];
+    }
+
+    subjects = applyLessonCountsToSubjects(subjects, lessons);
+
+    if (subjects.length === 0) {
+      emptyEl.hidden = false;
+      contentEl.hidden = true;
+      root.innerHTML = "";
+      return;
+    }
+
+    emptyEl.hidden = true;
+    contentEl.hidden = false;
+    root.innerHTML = subjects.map((s) => buildArchivedSubjectBlockHtml(s, lessons)).join("");
+  } catch (e) {
+    console.log("renderStudentArchivedPage failed:", e);
+    emptyEl.hidden = false;
+    contentEl.hidden = true;
+    if (emptyText) {
+      emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+    }
+    root.innerHTML = "";
+  }
+}
+
+function setupStudentArchivedPage() {
+  hydrateStudentSidebarChip();
+  initRoleAwareDashboardSidebar();
+  void hydrateSidebarProfileFromDatabase();
+
+  document.getElementById("archived-refresh-btn")?.addEventListener("click", () => {
+    void renderStudentArchivedPage();
+  });
+
+  void renderStudentArchivedPage();
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -5705,9 +6313,9 @@ function setupTeacherSubjectLessonsPage() {
     return;
   }
 
+  ensureTeacherSidebarNav();
   hydrateStudentSidebarChip();
   void hydrateSidebarProfileFromDatabase();
-  initRoleAwareDashboardSidebar();
 
   void hydrateTeacherSubjectLessonsPage();
   setupTeacherSubjectLessonsTabs();
@@ -5717,6 +6325,7 @@ function setupTeacherSubjectLessonsPage() {
 
 function setupTeacherSubjectsPage() {
   console.log("PAGE INIT RUNNING: setupTeacherSubjectsPage() called");
+  ensureTeacherSidebarNav();
   hydrateStudentSidebarChip();
   void hydrateSidebarProfileFromDatabase();
 
@@ -6121,14 +6730,7 @@ async function fetchAdminTeachers() {
   if (!res.ok) throw new Error(`/users status ${res.status}`);
   const rows = await res.json();
   const list = Array.isArray(rows) ? rows : (rows.users || []);
-  return list.filter((u) => {
-    const role = String(u.role || "").trim().toLowerCase();
-    if (role !== "teacher") return false;
-    const status = String(u.approval_status || "approved").trim().toLowerCase();
-    // Show approved teachers by default; pending/rejected are hidden from the
-    // drill-down because they normally cannot upload lessons anyway.
-    return status === "approved";
-  });
+  return list.filter((u) => String(u.role || "").trim().toLowerCase() === "teacher");
 }
 
 async function fetchAdminAllLessons() {
@@ -6223,7 +6825,7 @@ async function renderAdminTeachersView() {
     adminAllLessonsCache = lessons;
 
     if (!teachers.length) {
-      showAdminEmpty("No teachers yet", "There are no approved teachers in the system yet.");
+      showAdminEmpty("No teachers yet", "There are no teachers in the system yet.");
       return;
     }
 
@@ -6942,6 +7544,65 @@ let quizScore = 0;
   return studentLessons.filter((l) => String(l.subject_id || "") === String(selectedSubjectId));
 }
 
+function applySubjectTeacherAvatar(el, avatarData, displayName) {
+  if (!el) return;
+  const av = String(avatarData || "").trim();
+  const initials = getUserInitials(displayName || "Teacher");
+  if (av) {
+    el.style.backgroundImage = `url("${av.replace(/"/g, "%22")}")`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.backgroundRepeat = "no-repeat";
+    el.classList.add("avatar-has-image");
+    el.textContent = "";
+  } else {
+    el.style.backgroundImage = "";
+    el.classList.remove("avatar-has-image");
+    el.textContent = initials;
+  }
+}
+
+function renderSubjectTeacherProfile() {
+  const card = document.getElementById("subject-teacher-profile");
+  const avatarEl = document.getElementById("subject-teacher-avatar");
+  const nameEl = document.getElementById("subject-teacher-name");
+  const idEl = document.getElementById("subject-teacher-id");
+  if (!card) return;
+
+  if (!selectedSubjectId || String(selectedSubjectId) === "__unassigned__") {
+    card.hidden = true;
+    return;
+  }
+
+  const subjectMeta = studentSubjects.find((s) => String(s.id) === String(selectedSubjectId));
+  let teacherName =
+    (subjectMeta?.teacher_name || "").trim() ||
+    (subjectMeta?.created_by_teacher_id_number || "").trim();
+  let teacherId =
+    (subjectMeta?.teacher_id_number || subjectMeta?.created_by_teacher_id_number || "").trim();
+  let teacherAvatar = (subjectMeta?.teacher_avatar_data || "").trim();
+
+  if (!teacherName) {
+    const sampleLesson = getActiveStudentLessons().find(
+      (l) => l.teacher_name || l.teacher_id_number
+    );
+    if (sampleLesson) {
+      teacherName = (sampleLesson.teacher_name || sampleLesson.teacher_id_number || "").trim();
+      teacherId = teacherId || String(sampleLesson.teacher_id_number || "").trim();
+    }
+  }
+
+  if (!teacherName) {
+    card.hidden = true;
+    return;
+  }
+
+  card.hidden = false;
+  if (nameEl) nameEl.textContent = teacherName;
+  if (idEl) idEl.textContent = teacherId ? `ID ${teacherId}` : "";
+  applySubjectTeacherAvatar(avatarEl, teacherAvatar, teacherName);
+}
+
 function updateMyLessonHeaderForSubject() {
   const headerTitle = document.getElementById("student-lesson-panel-title");
   const headerSubtitle = document.getElementById("student-lesson-panel-subtitle");
@@ -6981,6 +7642,7 @@ function renderLessonSelection() {
   }
 
   updateMyLessonHeaderForSubject();
+  renderSubjectTeacherProfile();
 
   const lessons = getActiveStudentLessons();
   selectionEl.hidden = false;
@@ -8630,12 +9292,11 @@ if (typeof window !== "undefined") {
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired:", window.location.pathname);
+  redirectAdminFromTeacherOnlyPages();
+  initAdminSidebar();
   initRoleAwareDashboardSidebar();
   initTeacherLearniqSidebarProfile();
   animateProgressBars();
-  if (document.getElementById("admin-sidebar-name") || document.getElementById("admin-sidebar-avatar")) {
-    hydrateAdminSidebarFromSession();
-  }
   setupForms();
   setupSignupPage();
   
@@ -8661,6 +9322,15 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.location.pathname.includes('teacher-subjects.html')) {
     setupTeacherSubjectsPage();
   }
+  if (window.location.pathname.includes("teacher-student-registration.html")) {
+    setupTeacherStudentRegistrationPage();
+  }
+  if (window.location.pathname.includes("admin-teacher-registration.html")) {
+    setupAdminTeacherRegistrationPage();
+  }
+  if (window.location.pathname.includes("admin-student-registration.html")) {
+    setupAdminStudentRegistrationPage();
+  }
   if (window.location.pathname.includes("immersion-dashboard.html")) {
     setupImmersionDashboard();
   }
@@ -8675,6 +9345,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (window.location.pathname.includes('subjects.html')) {
     setupSubjectsPage();
+  }
+  if (window.location.pathname.includes("student-archived.html")) {
+    setupStudentArchivedPage();
   }
   if (window.location.pathname.includes('history.html')) {
     setupStudentHistoryPage();
@@ -9551,6 +10224,10 @@ function setupProfilePage() {
 
   setupProfilePhotoEditor(u);
   setupProfileDetailsEditor(u);
+
+  if (typeof window.initStudentLearningIQ === "function") {
+    window.initStudentLearningIQ();
+  }
 
   // Fetch latest profile from the database (source of truth) and re-render
   // once the cache is updated. Running in the background so the initial

@@ -21,6 +21,28 @@ from supabase_client import supabase
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
+# profiles table column (renamed from id_number)
+PROFILE_LRN_COLUMN = "lrn"
+
+
+def profile_lrn_from_row(profile: dict[str, Any] | None) -> str:
+    """LRN / school ID from a profiles row (supports legacy id_number key in memory)."""
+    if not profile:
+        return ""
+    return str(profile.get(PROFILE_LRN_COLUMN) or profile.get("id_number") or "").strip()
+
+
+def normalize_profile_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Ensure API consumers still receive id_number alongside lrn."""
+    if not row:
+        return None
+    out = dict(row)
+    lrn = profile_lrn_from_row(out)
+    if lrn:
+        out[PROFILE_LRN_COLUMN] = lrn
+        out["id_number"] = lrn
+    return out
+
 
 def _sb():
     if supabase is None:
@@ -35,12 +57,12 @@ def get_profile_by_credentials(id_number: str, email: str) -> dict[str, Any] | N
             _sb()
             .table("profiles")
             .select("*")
-            .eq("id_number", id_number)
+            .eq(PROFILE_LRN_COLUMN, id_number)
             .eq("email", email.lower().strip())
             .single()
             .execute()
         )
-        return response.data
+        return normalize_profile_row(response.data)
     except Exception as e:
         print(f"Error getting profile by credentials: {e}")
         return None
@@ -57,17 +79,24 @@ def get_profile_by_email(email: str) -> dict[str, Any] | None:
             .single()
             .execute()
         )
-        return response.data
+        return normalize_profile_row(response.data)
     except Exception as e:
         print(f"Error getting profile by email: {e}")
         return None
 
 
 def get_profile_by_id_number(id_number: str) -> dict[str, Any] | None:
-    """Profile row for a school ID number (used for attendance_logs.student_id FK)."""
+    """Profile row for school LRN / ID (used for attendance_logs.student_id FK)."""
     try:
-        res = _sb().table("profiles").select("*").eq("id_number", id_number.strip()).limit(1).execute()
-        return res.data[0] if res.data else None
+        res = (
+            _sb()
+            .table("profiles")
+            .select("*")
+            .eq(PROFILE_LRN_COLUMN, id_number.strip())
+            .limit(1)
+            .execute()
+        )
+        return normalize_profile_row(res.data[0] if res.data else None)
     except Exception as e:
         print(f"Error get_profile_by_id_number: {e}")
         return None
@@ -95,18 +124,19 @@ def profile_display_name(profile: dict[str, Any] | None) -> str:
         suffix = (profile.get("name_suffix") or "").strip()
         name = " ".join(parts)
         return f"{name} {suffix}".strip() if suffix else name
-    return (profile.get("id_number") or "").strip() or "User"
+    return profile_lrn_from_row(profile) or "User"
 
 
-_PROFILE_NAME_COLS = "id, last_name, first_name, middle_name, name_suffix, id_number, role"
+_PROFILE_NAME_COLS = "id, last_name, first_name, middle_name, name_suffix, lrn, role"
 
 
 def serialize_public_profile(prof: dict[str, Any] | None) -> dict[str, Any]:
     """API/session shape without full_name."""
     if not prof:
         return {}
-    p = dict(prof)
+    p = normalize_profile_row(dict(prof)) or {}
     p.pop("password", None)
+    lrn = profile_lrn_from_row(p)
     return {
         "id": p.get("id"),
         "display_name": profile_display_name(p),
@@ -114,10 +144,10 @@ def serialize_public_profile(prof: dict[str, Any] | None) -> dict[str, Any]:
         "last_name": (p.get("last_name") or "").strip(),
         "middle_name": (p.get("middle_name") or "").strip(),
         "name_suffix": (p.get("name_suffix") or "").strip(),
-        "id_number": p.get("id_number"),
+        "lrn": lrn,
+        "id_number": lrn,
         "email": p.get("email"),
         "role": p.get("role"),
-        "approval_status": p.get("approval_status"),
         "grade_level": p.get("grade_level"),
         "strand": p.get("strand"),
         "bio": p.get("bio") or "",
@@ -134,7 +164,6 @@ def insert_profile(
     email: str,
     password: str,
     role: str = "student",
-    approval_status: str = "pending",
     auth_user_id: str | None = None,
     *,
     last_name: str | None = None,
@@ -147,11 +176,10 @@ def insert_profile(
     if not last_name or not first_name:
         raise ValueError("last_name and first_name are required.")
     row = {
-        "id_number": id_number,
+        PROFILE_LRN_COLUMN: id_number.strip(),
         "email": email.lower().strip(),
         "password": password,
         "role": role,
-        "approval_status": approval_status,
         "last_name": last_name.strip(),
         "first_name": first_name.strip(),
     }
@@ -169,7 +197,8 @@ def insert_profile(
         row["id"] = auth_user_id
 
     res = _sb().table("profiles").insert(row).execute()
-    return res.data[0] if res.data else row
+    inserted = res.data[0] if res.data else row
+    return normalize_profile_row(inserted) or inserted
 
 
 def list_profiles() -> list[dict[str, Any]]:
@@ -183,35 +212,12 @@ def get_all_profiles() -> list[dict[str, Any]]:
     profiles = res.data or []
     out: list[dict[str, Any]] = []
     for profile in profiles:
-        row = dict(profile)
+        row = normalize_profile_row(dict(profile)) or {}
         row.pop("password", None)
         row.pop("full_name", None)
         row["display_name"] = profile_display_name(row)
         out.append(row)
     return out
-
-
-def update_user_approval_status(id_number: str, approval_status: str) -> bool:
-    """Update a user's approval status."""
-    try:
-        print(f"DEBUG: Database update - id_number: {id_number}, approval_status: {approval_status}")
-        result = (
-            _sb()
-            .table("profiles")
-            .update({"approval_status": approval_status})
-            .eq("id_number", id_number)
-            .execute()
-        )
-        print(f"DEBUG: Database update result data: {result.data}")
-        print(f"DEBUG: Database update result length: {len(result.data) if result.data else 0}")
-        return len(result.data) > 0
-    except Exception as e:
-        print(f"Error updating user approval status: {e}")
-        return False
-
-
-def update_profile_status(id_number: str, approval_status: str) -> None:
-    _sb().table("profiles").update({"approval_status": approval_status}).eq("id_number", id_number).execute()
 
 
 # Fields the signed-in user can edit on their own profile page.
@@ -242,10 +248,11 @@ def update_profile_extras(id_number: str, fields: dict[str, Any]) -> dict[str, A
         _sb()
         .table("profiles")
         .update(cleaned)
-        .eq("id_number", id_number.strip())
+        .eq(PROFILE_LRN_COLUMN, id_number.strip())
         .execute()
     )
-    return res.data[0] if res.data else None
+    updated = res.data[0] if res.data else None
+    return normalize_profile_row(updated)
 
 
 def insert_lesson(
@@ -488,7 +495,7 @@ def _profile_uuid_to_id_number() -> dict[str, str]:
     m: dict[str, str] = {}
     for p in get_all_profiles():
         pid = p.get("id")
-        num = p.get("id_number")
+        num = profile_lrn_from_row(p)
         if pid and num:
             m[str(pid)] = str(num).strip()
     return m
@@ -577,7 +584,9 @@ def list_all_attendance_logs(limit: int = 200) -> list[dict[str, Any]]:
     """All immersion / attendance rows for admin view (recent first)."""
     profiles = get_all_profiles()
     by_uuid = {str(p["id"]): p for p in profiles if p.get("id")}
-    by_idnum = {str(p.get("id_number") or "").strip(): p for p in profiles if p.get("id_number")}
+    by_idnum = {
+        profile_lrn_from_row(p): p for p in profiles if profile_lrn_from_row(p)
+    }
 
     res = None
     for order_col in ("logged_at", "time_in", "created_at"):
@@ -638,7 +647,9 @@ def list_all_journals_admin(limit: int = 200) -> list[dict[str, Any]]:
     """All journal rows for admin review (recent first)."""
     profiles = get_all_profiles()
     by_uuid = {str(p["id"]): p for p in profiles if p.get("id")}
-    by_idnum = {str(p.get("id_number") or "").strip(): p for p in profiles if p.get("id_number")}
+    by_idnum = {
+        profile_lrn_from_row(p): p for p in profiles if profile_lrn_from_row(p)
+    }
 
     rows: list[dict[str, Any]] = []
     for order_col in ("submitted_at", "created_at"):
@@ -682,12 +693,11 @@ def get_admin_recent_activity(limit: int = 12) -> list[dict[str, Any]]:
         ts = p.get("created_at")
         nm = profile_display_name(p)
         role = str(p.get("role") or "").strip().lower()
-        st = str(p.get("approval_status") or "pending").strip()
         items.append(
             {
                 "kind": "profile",
                 "title": f'{nm or "Account"} ({role or "user"})',
-                "detail": f"Registration status: {st}",
+                "detail": "New account registered",
                 "timestamp": ts,
             }
         )
@@ -749,16 +759,8 @@ def get_admin_dashboard_stats() -> dict[str, Any]:
     def rrole(p: dict[str, Any]) -> str:
         return str(p.get("role") or "").strip().lower()
 
-    def st(p: dict[str, Any]) -> str:
-        return str(p.get("approval_status") or "pending").strip().lower()
-
     total_students = sum(1 for p in profiles if rrole(p) == "student")
     total_teachers = sum(1 for p in profiles if rrole(p) == "teacher")
-    pending_approvals = sum(
-        1 for p in profiles if st(p) == "pending" and rrole(p) in ("student", "teacher")
-    )
-    approved_accounts = sum(1 for p in profiles if st(p) == "approved")
-    rejected_accounts = sum(1 for p in profiles if st(p) == "rejected")
 
     lessons_rows = list_all_lessons()
     lessons_published = sum(1 for row in lessons_rows if row.get("is_published"))
@@ -767,9 +769,6 @@ def get_admin_dashboard_stats() -> dict[str, Any]:
         "total_accounts": len(profiles),
         "total_students": total_students,
         "total_teachers": total_teachers,
-        "pending_approvals": pending_approvals,
-        "approved_accounts": approved_accounts,
-        "rejected_accounts": rejected_accounts,
         "uploaded_files": count_lessons_total(),
         "lessons_total": count_lessons_total(),
         "lessons_published": lessons_published,
@@ -1380,7 +1379,8 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
             {
                 "student_id": sid,
                 "display_name": profile_display_name(prof),
-                "id_number": (str(prof.get("id_number") or "").strip()),
+                "id_number": profile_lrn_from_row(prof),
+                "lrn": profile_lrn_from_row(prof),
                 "total_points": int(v["total_score"]),
                 "quiz_attempts": int(v["attempts"]),
                 "progress_pct": pct,
@@ -1717,7 +1717,8 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
             {
                 "id": uid,
                 "display_name": profile_display_name(prof),
-                "id_number": (str(prof.get("id_number") or "").strip() or None),
+                "id_number": profile_lrn_from_row(prof) or None,
+                "lrn": profile_lrn_from_row(prof) or None,
                 "pct": st_pct,
                 "score": s,
                 "hit_month": bool(raw.get("hit_month")),
@@ -1733,7 +1734,7 @@ def get_teacher_learniq_dashboard_stats(teacher_id_number: str) -> dict[str, Any
         top = max(scoped, key=lambda x: (x["pct"], x["score"]))
         if top.get("display_name"):
             sp["top_name"] = top["display_name"]
-            sp["top_id_number"] = top.get("id_number")
+            sp["top_id_number"] = profile_lrn_from_row(top)
             sp["top_pct"] = top["pct"]
     base["student_performance"] = sp
 
@@ -1827,7 +1828,7 @@ def get_student_learniq_dashboard_stats(student_id_number: str) -> dict[str, Any
 
     rank = None
     for e in entries:
-        if (e.get("id_number") or "").strip() == sid_key:
+        if profile_lrn_from_row(e) == sid_key:
             rank = int(e.get("rank") or 0)
             break
 
@@ -1864,6 +1865,206 @@ def get_student_learniq_dashboard_stats(student_id_number: str) -> dict[str, Any
         "rank_note": rank_note,
         "published_lessons_count": pub,
         "leaderboard_preview": preview,
+    }
+
+
+def _row_dt_utc(val: Any) -> datetime | None:
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def compute_student_learning_iq(student_id_number: str) -> dict[str, Any]:
+    """
+    LearnIQ Learning IQ (0–100) from real activity — not clinical IQ.
+    Sources: quiz_attempts, student_learning_events (activity/reviewer).
+    """
+    sid_key = (student_id_number or "").strip()
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    pid = profile_uuid_for_id_number(sid_key) if sid_key else None
+
+    quiz_accuracy = 0.0
+    practice_breadth = 0.0
+    activity_engagement = 0.0
+    study_consistency = 0.0
+    quiz_attempts = 0
+    lessons_practiced = 0
+    activity_events = 0
+    reviewer_events = 0
+
+    active_days: set[str] = set()
+
+    if pid or sid_key:
+        try:
+            res = _sb().table("quiz_attempts").select("*").execute()
+            distinct_lessons: set[str] = set()
+            total_score = 0
+            total_tq = 0
+            cutoff_14 = now - timedelta(days=14)
+
+            for r in res.data or []:
+                rsid = r.get("student_id")
+                if rsid:
+                    if str(rsid).strip() != str(pid):
+                        continue
+                else:
+                    if (r.get("student_id_number") or "").strip() != sid_key:
+                        continue
+
+                try:
+                    sc = int(float(r.get("score") or 0))
+                except (TypeError, ValueError):
+                    sc = 0
+                try:
+                    tq = int(float(r.get("total_questions") or 0))
+                except (TypeError, ValueError):
+                    tq = 0
+                total_score += sc
+                total_tq += tq
+                quiz_attempts += 1
+                lid = r.get("lesson_id")
+                if lid:
+                    distinct_lessons.add(str(lid))
+                tdt = _row_dt_utc(r.get("submitted_at") or r.get("created_at"))
+                if tdt is not None and tdt >= cutoff_14:
+                    active_days.add(tdt.date().isoformat())
+
+            lessons_practiced = len(distinct_lessons)
+            quiz_accuracy = (
+                round(100.0 * float(total_score) / total_tq, 1) if total_tq > 0 else 0.0
+            )
+        except Exception as e:
+            print(f"compute_student_learning_iq quiz_attempts: {e}")
+
+        activity_rows = list_student_learning_events(sid_key, "activity", limit=80)
+        reviewer_rows = list_student_learning_events(sid_key, "reviewer", limit=80)
+        activity_events = len(activity_rows)
+        reviewer_events = len(reviewer_rows)
+        activity_engagement = min(100.0, float(activity_events) * 20.0)
+
+        cutoff_14 = now - timedelta(days=14)
+        for ev in activity_rows + reviewer_rows:
+            tdt = _row_dt_utc(ev.get("timestamp"))
+            if tdt is not None and tdt >= cutoff_14:
+                active_days.add(tdt.date().isoformat())
+
+        pub = count_published_lessons()
+        if pub > 0:
+            practice_breadth = min(
+                100.0, round(100.0 * float(lessons_practiced) / float(pub), 1)
+            )
+        elif lessons_practiced > 0:
+            practice_breadth = 50.0
+
+        study_consistency = min(100.0, round(100.0 * len(active_days) / 14.0, 1))
+
+    has_data = quiz_attempts > 0 or activity_events > 0 or reviewer_events > 0
+
+    if not has_data:
+        return {
+            "computed_at": now_iso,
+            "is_computed": True,
+            "has_data": False,
+            "score": 0,
+            "strengths": [],
+            "improvements": [
+                "Complete your first quiz",
+                "Try lesson activities",
+            ],
+            "encouragement": (
+                "Start in My lesson — take a quiz or finish an activity to build your Learning IQ."
+            ),
+            "components": {
+                "quiz_accuracy": 0.0,
+                "practice_breadth": 0.0,
+                "activity_engagement": 0.0,
+                "study_consistency": 0.0,
+            },
+            "stats": {
+                "quiz_attempts": 0,
+                "lessons_practiced": 0,
+                "activity_events": 0,
+                "reviewer_events": 0,
+            },
+        }
+
+    score = int(
+        round(
+            0.40 * quiz_accuracy
+            + 0.25 * practice_breadth
+            + 0.20 * activity_engagement
+            + 0.15 * study_consistency
+        )
+    )
+    score = max(0, min(100, score))
+
+    strengths: list[str] = []
+    improvements: list[str] = []
+
+    if quiz_accuracy >= 75.0:
+        strengths.append("Strong quiz performance")
+    if study_consistency >= 55.0:
+        strengths.append("Consistent studying")
+    if practice_breadth >= 50.0:
+        strengths.append("Regular lesson practice")
+    if activity_engagement >= 60.0:
+        strengths.append("Active on lesson activities")
+
+    if quiz_accuracy < 65.0 and quiz_attempts > 0:
+        improvements.append("Quiz accuracy")
+    if activity_engagement < 50.0:
+        improvements.append("Activity completion")
+    if study_consistency < 50.0:
+        improvements.append("Learning consistency")
+    if practice_breadth < 40.0:
+        improvements.append("More lessons practiced")
+
+    if not strengths:
+        strengths.append("Getting started — keep going")
+    if not improvements:
+        improvements.append("Keep your momentum")
+
+    if score >= 90:
+        encouragement = (
+            "Outstanding learning habits. Keep challenging yourself with new lessons and quizzes."
+        )
+    elif score >= 80:
+        encouragement = (
+            "You're showing strong learning consistency. Keep practicing activities to improve your Learning IQ."
+        )
+    elif score >= 70:
+        encouragement = (
+            "Solid progress. Focus on quizzes and activities you have not tried yet this week."
+        )
+    else:
+        encouragement = (
+            "Every quiz and activity counts. Practice a little each day to raise your Learning IQ."
+        )
+
+    return {
+        "computed_at": now_iso,
+        "is_computed": True,
+        "has_data": True,
+        "score": score,
+        "strengths": strengths[:4],
+        "improvements": improvements[:4],
+        "encouragement": encouragement,
+        "components": {
+            "quiz_accuracy": quiz_accuracy,
+            "practice_breadth": practice_breadth,
+            "activity_engagement": round(activity_engagement, 1),
+            "study_consistency": study_consistency,
+        },
+        "stats": {
+            "quiz_attempts": quiz_attempts,
+            "lessons_practiced": lessons_practiced,
+            "activity_events": activity_events,
+            "reviewer_events": reviewer_events,
+        },
     }
 
 
@@ -2506,6 +2707,22 @@ def _period_date_range(period: dict[str, Any] | None) -> tuple[str | None, str |
 
 # ---------- Enrollments ----------
 
+ENROLLMENT_STATUS_ACTIVE = "active"
+ENROLLMENT_STATUS_ARCHIVED = "archived"
+ENROLLMENT_STATUS_UNENROLLED = "unenrolled"
+_MY_SUBJECTS_STATUSES = (ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_ARCHIVED)
+_ARCHIVED_LIST_STATUSES = (ENROLLMENT_STATUS_ARCHIVED, ENROLLMENT_STATUS_UNENROLLED)
+
+
+def enrollment_status_from_row(row: dict[str, Any] | None) -> str:
+    if not row:
+        return ENROLLMENT_STATUS_ACTIVE
+    raw = (row.get("enrollment_status") or ENROLLMENT_STATUS_ACTIVE).strip().lower()
+    if raw in _ARCHIVED_LIST_STATUSES or raw == ENROLLMENT_STATUS_ACTIVE:
+        return raw
+    return ENROLLMENT_STATUS_ACTIVE
+
+
 def list_enrollments_for_student(
     student_uuid: str,
     period_id: str | None = None,
@@ -2573,6 +2790,7 @@ def upsert_enrollment(
         "subject_id": str(subject_id),
         "teacher_id_number": teacher_id_number,
         "grading_period_id": grading_period_id,
+        "enrollment_status": ENROLLMENT_STATUS_ACTIVE,
     }
     try:
         res = (
@@ -2587,28 +2805,67 @@ def upsert_enrollment(
         return None
 
 
-def student_enrollment_exists(
+def get_student_enrollment_row(
     student_uuid: str,
     subject_id: str,
     grading_period_id: str | None,
-) -> bool:
+) -> dict[str, Any] | None:
     if not student_uuid or not subject_id:
-        return False
+        return None
     try:
         q = (
             _sb()
             .table("enrollments")
-            .select("id")
+            .select("*")
             .eq("student_id", student_uuid)
             .eq("subject_id", str(subject_id))
         )
         if grading_period_id:
             q = q.eq("grading_period_id", grading_period_id)
         res = q.limit(1).execute()
-        return bool(res.data)
+        return res.data[0] if res.data else None
     except Exception as e:
-        print(f"student_enrollment_exists: {e}")
+        print(f"get_student_enrollment_row: {e}")
+        return None
+
+
+def student_enrollment_exists(
+    student_uuid: str,
+    subject_id: str,
+    grading_period_id: str | None,
+) -> bool:
+    row = get_student_enrollment_row(student_uuid, subject_id, grading_period_id)
+    if not row:
         return False
+    return enrollment_status_from_row(row) in _MY_SUBJECTS_STATUSES
+
+
+def update_student_enrollment_status(
+    student_uuid: str,
+    subject_id: str,
+    grading_period_id: str | None,
+    new_status: str,
+) -> dict[str, Any] | None:
+    if not student_uuid or not subject_id:
+        return None
+    status = (new_status or "").strip().lower()
+    if status not in _ARCHIVED_LIST_STATUSES and status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError("Invalid enrollment status.")
+    row = get_student_enrollment_row(student_uuid, subject_id, grading_period_id)
+    if not row or not row.get("id"):
+        return None
+    try:
+        res = (
+            _sb()
+            .table("enrollments")
+            .update({"enrollment_status": status})
+            .eq("id", row["id"])
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"update_student_enrollment_status: {e}")
+        raise
 
 
 def _student_enrollment_access_map(
@@ -2618,6 +2875,8 @@ def _student_enrollment_access_map(
     """Map subject_id -> teacher_id_number filter for published lessons (None = any teacher)."""
     access: dict[str, str | None] = {}
     for row in list_enrollments_for_student(student_uuid, grading_period_id):
+        if enrollment_status_from_row(row) == ENROLLMENT_STATUS_UNENROLLED:
+            continue
         sid = row.get("subject_id")
         if not sid:
             nested = row.get("subjects") or {}
@@ -2646,8 +2905,18 @@ def join_subject_by_code(student_uuid: str, join_code: str) -> dict[str, Any]:
     period_id = period.get("id")
     if not period_id:
         raise ValueError("No grading period is configured. Ask your administrator.")
-    if student_enrollment_exists(student_uuid, subject_id, period_id):
-        raise ValueError("You are already enrolled in this subject")
+    existing = get_student_enrollment_row(student_uuid, subject_id, period_id)
+    if existing:
+        prior = enrollment_status_from_row(existing)
+        if prior in _MY_SUBJECTS_STATUSES:
+            raise ValueError("You are already enrolled in this subject")
+        if prior == ENROLLMENT_STATUS_UNENROLLED:
+            row = update_student_enrollment_status(
+                student_uuid, subject_id, period_id, ENROLLMENT_STATUS_ACTIVE
+            )
+            if not row:
+                raise RuntimeError("Could not re-enroll.")
+            return {"subject": subject, "enrollment": row}
     teacher_id = (subject.get("created_by_teacher_id_number") or "").strip() or None
     row = upsert_enrollment(
         student_uuid=student_uuid,
@@ -2663,6 +2932,8 @@ def join_subject_by_code(student_uuid: str, join_code: str) -> dict[str, Any]:
 def list_enrolled_subjects_for_student(
     student_uuid: str,
     grading_period_id: str | None = None,
+    *,
+    statuses: tuple[str, ...] = _MY_SUBJECTS_STATUSES,
 ) -> list[dict[str, Any]]:
     """Subjects the student is enrolled in for the given (or current) grading period."""
     if not student_uuid:
@@ -2675,6 +2946,8 @@ def list_enrolled_subjects_for_student(
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for row in list_enrollments_for_student(student_uuid, period_id):
+        if enrollment_status_from_row(row) not in statuses:
+            continue
         nested = row.get("subjects") or {}
         sid = row.get("subject_id") or nested.get("id")
         if not sid:
@@ -2691,8 +2964,49 @@ def list_enrolled_subjects_for_student(
         }
         full = dict(full)
         full["published_lesson_count"] = pub_counts.get(key, 0)
+        full["enrollment_status"] = enrollment_status_from_row(row)
         out.append(full)
+    _enrich_subjects_with_teacher_profiles(out)
     return sorted(out, key=lambda x: (x.get("name") or "").lower())
+
+
+def _enrich_subjects_with_teacher_profiles(subjects: list[dict[str, Any]]) -> None:
+    """Attach teacher_name, teacher_id_number, teacher_avatar_data for student UI."""
+    teacher_idns: set[str] = set()
+    for s in subjects:
+        tidn = (s.get("created_by_teacher_id_number") or "").strip()
+        if tidn:
+            teacher_idns.add(tidn)
+    if not teacher_idns:
+        return
+    profile_map: dict[str, dict[str, Any]] = {}
+    for tidn in teacher_idns:
+        prof = get_profile_by_id_number(tidn)
+        if prof:
+            profile_map[tidn] = prof
+    for s in subjects:
+        tidn = (s.get("created_by_teacher_id_number") or "").strip()
+        if not tidn:
+            s["teacher_name"] = None
+            s["teacher_id_number"] = None
+            s["teacher_avatar_data"] = ""
+            continue
+        prof = profile_map.get(tidn)
+        s["teacher_id_number"] = tidn
+        s["teacher_name"] = profile_display_name(prof) if prof else tidn
+        s["teacher_avatar_data"] = (prof.get("avatar_data") or "") if prof else ""
+
+
+def list_archived_subjects_for_student(
+    student_uuid: str,
+    grading_period_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Archived + unenrolled subjects for the Archived section."""
+    return list_enrolled_subjects_for_student(
+        student_uuid,
+        grading_period_id,
+        statuses=_ARCHIVED_LIST_STATUSES,
+    )
 
 
 def student_can_view_published_lesson(student_uuid: str, lesson: dict[str, Any]) -> bool:
@@ -3234,6 +3548,19 @@ def normalize_profile_strand(strand: str | None) -> str | None:
     return _STRAND_ALIASES.get(raw, raw)
 
 
+def normalize_profile_grade_level(grade_level: str | None) -> str | None:
+    """SHS grade level from profiles.grade_level — returns '11', '12', or None."""
+    s = str(grade_level or "").strip().lower()
+    if not s:
+        return None
+    m = re.search(r"\b(11|12)\b", s)
+    if m:
+        return m.group(1)
+    if s in ("11", "12"):
+        return s
+    return None
+
+
 def _teacher_owned_subject_ids(teacher_id_number: str) -> list[str]:
     tid = (teacher_id_number or "").strip()
     if not tid:
@@ -3278,8 +3605,8 @@ def _fetch_student_profiles_by_uuids(uuids: set[str] | list[str]) -> list[dict[s
     if not ids:
         return []
     cols = (
-        "id, last_name, first_name, middle_name, name_suffix, id_number, "
-        "email, role, approval_status, grade_level, strand, section"
+        "id, last_name, first_name, middle_name, name_suffix, lrn, "
+        "email, role, grade_level, strand, section"
     )
     out: list[dict[str, Any]] = []
     chunk = 80
@@ -3294,7 +3621,10 @@ def _fetch_student_profiles_by_uuids(uuids: set[str] | list[str]) -> list[dict[s
                 .eq("role", "student")
                 .execute()
             )
-            out.extend(res.data or [])
+            for row in res.data or []:
+                normalized = normalize_profile_row(row)
+                if normalized:
+                    out.append(normalized)
         except Exception as e:
             print(f"_fetch_student_profiles_by_uuids: {e}")
     return out
@@ -3305,26 +3635,42 @@ def list_gradecard_strands_for_teacher(teacher_id_number: str) -> list[dict[str,
     student_uuids = _student_uuids_enrolled_in_teacher_subjects(teacher_id_number)
     profiles = _fetch_student_profiles_by_uuids(student_uuids)
     counts: dict[str, int] = {s: 0 for s in SHS_STRANDS}
+    grade_counts: dict[str, dict[str, int]] = {
+        s: {"11": 0, "12": 0} for s in SHS_STRANDS
+    }
     unassigned = 0
+    unassigned_grades = {"11": 0, "12": 0}
     for p in profiles:
-        status = str(p.get("approval_status") or "").strip().lower()
-        if status and status not in ("approved", "active"):
-            continue
         norm = normalize_profile_strand(p.get("strand"))
+        gl = normalize_profile_grade_level(p.get("grade_level"))
         if norm in counts:
             counts[norm] += 1
+            if gl in ("11", "12"):
+                grade_counts[norm][gl] += 1
         else:
             unassigned += 1
+            if gl in ("11", "12"):
+                unassigned_grades[gl] += 1
     rows = [
         {
             "strand": s,
             "label": s,
             "student_count": counts[s],
+            "grade_11_count": grade_counts[s]["11"],
+            "grade_12_count": grade_counts[s]["12"],
         }
         for s in SHS_STRANDS
     ]
     if unassigned:
-        rows.append({"strand": "__unassigned__", "label": "No strand set", "student_count": unassigned})
+        rows.append(
+            {
+                "strand": "__unassigned__",
+                "label": "No strand set",
+                "student_count": unassigned,
+                "grade_11_count": unassigned_grades["11"],
+                "grade_12_count": unassigned_grades["12"],
+            }
+        )
     return rows
 
 
@@ -3333,6 +3679,7 @@ def list_gradecard_students_for_teacher(
     strand: str,
     *,
     search: str | None = None,
+    grade_level: str | None = None,
 ) -> list[dict[str, Any]]:
     """Students in a strand enrolled in the teacher's subjects."""
     norm_strand = normalize_profile_strand(strand)
@@ -3344,21 +3691,27 @@ def list_gradecard_students_for_teacher(
         if not norm_strand or norm_strand not in SHS_STRANDS:
             return []
 
+    norm_grade = normalize_profile_grade_level(grade_level) if grade_level else None
+    if grade_level and norm_grade not in ("11", "12"):
+        return []
+
     student_uuids = _student_uuids_enrolled_in_teacher_subjects(teacher_id_number)
     profiles = _fetch_student_profiles_by_uuids(student_uuids)
     needle = (search or "").strip().lower()
     out: list[dict[str, Any]] = []
 
     for p in profiles:
-        status = str(p.get("approval_status") or "").strip().lower()
-        if status and status not in ("approved", "active"):
-            continue
         p_strand = normalize_profile_strand(p.get("strand"))
         if match_unassigned:
             if p_strand in SHS_STRANDS:
                 continue
         elif p_strand != norm_strand:
             continue
+
+        if norm_grade:
+            p_grade = normalize_profile_grade_level(p.get("grade_level"))
+            if p_grade != norm_grade:
+                continue
 
         row = serialize_public_profile(p)
         if needle:
@@ -3901,7 +4254,7 @@ def build_full_gradecard(
     summary_out = {
         "id": summary_row.get("id"),
         "reference_no": summary_row.get("reference_no")
-            or _generate_reference_no(student.get("id_number"), period),
+            or _generate_reference_no(profile_lrn_from_row(student), period),
         "general_average": summary_row.get("general_average")
             if summary_row.get("general_average") is not None else auto_general,
         "general_average_auto": auto_general,
@@ -3922,7 +4275,8 @@ def build_full_gradecard(
     return {
         "student": {
             "id": student_uuid,
-            "id_number": student.get("id_number"),
+            "lrn": profile_lrn_from_row(student),
+            "id_number": profile_lrn_from_row(student),
             "display_name": profile_display_name(student),
             "first_name": student.get("first_name"),
             "last_name": student.get("last_name"),
@@ -3937,7 +4291,8 @@ def build_full_gradecard(
             "adviser_id_number": adviser_idn or None,
         },
         "adviser": ({
-            "id_number": adviser_profile.get("id_number"),
+            "lrn": profile_lrn_from_row(adviser_profile),
+            "id_number": profile_lrn_from_row(adviser_profile),
             "display_name": profile_display_name(adviser_profile),
         } if adviser_profile else None),
         "period": period,

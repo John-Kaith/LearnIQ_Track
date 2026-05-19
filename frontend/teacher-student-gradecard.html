@@ -11,10 +11,10 @@
   <link rel="stylesheet" href="style.css?v=2026051802" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js?v=2026051802" defer></script>
-  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026051802" defer></script>
+  <script src="script.js?v=202605201" defer></script>
+  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026052102" defer></script>
 </head>
-<body class="teacher-learniq-page teacher-student-gradecard-page">
+<body class="teacher-learniq-page teacher-student-gradecard-page" data-sidebar-active="gradecard">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -27,15 +27,7 @@
         </a>
       </div>
 
-      <nav class="side-links">
-        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
-        <a href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
-        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
-        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
-        <a class="active" href="teacher-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
-        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
-      </nav>
+      <nav class="side-links" aria-label="Teacher navigation"></nav>
 
       <div class="sidebar-footer">
         <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
@@ -63,7 +55,17 @@
       </section>
 
       <section class="glass-card content-card gradecard-picker" id="gradecard-picker">
-        <nav class="gradecard-breadcrumb" id="gradecard-breadcrumb" aria-label="Gradecard navigation"></nav>
+        <div class="gradecard-picker-header">
+          <nav class="gradecard-breadcrumb" id="gradecard-breadcrumb" aria-label="Gradecard navigation"></nav>
+          <div class="workspace-tabs gradecard-grade-tabs" role="tablist" aria-label="Filter by grade level">
+            <button type="button" class="workspace-tab is-active" data-gradecard-grade="11" id="gradecard-grade-tab-11">
+              Grade 11 <span class="users-tab-count" id="gradecard-grade-count-11" hidden></span>
+            </button>
+            <button type="button" class="workspace-tab" data-gradecard-grade="12" id="gradecard-grade-tab-12">
+              Grade 12 <span class="users-tab-count" id="gradecard-grade-count-12" hidden></span>
+            </button>
+          </div>
+        </div>
 
         <div id="gradecard-strand-step" class="gradecard-step">
           <div class="gradecard-step-head">

@@ -20,6 +20,7 @@ from pypdf import PdfReader
 from supabase import create_client, Client
 
 import db_supabase
+import email_service
 import immersion_upload
 from supabase_client import is_configured
 
@@ -107,7 +108,7 @@ def student_id_number_from_authorization(authorization: str | None) -> str | Non
         prof = db_supabase.get_profile_by_email(email)
         if not prof:
             return None
-        sid = prof.get("id_number")
+        sid = db_supabase.profile_lrn_from_row(prof)
         return str(sid).strip() if sid else None
     except Exception as e:
         print("student_id_number_from_authorization:", e)
@@ -318,22 +319,34 @@ def test_db():
             email=test_email,
             password="TempPass123",
             role="student",
-            approval_status="pending",
             last_name="Test",
             first_name="Supabase",
         )
-        result["insert_ok"] = bool(inserted and inserted.get("id_number") == test_id)
+        result["insert_ok"] = bool(
+            inserted and db_supabase.profile_lrn_from_row(inserted) == test_id
+        )
 
-        rows = [r for r in db_supabase.list_profiles() if r.get("id_number") == test_id]
+        rows = [
+            r
+            for r in db_supabase.list_profiles()
+            if db_supabase.profile_lrn_from_row(r) == test_id
+        ]
         result["select_ok"] = bool(rows)
 
-        db_supabase.update_profile_status(test_id, "approved")
-        rows_after = [r for r in db_supabase.list_profiles() if r.get("id_number") == test_id]
-        result["update_ok"] = bool(rows_after and rows_after[0].get("approval_status") == "approved")
+        rows_after = [
+            r
+            for r in db_supabase.list_profiles()
+            if db_supabase.profile_lrn_from_row(r) == test_id
+        ]
+        result["update_ok"] = bool(rows_after)
 
         # Keep test data out of production tables.
-        db_supabase._sb().table("profiles").delete().eq("id_number", test_id).execute()
-        rows_cleanup = [r for r in db_supabase.list_profiles() if r.get("id_number") == test_id]
+        db_supabase._sb().table("profiles").delete().eq(db_supabase.PROFILE_LRN_COLUMN, test_id).execute()
+        rows_cleanup = [
+            r
+            for r in db_supabase.list_profiles()
+            if db_supabase.profile_lrn_from_row(r) == test_id
+        ]
         result["cleanup_ok"] = not rows_cleanup
 
         result["message"] = "Supabase test completed."
@@ -365,17 +378,47 @@ async def login_user(body: dict):
         return err
     
     try:
-        email = (body.get("email") or "").strip()
         password = body.get("password") or ""
-        print(f"LOGIN EMAIL: {email}")
-        
-        print(f"DEBUG: Extracted email: '{email}', password: {'*' * len(password) if password else 'None'}")
-        
-        if not email or not password:
-            print(f"DEBUG: Missing email or password")
-            return JSONResponse({"error": "email and password are required."}, status_code=400)
-        
-        # Authenticate with Supabase
+        identifier = (
+            body.get("identifier")
+            or body.get("email")
+            or body.get("lrn")
+            or body.get("id_number")
+            or ""
+        ).strip()
+        login_method = (body.get("login_method") or "").strip().lower()
+
+        if not identifier or not password:
+            return JSONResponse(
+                {"error": "LRN or email and password are required."},
+                status_code=400,
+            )
+
+        use_email = login_method == "email" or (
+            login_method != "lrn" and "@" in identifier
+        )
+
+        if use_email:
+            email = identifier.lower()
+            user_profile = db_supabase.get_profile_by_email(email)
+            if not user_profile:
+                return JSONResponse({"error": "Invalid credentials."}, status_code=401)
+        else:
+            user_profile = db_supabase.get_profile_by_id_number(identifier)
+            if not user_profile:
+                return JSONResponse({"error": "Invalid credentials."}, status_code=401)
+            email = (user_profile.get("email") or "").strip().lower()
+            if not email:
+                return JSONResponse(
+                    {
+                        "error": "No email is linked to this LRN. Contact your administrator."
+                    },
+                    status_code=404,
+                )
+
+        print(f"LOGIN IDENTIFIER: {identifier!r}, AUTH EMAIL: {email}")
+
+        # Authenticate with Supabase (email + password)
         print(f"DEBUG: Attempting Supabase auth for email: {email}")
         try:
             auth_response = supabase.auth.sign_in_with_password({
@@ -394,32 +437,6 @@ async def login_user(body: dict):
         if not auth_response.user:
             print(f"DEBUG: No user returned from auth")
             return JSONResponse({"error": "Invalid credentials."}, status_code=401)
-        
-        # Get user profile from our profiles table
-        print(f"DEBUG: Looking up profile for email: {email}")
-        try:
-            user_profile = db_supabase.get_profile_by_email(email)
-            print(f"DEBUG: Profile lookup result: {user_profile}")
-            print(f"LOGIN DATABASE RESULT: {user_profile}")
-        except Exception as profile_error:
-            print(f"DEBUG: Profile lookup exception: {profile_error}")
-            print(f"DEBUG: Profile exception type: {type(profile_error)}")
-            return JSONResponse({"error": "Database error during profile lookup."}, status_code=500)
-        
-        if not user_profile:
-            print(f"DEBUG: No profile found for email: {email}")
-            return JSONResponse({"error": "User profile not found."}, status_code=404)
-        
-        # Check approval status
-        approval_status = user_profile.get("approval_status", "pending")
-        print(f"DEBUG: User approval status: {approval_status}")
-        
-        if approval_status == "pending":
-            print(f"DEBUG: User account pending approval")
-            return JSONResponse({"error": "Your account is still pending approval."}, status_code=403)
-        elif approval_status == "rejected":
-            print(f"DEBUG: User account rejected")
-            return JSONResponse({"error": "Your registration was not approved. Please contact the administrator."}, status_code=403)
         
         # Return safe user data with auth session
         print(f"DEBUG: Preparing successful response")
@@ -568,13 +585,24 @@ async def register_user(body: dict):
         return err
     try:
         id_number = (body.get("id_number") or "").strip()
-        email = (body.get("email") or "").strip()
-        password = body.get("password") or ""
+        email = (body.get("email") or "").strip().lower()
+        password_raw = (body.get("password") or "").strip()
+        auto_generate = bool(body.get("auto_generate_password")) or not password_raw
+        password = password_raw or (
+            email_service.generate_registration_password()
+            if auto_generate
+            else ""
+        )
         role = (body.get("role") or "student").strip().lower()
 
-        if not id_number or not email or not password:
+        if not id_number or not email:
             return JSONResponse(
-                {"error": "id_number, email, and password are required."},
+                {"error": "id_number and email are required."},
+                status_code=400,
+            )
+        if not password:
+            return JSONResponse(
+                {"error": "password is required, or leave it blank to auto-generate."},
                 status_code=400,
             )
 
@@ -639,7 +667,6 @@ async def register_user(body: dict):
             email=email,
             password="",
             role=role,
-            approval_status="pending",
             auth_user_id=auth_response.user.id,
             last_name=last_name,
             first_name=first_name,
@@ -651,10 +678,50 @@ async def register_user(body: dict):
         
         profile = dict(profile)
         profile.pop("password", None)
-        
+
+        credentials_emailed = False
+        credentials_email_error = None
+        if auto_generate and not password_raw:
+            sent_ok, err = await asyncio.to_thread(
+                email_service.send_registration_credentials_email,
+                to_email=email,
+                first_name=first_name,
+                last_name=last_name,
+                middle_name=middle_name,
+                name_suffix=name_suffix or "",
+                lrn=id_number,
+                login_email=email,
+                password=password,
+                role=role,
+            )
+            credentials_emailed = sent_ok
+            credentials_email_error = err
+
+        if auto_generate and not password_raw and credentials_emailed:
+            message = (
+                "Account created. Login credentials were emailed to "
+                f"{email} (LRN/ID, email, and password)."
+            )
+        elif auto_generate and not password_raw:
+            message = (
+                "Account created with an auto-generated password, but the "
+                "credentials email could not be sent."
+            )
+            if credentials_email_error:
+                message += f" {credentials_email_error}"
+        else:
+            message = (
+                "Account created successfully. "
+                "You can sign in after confirming your email."
+            )
+
         return {
             "user": profile,
-            "message": "Account created successfully. Please check your email to confirm your account."
+            "message": message,
+            "email": email,
+            "auto_generated_password": auto_generate and not password_raw,
+            "credentials_emailed": credentials_emailed,
+            "credentials_email_error": credentials_email_error,
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
@@ -737,51 +804,6 @@ def admin_recent_activity(limit: int = Query(default=12, ge=1, le=50)):
         return err
     try:
         return {"items": db_supabase.get_admin_recent_activity(limit)}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
-
-
-@app.patch("/users")
-def update_user_status(body: dict):
-    err = require_supabase()
-    if err is not None:
-        return err
-    try:
-        id_number = body.get("id_number")
-        approval_status = body.get("approval_status")
-        
-        print(f"DEBUG: Received approval request - id_number: {id_number}, approval_status: {approval_status}")
-        
-        if not id_number or not approval_status:
-            return JSONResponse({"error": "id_number and approval_status are required."}, status_code=400)
-        
-        if approval_status not in ("pending", "approved", "rejected"):
-            print(f"DEBUG: Invalid approval_status value: {approval_status}")
-            return JSONResponse({"error": "Invalid approval_status."}, status_code=400)
-        
-        print(f"DEBUG: Calling database update for id_number: {id_number}")
-        success = db_supabase.update_user_approval_status(id_number, approval_status)
-        print(f"DEBUG: Database update result: {success}")
-        
-        if not success:
-            return JSONResponse({"error": "User not found."}, status_code=404)
-        
-        return {"message": f"User status updated to {approval_status}"}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@app.patch("/profiles/{id_number}/status")
-async def patch_profile_status(id_number: str, body: dict):
-    err = require_supabase()
-    if err is not None:
-        return err
-    new_status = (body.get("approval_status") or "").strip().lower()
-    if new_status not in ("pending", "approved", "rejected"):
-        return JSONResponse({"error": "approval_status must be pending, approved, or rejected."}, status_code=400)
-    try:
-        db_supabase.update_profile_status(id_number, new_status)
-        return {"id_number": id_number, "approval_status": new_status}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1009,6 +1031,82 @@ def list_student_enrolled_subjects_endpoint(
     try:
         subjects = db_supabase.list_enrolled_subjects_for_student(student_uuid, period_id)
         return {"subjects": subjects, "count": len(subjects)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/subjects/archived")
+def list_student_archived_subjects_endpoint(
+    student_id_number: str = Query(...),
+    period_id: str | None = Query(default=None),
+):
+    """Subjects the student archived or unenrolled (hidden unenrolled from My subjects)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    student_uuid = db_supabase.profile_uuid_for_id_number(sid)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+    try:
+        subjects = db_supabase.list_archived_subjects_for_student(student_uuid, period_id)
+        return {"subjects": subjects, "count": len(subjects)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.patch("/student/subjects/{subject_id}/enrollment")
+async def patch_student_subject_enrollment_endpoint(
+    subject_id: str,
+    body: dict = Body(...),
+):
+    """Archive or unenroll a student from a subject (updates Supabase enrollments)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    payload = body if isinstance(body, dict) else {}
+    student_id_number = str(payload.get("student_id_number") or "").strip()
+    action = str(payload.get("action") or "").strip().lower()
+    if not student_id_number:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    if action not in ("archive", "unenroll"):
+        return JSONResponse(
+            {"error": "action must be archive or unenroll"},
+            status_code=400,
+        )
+    student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
+    if not student_uuid:
+        return JSONResponse({"error": "Student not found"}, status_code=404)
+    period_id = payload.get("grading_period_id")
+    if not period_id:
+        cur = db_supabase.get_current_grading_period() or {}
+        period_id = cur.get("id")
+    new_status = (
+        db_supabase.ENROLLMENT_STATUS_ARCHIVED
+        if action == "archive"
+        else db_supabase.ENROLLMENT_STATUS_UNENROLLED
+    )
+    try:
+        row = db_supabase.get_student_enrollment_row(
+            student_uuid, str(subject_id), period_id
+        )
+        if not row:
+            return JSONResponse({"error": "Enrollment not found"}, status_code=404)
+        updated = db_supabase.update_student_enrollment_status(
+            student_uuid, str(subject_id), period_id, new_status
+        )
+        if not updated:
+            return JSONResponse({"error": "Could not update enrollment"}, status_code=502)
+        return {
+            "ok": True,
+            "action": action,
+            "enrollment_status": new_status,
+            "enrollment": updated,
+        }
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1747,6 +1845,21 @@ def get_student_dashboard_stats(authorization: str | None = Header(default=None)
         return JSONResponse({"error": "Sign in required."}, status_code=401)
     try:
         return db_supabase.get_student_learniq_dashboard_stats(sid)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/learning-iq")
+def get_student_learning_iq_endpoint(authorization: str | None = Header(default=None)):
+    """LearnIQ Learning IQ score from quiz attempts and learning events (Bearer token)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = student_id_number_from_authorization(authorization)
+    if not sid:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        return db_supabase.compute_student_learning_iq(sid)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -2745,6 +2858,7 @@ def teacher_gradecard_students_endpoint(
     teacher_id_number: str = Query(...),
     strand: str = Query(...),
     q: str | None = Query(default=None),
+    grade_level: str | None = Query(default=None),
 ):
     """Students in a strand enrolled in the teacher's subjects."""
     err = require_supabase()
@@ -2756,11 +2870,21 @@ def teacher_gradecard_students_endpoint(
     st = str(strand or "").strip()
     if not st:
         return JSONResponse({"error": "strand is required"}, status_code=400)
+    gl = str(grade_level or "").strip() or None
+    if gl and gl not in ("11", "12"):
+        return JSONResponse(
+            {"error": "grade_level must be 11 or 12"}, status_code=400
+        )
     try:
         students = db_supabase.list_gradecard_students_for_teacher(
-            tid, st, search=q
+            tid, st, search=q, grade_level=gl
         )
-        return {"strand": st, "students": students, "count": len(students)}
+        return {
+            "strand": st,
+            "grade_level": gl,
+            "students": students,
+            "count": len(students),
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 

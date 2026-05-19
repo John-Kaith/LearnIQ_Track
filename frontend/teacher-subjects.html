@@ -11,9 +11,9 @@
   <link rel="stylesheet" href="style.css" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=202605201" defer></script>
 </head>
-<body class="teacher-subjects-page">
+<body class="teacher-subjects-page teacher-learniq-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
     <aside class="sidebar glass-card">
       <div class="sidebar-header">
@@ -26,15 +26,7 @@
         </a>
       </div>
 
-      <nav class="side-links">
-        <a href="teacher-learniq-dashboard.html"><i class="fa-solid fa-chalkboard-user"></i> Dashboard</a>
-        <a class="active" href="teacher-subjects.html"><i class="fa-solid fa-book-open"></i> My Subjects</a>
-        <a href="ai-result.html"><i class="fa-solid fa-wand-sparkles"></i> Full lesson review</a>
-        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
-        <a href="teacher-student-gradecard.html"><i class="fa-solid fa-id-card"></i> Student Gradecard</a>
-        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="teacher-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
-      </nav>
+      <nav class="side-links" aria-label="Teacher navigation"></nav>
 
       <div class="sidebar-footer">
         <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">

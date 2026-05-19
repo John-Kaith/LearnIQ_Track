@@ -7,36 +7,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error(e);
   }
 
-  window.__studentApprovalsTab = "pending";
-
-  function setActiveTab(tab) {
-    window.__studentApprovalsTab = tab;
-    document.querySelectorAll("[data-student-approval-tab]").forEach((btn) => {
-      const on = btn.getAttribute("data-student-approval-tab") === tab;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-  }
-
-  document.querySelectorAll("[data-student-approval-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.getAttribute("data-student-approval-tab");
-      if (!tab) return;
-      setActiveTab(tab);
-      if (typeof loadPendingApprovals === "function") loadPendingApprovals();
-    });
-  });
-
   try {
     if (typeof loadPendingApprovals === "function") await loadPendingApprovals();
   } catch (e) {
     console.error(e);
   }
-
-  document.getElementById("refresh-approvals")?.addEventListener("click", () => {
-    if (typeof loadPendingApprovals === "function") loadPendingApprovals();
-    if (typeof showToast === "function") showToast("Student list refreshed.", "success");
-  });
 
   document.getElementById("approval-reset")?.addEventListener("click", () => {
     const s = document.getElementById("approval-search");
@@ -48,23 +23,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof loadPendingApprovals === "function") loadPendingApprovals();
   });
 
-  function handleStudentApprovalRowInteraction(event) {
+  function handleStudentRowInteraction(event) {
     const target = event.target;
     if (!target || typeof target.closest !== "function") return;
-
-    // Action buttons take priority — opening the profile would block them otherwise.
-    const actionEl = target.closest("[data-action]");
-    if (actionEl && actionEl.dataset.action && actionEl.dataset.id) {
-      const action = actionEl.dataset.action;
-      const idNumber = actionEl.dataset.id;
-      if (action === "approve" && typeof updateAdminUserStatus === "function") {
-        updateAdminUserStatus(idNumber, "approved");
-      }
-      if (action === "reject" && typeof updateAdminUserStatus === "function") {
-        updateAdminUserStatus(idNumber, "rejected");
-      }
-      return;
-    }
 
     const profileEl = target.closest("[data-profile-id]");
     if (profileEl && profileEl.dataset.profileId != null && profileEl.dataset.profileId !== "") {
@@ -78,15 +39,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const studentTableBody = document.getElementById("approval-table-body");
-  studentTableBody?.addEventListener("click", handleStudentApprovalRowInteraction);
+  studentTableBody?.addEventListener("click", handleStudentRowInteraction);
   studentTableBody?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
-    const row = event.target && typeof event.target.closest === "function"
-      ? event.target.closest("[data-profile-id]")
-      : null;
-    if (!row || event.target.closest("[data-action]")) return;
+    const row =
+      event.target && typeof event.target.closest === "function"
+        ? event.target.closest("[data-profile-id]")
+        : null;
+    if (!row) return;
     event.preventDefault();
-    handleStudentApprovalRowInteraction({ target: row, preventDefault: () => {} });
+    handleStudentRowInteraction({ target: row, preventDefault: () => {} });
   });
 
   const profileModal = document.getElementById("student-profile-modal");

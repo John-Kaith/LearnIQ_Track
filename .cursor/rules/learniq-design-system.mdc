@@ -1,0 +1,38 @@
+---
+description: LearnIQ unified visual design — Learning IQ card is the benchmark for all web and mobile UI
+globs: frontend/**/*,mobile-app/**/*
+alwaysApply: true
+---
+
+# LearnIQ Design System
+
+**Benchmark:** `frontend/css/learniq-design-system.css` — the **Learning IQ** card (`.lq-surface-premium`).
+
+Before adding or changing UI, ask: **"Would this belong beside the Learning IQ card?"** If not, redesign using the design system.
+
+## Design language
+
+- Premium dark educational platform
+- Background `#050b16`, purple/blue gradients, soft glow
+- Thin elegant borders, rounded premium corners, light glassmorphism
+- Professional, modern — not flashy
+
+## Rules
+
+1. Do **not** invent one-off colors, shadows, or radii per page.
+2. Use **tokens** (`--lq-*`) and **primitives** (`.lq-*` classes).
+3. Map existing patterns:
+   - Premium feature card → `.lq-surface-premium`
+   - Dashboard card → `.glass-card` / `.lq-surface-glass`
+   - Nested insight → `.lq-surface-inset`
+   - Buttons → `.btn-primary` / `.lq-btn--primary` (same styles)
+   - Inputs → standard `input` / `.lq-input` (focus ring from DS)
+   - Sidebar nav → `.side-links a` (active state from DS)
+   - Stat cards → `.stat-card` / `.lq-stat-card`
+   - Modals → `.action-modal` / `.lq-modal`
+
+4. **Mobile:** use `mobile-app/constants/learniqTheme.ts` — keep in sync with web tokens.
+
+5. Never label features as clinical/psychological "IQ tests." Use **Learning IQ** for the learning intelligence score only.
+
+6. Do **not** redesign entire pages unless asked — extend the system incrementally.

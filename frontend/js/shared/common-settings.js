@@ -74,8 +74,6 @@
     const idNumber = session.id_number || "—";
     const email = session.email || "—";
     const role = (session.role || "—").replace(/^./, (c) => c.toUpperCase());
-    const status = session.approval_status || "active";
-
     return `
       <section class="cs-panel">
         <!-- Account -->
@@ -88,10 +86,9 @@
             <div class="cs-account-avatar" aria-hidden="true">${esc(getInitials(name))}</div>
             <dl class="cs-account-fields">
               <div><dt>Name</dt><dd>${esc(name)}</dd></div>
-              <div><dt>ID Number</dt><dd>${esc(idNumber)}</dd></div>
+              <div><dt>LRN</dt><dd>${esc(idNumber)}</dd></div>
               <div><dt>Email</dt><dd>${esc(email)}</dd></div>
               <div><dt>Role</dt><dd>${esc(role)}</dd></div>
-              <div><dt>Status</dt><dd><span class="cs-pill cs-pill-${esc(String(status).toLowerCase())}">${esc(status)}</span></dd></div>
             </dl>
           </div>
         </article>
