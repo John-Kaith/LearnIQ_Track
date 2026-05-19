@@ -9626,3 +9626,135 @@ html[data-theme="light"] .dashboard-shell .sidebar {
   border-color: var(--lq-border-accent);
 }
 
+/* Class attendance (teacher subject + student my-lesson) */
+.class-attendance-teacher-panel {
+  margin-bottom: 1.25rem;
+}
+
+.class-attendance-teacher-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.class-attendance-teacher-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.class-attendance-teacher-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.class-attendance-teacher-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.class-attendance-live-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.class-attendance-live-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-md);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.class-attendance-live-student {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.class-attendance-live-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.class-attendance-live-thumb {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+  border: 1px solid var(--lq-border-subtle);
+}
+
+.class-attendance-student-card {
+  margin-bottom: 1rem;
+}
+
+.class-attendance-student-card.is-absent {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.class-attendance-student-card.is-submitted {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.class-attendance-student-card .immersion-clock-actions .btn:disabled {
+  opacity: 0.55;
+}
+
+.class-attendance-submitted-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.class-attendance-submitted-badge {
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+.class-attendance-student-card.is-submitted .immersion-capture-fields {
+  margin-top: 0.75rem;
+}
+
+.class-attendance-submitted-photo {
+  width: 100%;
+  max-width: 280px;
+  border-radius: var(--lq-radius-md, 0.5rem);
+  border: 1px solid var(--lq-border-subtle);
+  object-fit: cover;
+}
+
+.class-attendance-loc-badge {
+  align-self: flex-start;
+  font-size: 0.75rem;
+}
+
+.class-attendance-loc-badge--warn {
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fcd34d;
+}
+
+.class-attendance-live-meta {
+  flex-wrap: wrap;
+}
+
+.class-attendance-submitted-view .class-attendance-loc-badge {
+  margin-top: 0.15rem;
+}
+

@@ -83,13 +83,24 @@
       timeInBtn,
       timeOutBtn,
       onReadyChange,
+      initialMode,
     } = options;
 
     let mediaStream = null;
     let readyPayload = null;
-    let mode = "time_in";
+    let captureActive = true;
+    let mode = initialMode === "class_attendance" ? "class_attendance" : "time_in";
 
     const copy = {
+      class_attendance: {
+        idle: "",
+        ready: "Photo captured. Tap Submit attendance.",
+        preview: "Attendance photo",
+        timeLabel: "submitted:",
+        photoName: "class-attendance.jpg",
+        gpsError:
+          "Location permission denied. Allow location access to submit class attendance.",
+      },
       time_in: {
         idle: "Take a photo to capture your location and time before Time In.",
         ready: "Photo, location, and time captured. You can now tap Time In.",
@@ -114,7 +125,13 @@
 
     function setStatus(msg, isError) {
       if (!captureStatusEl) return;
-      captureStatusEl.textContent = msg || "";
+      const text = msg || "";
+      if (!text) {
+        captureStatusEl.textContent = "";
+        captureStatusEl.classList.remove("is-error");
+        return;
+      }
+      captureStatusEl.textContent = text;
       captureStatusEl.classList.toggle("is-error", Boolean(isError));
     }
 
@@ -136,7 +153,13 @@
       if (fieldTimeLabel) fieldTimeLabel.textContent = c.timeLabel;
       if (previewBadgeEl) previewBadgeEl.textContent = c.preview;
 
-      if (mode === "time_in") {
+      if (mode === "class_attendance") {
+        syncActionButton(
+          timeInBtn,
+          ready && captureActive,
+          captureActive ? "Take a photo first to enable Submit attendance" : "Waiting for teacher to start attendance"
+        );
+      } else if (mode === "time_in") {
         syncActionButton(timeInBtn, ready, "Take a photo first to enable Time In");
         if (timeOutBtn) {
           timeOutBtn.disabled = true;
@@ -161,8 +184,26 @@
     }
 
     function setMode(nextMode) {
-      mode = nextMode === "time_out" ? "time_out" : "time_in";
+      if (nextMode === "class_attendance") mode = "class_attendance";
+      else mode = nextMode === "time_out" ? "time_out" : "time_in";
       resetCapture();
+    }
+
+    function setCaptureActive(active, options) {
+      const clearFieldsOnDeactivate =
+        !options || options.clearFieldsOnDeactivate !== false;
+      captureActive = Boolean(active);
+      if (!captureActive) {
+        stopCamera();
+        readyPayload = null;
+        if (previewPanel) previewPanel.hidden = true;
+        if (takePhotoBtn) takePhotoBtn.disabled = true;
+        if (clearFieldsOnDeactivate) clearCaptureFields();
+        setStatus("", false);
+      } else if (takePhotoBtn && !readyPayload) {
+        takePhotoBtn.disabled = false;
+      }
+      notifyReady();
     }
 
     function stopCamera() {
@@ -198,7 +239,8 @@
       }
       if (takePhotoBtn) takePhotoBtn.disabled = false;
       clearCaptureFields();
-      setStatus(modeCopy().idle, false);
+      const idle = modeCopy().idle;
+      setStatus(idle, false);
       notifyReady();
     }
 
@@ -307,7 +349,7 @@
     }
 
     takePhotoBtn?.addEventListener("click", () => {
-      if (readyPayload) return;
+      if (!captureActive || readyPayload) return;
       void capturePhotoAndMetadata();
     });
     shutterBtn?.addEventListener("click", () => void shutterCapture());
@@ -317,11 +359,12 @@
       setStatus(modeCopy().idle, false);
     });
 
-    setMode("time_in");
+    setMode(mode);
 
     return {
       setMode,
       getMode: () => mode,
+      setCaptureActive,
       resetCapture,
       buildFormData,
       isReady: () => Boolean(readyPayload),

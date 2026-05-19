@@ -16,7 +16,9 @@
   <script src="js/shared/reviewer-markdown.js?v=202605153" defer></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/shared/ai-generation-cooldown.js?v=2026051803" defer></script>
-  <script src="script.js?v=2026051901" defer></script>
+  <script src="js/pages/immersion-capture.js?v=2026052122" defer></script>
+  <script src="script.js?v=2026052110" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026052122" defer></script>
 </head>
 <body class="my-lesson-page">
   <div class="dashboard-shell container">
@@ -64,6 +66,52 @@
 
       <section id="student-learning-block" class="dashboard-grid">
         <div class="content-stack lesson-workspace-main">
+          <article id="student-class-attendance-card" class="glass-card content-card class-attendance-student-card" hidden aria-label="Class attendance">
+            <div>
+              <h3><i class="fa-solid fa-camera"></i> Class attendance</h3>
+              <p class="content-subtitle" id="student-class-attendance-subtitle">Your teacher has not started attendance yet.</p>
+            </div>
+            <p class="small-note" id="student-class-attendance-status" role="status"></p>
+            <div id="student-class-attendance-submitted" class="class-attendance-submitted-view" hidden>
+              <span class="badge badge-soft class-attendance-submitted-badge">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Attendance submitted
+              </span>
+              <span id="student-class-location-verified-badge" class="badge class-attendance-loc-badge" hidden></span>
+              <img id="student-class-submitted-photo" class="class-attendance-submitted-photo" alt="Your submitted attendance photo" hidden loading="lazy" />
+            </div>
+            <p class="immersion-capture-status small-note" id="student-class-capture-status" role="status" hidden></p>
+            <div class="button-group immersion-clock-actions" id="student-class-attendance-actions" hidden>
+              <button type="button" class="btn btn-secondary" id="student-class-take-photo-btn" disabled>
+                <i class="fa-solid fa-camera"></i> Take photo
+              </button>
+              <button type="button" class="btn btn-secondary is-locked" id="student-class-check-in-btn" disabled>
+                <i class="fa-solid fa-paper-plane"></i> Submit attendance
+              </button>
+            </div>
+            <div id="student-class-camera-panel" class="immersion-camera-panel" hidden>
+              <video id="student-class-camera-video" playsinline muted></video>
+              <canvas id="student-class-camera-canvas" hidden></canvas>
+              <div class="immersion-camera-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="student-class-camera-shutter">Capture</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="student-class-camera-cancel">Cancel</button>
+              </div>
+            </div>
+            <div id="student-class-preview-panel" class="immersion-preview-panel" hidden>
+              <img id="student-class-preview-img" alt="Attendance photo preview" />
+              <span class="badge badge-soft" id="student-class-preview-badge">Photo preview</span>
+            </div>
+            <div class="immersion-capture-fields" id="student-class-capture-fields" hidden aria-live="polite">
+              <div class="immersion-meta-row">
+                <span class="immersion-meta-label">location:</span>
+                <span class="immersion-meta-value" id="student-class-field-location">—</span>
+              </div>
+              <div class="immersion-meta-row">
+                <span class="immersion-meta-label">time:</span>
+                <span class="immersion-meta-value" id="student-class-field-time">—</span>
+              </div>
+            </div>
+          </article>
+
           <article id="subject-teacher-profile" class="glass-card subject-teacher-strip" hidden aria-label="Subject instructor">
             <div class="subject-teacher-inner">
               <div class="avatar subject-teacher-avatar" id="subject-teacher-avatar" aria-hidden="true">TC</div>

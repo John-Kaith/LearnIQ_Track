@@ -3092,6 +3092,223 @@ def teacher_immersion_student_overview_endpoint(
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.post("/teacher/class-attendance/start")
+async def teacher_class_attendance_start_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    """Open today's class attendance for a subject (students can photo check-in)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(
+        authorization, body.get("teacher_id_number")
+    )
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    subject_id = str(body.get("subject_id") or "").strip()
+    if not subject_id:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    teacher_lat = body.get("teacher_latitude")
+    teacher_lon = body.get("teacher_longitude")
+    teacher_loc = str(body.get("teacher_start_location_name") or "").strip() or None
+    try:
+        lat = float(teacher_lat) if teacher_lat is not None else None
+        lon = float(teacher_lon) if teacher_lon is not None else None
+    except (TypeError, ValueError):
+        lat, lon = None, None
+    try:
+        session = db_supabase.start_class_attendance_session(
+            subject_id,
+            tid,
+            teacher_latitude=lat,
+            teacher_longitude=lon,
+            teacher_start_location_name=teacher_loc,
+        )
+        geofence = db_supabase._geofence_for_api(subject_id, session)
+        return {"session": session, "geofence": geofence}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/teacher/class-attendance/end")
+async def teacher_class_attendance_end_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    """Close class attendance session for today."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(
+        authorization, body.get("teacher_id_number")
+    )
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    session_id = str(body.get("session_id") or "").strip()
+    if not session_id:
+        return JSONResponse({"error": "session_id is required"}, status_code=400)
+    try:
+        session = db_supabase.end_class_attendance_session(session_id, tid)
+        return {"session": session}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/class-attendance/live")
+def teacher_class_attendance_live_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    subject_id: str = Query(...),
+):
+    """Live roster for polling while session is open (or today's final roster)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    try:
+        return db_supabase.build_class_attendance_live(sid, tid)
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/class-attendance/status")
+def student_class_attendance_status_endpoint(
+    authorization: str | None = Header(default=None),
+    subject_id: str = Query(...),
+):
+    """Whether class attendance is open for this subject and if the student checked in."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    student_id, bad = resolve_student_id_number_or_403({}, authorization)
+    if bad is not None:
+        return bad
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    prof = db_supabase.get_profile_by_id_number(student_id)
+    if not prof:
+        return JSONResponse({"error": "Student profile not found"}, status_code=404)
+    student_uuid = str(prof.get("id") or "")
+    try:
+        return db_supabase.get_student_class_attendance_status(
+            student_uuid, student_id, sid
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/student/class-attendance/check-in")
+async def student_class_attendance_check_in_endpoint(
+    authorization: str | None = Header(default=None),
+    subject_id: str = Form(...),
+    photo: UploadFile | None = File(None),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    readable_location_name: str | None = Form(None),
+    capture_timestamp: str | None = Form(None),
+):
+    """Photo check-in for class attendance (same capture rules as immersion Time In)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    student_id, bad = resolve_student_id_number_or_403({}, authorization)
+    if bad is not None:
+        return bad
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    prof = db_supabase.get_profile_by_id_number(student_id)
+    if not prof:
+        return JSONResponse({"error": "Student profile not found"}, status_code=404)
+    student_uuid = str(prof.get("id") or "")
+
+    if photo is None or not photo.filename:
+        return JSONResponse(
+            {"error": "Photo is required. Take a photo before checking in."},
+            status_code=400,
+        )
+    if latitude is None or longitude is None:
+        return JSONResponse(
+            {"error": "GPS location is required. Allow location when taking your photo."},
+            status_code=400,
+        )
+    try:
+        lat = float(latitude)
+        lon = float(longitude)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Invalid GPS coordinates."}, status_code=400)
+
+    try:
+        capture_dt = _parse_capture_timestamp_iso(capture_timestamp or "")
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    now_dt = datetime.now(timezone.utc)
+    if abs((now_dt - capture_dt).total_seconds()) > IMMERSION_CAPTURE_MAX_SKEW_MINUTES * 60:
+        return JSONResponse(
+            {
+                "error": f"Capture time must be within {IMMERSION_CAPTURE_MAX_SKEW_MINUTES} minutes of now.",
+            },
+            status_code=400,
+        )
+
+    location_label = (readable_location_name or "").strip()
+    if not location_label:
+        location_label = _reverse_geocode_location(lat, lon) or ""
+    if not location_label:
+        return JSONResponse(
+            {"error": "Could not determine your location. Allow GPS and try again."},
+            status_code=400,
+        )
+
+    raw = await photo.read()
+    content_type = (photo.content_type or "").lower()
+    if content_type and not content_type.startswith("image/"):
+        return JSONResponse({"error": "Only image files are allowed."}, status_code=400)
+    if len(raw) > immersion_upload.MAX_PHOTO_BYTES:
+        return JSONResponse({"error": "Photo is too large (max 6 MB)."}, status_code=400)
+
+    photo_b64 = base64.standard_b64encode(raw).decode("ascii")
+    try:
+        record = db_supabase.insert_class_attendance_checkin(
+            student_uuid,
+            student_id,
+            sid,
+            time_in_iso=now_dt.isoformat(),
+            captured_photo_base64=photo_b64,
+            latitude=lat,
+            longitude=lon,
+            readable_location_name=location_label,
+            capture_timestamp=capture_dt.isoformat(),
+        )
+        return {"record": record}
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get("/teacher/gradecard/students")
 def teacher_gradecard_students_endpoint(
     teacher_id_number: str = Query(...),

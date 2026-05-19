@@ -11,7 +11,8 @@
   <link rel="stylesheet" href="style.css?v=2026051618" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="script.js?v=202605201" defer></script>
+  <script src="script.js?v=2026052110" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026052120" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
@@ -79,6 +80,30 @@
             <span class="metric-note" id="teacher-stat-join-note">Share with students to join</span>
           </div>
         </article>
+      </section>
+
+      <section class="glass-card content-card class-attendance-teacher-panel" id="teacher-class-attendance-panel" aria-label="Class attendance">
+        <div class="class-attendance-teacher-head">
+          <div>
+            <h2><i class="fa-solid fa-clipboard-check"></i> Class attendance</h2>
+            <p class="small-note" id="teacher-class-attendance-hint">Start attendance so enrolled students can submit with a photo inside this subject (My lesson).</p>
+          </div>
+          <div class="class-attendance-teacher-actions">
+            <button type="button" class="btn btn-primary" id="teacher-class-attendance-start-btn">
+              <i class="fa-solid fa-play"></i> Start attendance
+            </button>
+            <button type="button" class="btn btn-secondary" id="teacher-class-attendance-end-btn" hidden disabled>
+              <i class="fa-solid fa-stop"></i> End attendance
+            </button>
+          </div>
+        </div>
+        <div class="class-attendance-teacher-stats" id="teacher-class-attendance-stats" hidden>
+          <span class="badge badge-soft" id="teacher-class-attendance-status-badge">—</span>
+          <span class="small-note" id="teacher-class-attendance-counts">0 present · 0 absent</span>
+        </div>
+        <p class="small-note" id="teacher-class-attendance-location" hidden></p>
+        <p class="small-note" id="teacher-class-attendance-geofence" hidden></p>
+        <div id="teacher-class-attendance-live-list" class="class-attendance-live-list" role="list" hidden></div>
       </section>
 
       <section class="dashboard-grid teacher-subject-lessons-grid">

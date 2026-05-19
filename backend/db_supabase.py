@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import math
 import os
 import re
 import secrets
@@ -10,6 +11,8 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+CLASS_ATTENDANCE_DEFAULT_RADIUS_M = 150
 
 JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -3264,6 +3267,534 @@ def compute_activity_average_for_subject(
     except Exception as e:
         print(f"compute_activity_average_for_subject: {e}")
         return out
+
+
+# ---------- Class attendance (photo check-in per subject; not immersion) ----------
+
+def _subject_owned_by_teacher(subject_id: str, teacher_id_number: str) -> bool:
+    row = get_subject_row(subject_id)
+    if not row:
+        return False
+    return (row.get("created_by_teacher_id_number") or "").strip() == (
+        teacher_id_number or ""
+    ).strip()
+
+
+def student_enrolled_in_subject(student_uuid: str, subject_id: str) -> bool:
+    if not student_uuid or not subject_id:
+        return False
+    cur = get_current_grading_period() or {}
+    access = _student_enrollment_access_map(student_uuid, cur.get("id"))
+    return str(subject_id).strip() in access
+
+
+def _serialize_class_checkin_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    out = {**row}
+    b64 = out.pop("captured_photo_base64", None)
+    photo = _data_url_from_base64_field(b64) if isinstance(b64, str) else None
+    if photo:
+        out["photo_url"] = photo
+        out["time_in_photo_url"] = photo
+    return out
+
+
+def _class_attendance_record_is_present(rec: dict[str, Any] | None) -> bool:
+    """Present only when the student submitted a photo check-in for this session."""
+    if not rec:
+        return False
+    if str(rec.get("status") or "").strip().lower() == "absent":
+        return False
+    if rec.get("photo_url") or rec.get("time_in_photo_url"):
+        return True
+    b64 = rec.get("captured_photo_base64")
+    return isinstance(b64, str) and bool(b64.strip())
+
+
+def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6_371_000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlon / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(min(1.0, a)))
+
+
+def _get_subject_row(subject_id: str) -> dict[str, Any] | None:
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return None
+    try:
+        res = _sb().table("subjects").select("*").eq("id", sid).limit(1).execute()
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"_get_subject_row: {e}")
+        return None
+
+
+def _maybe_set_subject_geofence(
+    subject_id: str,
+    lat: float,
+    lon: float,
+    location_name: str | None = None,
+) -> None:
+    """First Start with GPS sets the fixed class geofence pin for this subject."""
+    subj = _get_subject_row(subject_id)
+    if not subj or subj.get("attendance_geofence_lat") is not None:
+        return
+    label = (location_name or "").strip() or "Class location"
+    try:
+        _sb().table("subjects").update(
+            {
+                "attendance_geofence_lat": lat,
+                "attendance_geofence_lon": lon,
+                "attendance_geofence_radius_m": CLASS_ATTENDANCE_DEFAULT_RADIUS_M,
+                "attendance_geofence_label": label,
+            }
+        ).eq("id", str(subject_id)).execute()
+    except Exception as e:
+        print(f"_maybe_set_subject_geofence: {e}")
+
+
+def _resolve_class_geofence(
+    subject_id: str,
+    session: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    subj = _get_subject_row(subject_id)
+    if subj and subj.get("attendance_geofence_lat") is not None and subj.get(
+        "attendance_geofence_lon"
+    ) is not None:
+        try:
+            return {
+                "center_lat": float(subj["attendance_geofence_lat"]),
+                "center_lon": float(subj["attendance_geofence_lon"]),
+                "radius_m": float(
+                    subj.get("attendance_geofence_radius_m")
+                    or CLASS_ATTENDANCE_DEFAULT_RADIUS_M
+                ),
+                "source": "subject",
+                "label": (subj.get("attendance_geofence_label") or "Class location").strip(),
+            }
+        except (TypeError, ValueError):
+            pass
+    if session and session.get("teacher_start_latitude") is not None and session.get(
+        "teacher_start_longitude"
+    ) is not None:
+        try:
+            return {
+                "center_lat": float(session["teacher_start_latitude"]),
+                "center_lon": float(session["teacher_start_longitude"]),
+                "radius_m": float(CLASS_ATTENDANCE_DEFAULT_RADIUS_M),
+                "source": "session",
+                "label": (session.get("teacher_start_location_name") or "Teacher start").strip(),
+            }
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _evaluate_location_verified(
+    subject_id: str,
+    session: dict[str, Any] | None,
+    student_lat: float,
+    student_lon: float,
+) -> bool | None:
+    geofence = _resolve_class_geofence(subject_id, session)
+    if not geofence:
+        return None
+    dist = _haversine_meters(
+        geofence["center_lat"],
+        geofence["center_lon"],
+        student_lat,
+        student_lon,
+    )
+    return dist <= geofence["radius_m"]
+
+
+def _geofence_for_api(subject_id: str, session: dict[str, Any] | None) -> dict[str, Any] | None:
+    g = _resolve_class_geofence(subject_id, session)
+    if not g:
+        return None
+    return {
+        "radius_m": int(g["radius_m"]),
+        "source": g["source"],
+        "label": g["label"],
+    }
+
+
+def _apply_teacher_start_to_session(
+    subject_id: str,
+    session_id: str,
+    *,
+    teacher_latitude: float | None,
+    teacher_longitude: float | None,
+    teacher_start_location_name: str | None = None,
+) -> None:
+    if teacher_latitude is None or teacher_longitude is None:
+        return
+    try:
+        lat = float(teacher_latitude)
+        lon = float(teacher_longitude)
+    except (TypeError, ValueError):
+        return
+    name = (teacher_start_location_name or "").strip() or None
+    try:
+        _sb().table("class_attendance_sessions").update(
+            {
+                "teacher_start_latitude": lat,
+                "teacher_start_longitude": lon,
+                "teacher_start_location_name": name,
+            }
+        ).eq("id", str(session_id)).execute()
+        _maybe_set_subject_geofence(subject_id, lat, lon, name)
+    except Exception as e:
+        print(f"_apply_teacher_start_to_session: {e}")
+
+
+def _class_attendance_local_today() -> str:
+    """School-day date for class attendance (Philippines)."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("Asia/Manila")).date().isoformat()
+    except Exception:
+        return datetime.now(timezone.utc).date().isoformat()
+
+
+def get_class_attendance_session_today(subject_id: str) -> dict[str, Any] | None:
+    """Open session for this subject, else today's closed session (PH school day)."""
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return None
+    try:
+        open_res = (
+            _sb()
+            .table("class_attendance_sessions")
+            .select("*")
+            .eq("subject_id", sid)
+            .eq("status", "open")
+            .order("started_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if open_res.data:
+            return open_res.data[0]
+        day = _class_attendance_local_today()
+        res = (
+            _sb()
+            .table("class_attendance_sessions")
+            .select("*")
+            .eq("subject_id", sid)
+            .eq("session_date", day)
+            .limit(1)
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception as e:
+        print(f"get_class_attendance_session_today: {e}")
+        return None
+
+
+def start_class_attendance_session(
+    subject_id: str,
+    teacher_id_number: str,
+    *,
+    teacher_latitude: float | None = None,
+    teacher_longitude: float | None = None,
+    teacher_start_location_name: str | None = None,
+) -> dict[str, Any]:
+    sid = str(subject_id or "").strip()
+    tid = str(teacher_id_number or "").strip()
+    if not sid or not tid:
+        raise ValueError("subject_id and teacher_id_number are required.")
+    if not _subject_owned_by_teacher(sid, tid):
+        raise ValueError("You do not own this subject.")
+    existing = get_class_attendance_session_today(sid)
+    if existing:
+        if str(existing.get("status") or "").lower() == "open":
+            sess_id = str(existing.get("id") or "")
+            _apply_teacher_start_to_session(
+                sid,
+                sess_id,
+                teacher_latitude=teacher_latitude,
+                teacher_longitude=teacher_longitude,
+                teacher_start_location_name=teacher_start_location_name,
+            )
+            return get_class_attendance_session_today(sid) or existing
+        # Re-open today's session — fresh round; clear prior check-ins for this session.
+        sess_id = str(existing.get("id") or "")
+        try:
+            _sb().table("class_attendance_records").delete().eq("session_id", sess_id).execute()
+        except Exception as e:
+            print(f"start_class_attendance_session clear records: {e}")
+        res = (
+            _sb()
+            .table("class_attendance_sessions")
+            .update(
+                {
+                    "status": "open",
+                    "ended_at": None,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            .eq("id", sess_id)
+            .execute()
+        )
+        row = (res.data or [None])[0] or existing
+        _apply_teacher_start_to_session(
+            sid,
+            sess_id,
+            teacher_latitude=teacher_latitude,
+            teacher_longitude=teacher_longitude,
+            teacher_start_location_name=teacher_start_location_name,
+        )
+        return get_class_attendance_session_today(sid) or row
+    res = (
+        _sb()
+        .table("class_attendance_sessions")
+        .insert(
+            {
+                "subject_id": sid,
+                "teacher_id_number": tid,
+                "status": "open",
+                "session_date": _class_attendance_local_today(),
+            }
+        )
+        .execute()
+    )
+    row = (res.data or [None])[0]
+    if not row:
+        raise RuntimeError("Could not start class attendance.")
+    _apply_teacher_start_to_session(
+        sid,
+        str(row.get("id") or ""),
+        teacher_latitude=teacher_latitude,
+        teacher_longitude=teacher_longitude,
+        teacher_start_location_name=teacher_start_location_name,
+    )
+    return get_class_attendance_session_today(sid) or row
+
+
+def end_class_attendance_session(session_id: str, teacher_id_number: str) -> dict[str, Any]:
+    sess_id = str(session_id or "").strip()
+    tid = str(teacher_id_number or "").strip()
+    session = (
+        _sb()
+        .table("class_attendance_sessions")
+        .select("*")
+        .eq("id", sess_id)
+        .limit(1)
+        .execute()
+    )
+    row = (session.data or [None])[0]
+    if not row:
+        raise ValueError("Attendance session not found.")
+    if not _subject_owned_by_teacher(str(row.get("subject_id") or ""), tid):
+        raise ValueError("You do not own this subject.")
+    if str(row.get("status") or "").lower() == "closed":
+        return row
+    ended = datetime.now(timezone.utc).isoformat()
+    res = (
+        _sb()
+        .table("class_attendance_sessions")
+        .update({"status": "closed", "ended_at": ended})
+        .eq("id", sess_id)
+        .execute()
+    )
+    return (res.data or [row])[0]
+
+
+def _list_enrolled_students_for_subject(subject_id: str) -> list[dict[str, Any]]:
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return []
+    try:
+        res = (
+            _sb()
+            .table("enrollments")
+            .select("student_id")
+            .eq("subject_id", sid)
+            .execute()
+        )
+        uuids = [str(r["student_id"]) for r in (res.data or []) if r.get("student_id")]
+    except Exception as e:
+        print(f"_list_enrolled_students_for_subject: {e}")
+        return []
+    profiles = _fetch_student_profiles_by_uuids(uuids)
+    out = [serialize_public_profile(p) for p in profiles]
+    out.sort(key=lambda x: (x.get("display_name") or x.get("id_number") or "").lower())
+    return out
+
+
+def _class_records_for_session(session_id: str) -> list[dict[str, Any]]:
+    try:
+        res = (
+            _sb()
+            .table("class_attendance_records")
+            .select("*")
+            .eq("session_id", str(session_id))
+            .order("time_in", desc=False)
+            .execute()
+        )
+        return [_serialize_class_checkin_row(r) or r for r in (res.data or [])]
+    except Exception as e:
+        print(f"_class_records_for_session: {e}")
+        return []
+
+
+def build_class_attendance_live(subject_id: str, teacher_id_number: str) -> dict[str, Any]:
+    sid = str(subject_id or "").strip()
+    tid = str(teacher_id_number or "").strip()
+    if not _subject_owned_by_teacher(sid, tid):
+        raise PermissionError("You do not own this subject.")
+    session = get_class_attendance_session_today(sid)
+    students = _list_enrolled_students_for_subject(sid)
+    session_open = bool(
+        session and str(session.get("status") or "").lower() == "open"
+    )
+    records = _class_records_for_session(str(session["id"])) if session else []
+    by_student = {str(r.get("student_id") or ""): r for r in records}
+    roster = []
+    present = 0
+    pending = 0
+    for stu in students:
+        stu_id = str(stu.get("id") or "")
+        rec = by_student.get(stu_id)
+        submitted = _class_attendance_record_is_present(rec)
+        if submitted:
+            present += 1
+        elif session_open:
+            pending += 1
+        state = "present" if submitted else ("pending" if session_open else "absent")
+        roster.append(
+            {
+                "student": stu,
+                "checked_in": submitted,
+                "attendance_state": state,
+                "record": rec if submitted else None,
+            }
+        )
+    absent = max(0, len(students) - present - pending)
+    geofence = _geofence_for_api(sid, session)
+    return {
+        "session": session,
+        "roster": roster,
+        "geofence": geofence,
+        "enrolled_count": len(students),
+        "present_count": present,
+        "pending_count": pending,
+        "absent_count": absent,
+    }
+
+
+def get_student_class_attendance_status(
+    student_uuid: str,
+    student_id_number: str,
+    subject_id: str,
+) -> dict[str, Any]:
+    sid = str(subject_id or "").strip()
+    if not student_enrolled_in_subject(student_uuid, sid):
+        return {
+            "enrolled": False,
+            "session_open": False,
+            "session_closed": False,
+            "session": None,
+            "already_checked_in": False,
+            "marked_absent": False,
+            "record": None,
+        }
+    session = get_class_attendance_session_today(sid)
+    status = str(session.get("status") or "").lower() if session else ""
+    open_sess = bool(session and status == "open")
+    closed_sess = bool(session and status == "closed")
+    record = None
+    if session:
+        try:
+            res = (
+                _sb()
+                .table("class_attendance_records")
+                .select("*")
+                .eq("session_id", str(session["id"]))
+                .eq("student_id", student_uuid)
+                .limit(1)
+                .execute()
+            )
+            if res.data:
+                record = _serialize_class_checkin_row(res.data[0])
+        except Exception as e:
+            print(f"get_student_class_attendance_status record: {e}")
+    checked_in = _class_attendance_record_is_present(record)
+    if record and not checked_in:
+        record = None
+    return {
+        "enrolled": True,
+        "session_open": open_sess,
+        "session_closed": closed_sess,
+        "session": session,
+        "geofence": _geofence_for_api(sid, session),
+        "already_checked_in": checked_in,
+        "marked_absent": closed_sess and not checked_in,
+        "record": record,
+    }
+
+
+def insert_class_attendance_checkin(
+    student_uuid: str,
+    student_id_number: str,
+    subject_id: str,
+    *,
+    time_in_iso: str,
+    captured_photo_base64: str,
+    latitude: float,
+    longitude: float,
+    readable_location_name: str,
+    capture_timestamp: str,
+) -> dict[str, Any]:
+    sid = str(subject_id or "").strip()
+    if not student_enrolled_in_subject(student_uuid, sid):
+        raise PermissionError("You are not enrolled in this subject.")
+    session = get_class_attendance_session_today(sid)
+    if not session or str(session.get("status") or "").lower() != "open":
+        raise ValueError("Class attendance is not open for this subject right now.")
+    sess_id = str(session["id"])
+    try:
+        existing = (
+            _sb()
+            .table("class_attendance_records")
+            .select("id")
+            .eq("session_id", sess_id)
+            .eq("student_id", student_uuid)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            raise ValueError("You already checked in for today's class attendance.")
+    except ValueError:
+        raise
+    except Exception as e:
+        print(f"insert_class_attendance_checkin existing: {e}")
+
+    location_verified = _evaluate_location_verified(sid, session, latitude, longitude)
+    row = {
+        "session_id": sess_id,
+        "student_id": student_uuid,
+        "student_id_number": student_id_number.strip(),
+        "time_in": time_in_iso,
+        "status": "present",
+        "captured_photo_base64": captured_photo_base64,
+        "latitude": latitude,
+        "longitude": longitude,
+        "readable_location_name": readable_location_name,
+        "capture_timestamp": capture_timestamp,
+    }
+    if location_verified is not None:
+        row["location_verified"] = location_verified
+    res = _sb().table("class_attendance_records").insert(row).execute()
+    inserted = (res.data or [None])[0]
+    if not inserted:
+        raise RuntimeError("Could not save class attendance.")
+    return _serialize_class_checkin_row(inserted) or inserted
 
 
 def _attendance_status_bucket(status_raw: Any) -> str:
