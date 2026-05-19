@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Immersion Attendance | Teacher · LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css?v=2026051802" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="script.js?v=202605201" defer></script>
+  <script src="js/core/utils.js" defer></script>
+  <script src="js/pages/teacher-immersion-attendance.entry.js?v=2026052101" defer></script>
+</head>
+<body class="teacher-learniq-page teacher-immersion-attendance-page" data-sidebar-active="immersion-attendance">
+  <div class="dashboard-shell container">
+    <aside class="sidebar glass-card">
+      <div class="sidebar-header">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>Teacher LearnIQ</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links" aria-label="Teacher navigation"></nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="teacher-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">TC</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Teacher</span>
+            <div class="small-note" id="student-display-track"></div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1><i class="fa-solid fa-briefcase"></i> Immersion Attendance</h1>
+          <p>Choose a strand, pick a Grade 12 student, then review work hours, today&apos;s attendance, and daily journals.</p>
+        </div>
+        <div class="panel-header-actions">
+          <span class="badge badge-soft"><i class="fa-solid fa-graduation-cap"></i> Grade 12 · Work immersion</span>
+        </div>
+      </section>
+
+      <section class="glass-card content-card gradecard-picker" id="immersion-picker">
+        <div class="gradecard-picker-header">
+          <nav class="gradecard-breadcrumb" id="immersion-breadcrumb" aria-label="Immersion navigation"></nav>
+        </div>
+
+        <div id="immersion-strand-step" class="gradecard-step">
+          <div class="gradecard-step-head">
+            <h2><i class="fa-solid fa-layer-group"></i> Select strand</h2>
+            <p class="small-note" id="immersion-strand-note">Grade 12 students enrolled in your subjects, grouped by SHS strand.</p>
+          </div>
+          <div id="immersion-strand-grid" class="gradecard-strand-grid" role="list"></div>
+        </div>
+
+        <div id="immersion-students-step" class="gradecard-step" hidden>
+          <div class="gradecard-step-head gradecard-step-head-row">
+            <div>
+              <h2 id="immersion-students-title"><i class="fa-solid fa-users"></i> Students</h2>
+              <p class="small-note" id="immersion-students-subtitle">Pick a student to view immersion attendance.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="immersion-back-strands-btn">
+              <i class="fa-solid fa-arrow-left"></i> All strands
+            </button>
+          </div>
+          <label class="form-field gradecard-student-filter">
+            <span class="small-note">Filter in this strand</span>
+            <input
+              id="immersion-student-filter"
+              type="search"
+              class="form-input"
+              placeholder="Search name or ID…"
+              autocomplete="off" />
+          </label>
+          <div id="immersion-student-list" class="gradecard-student-list" role="list"></div>
+        </div>
+      </section>
+
+      <section class="gradecard-detail-toolbar glass-card content-card" id="immersion-detail-toolbar" hidden>
+        <button type="button" class="btn btn-secondary btn-sm" id="immersion-back-students-btn">
+          <i class="fa-solid fa-arrow-left"></i> Back to students
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="immersion-refresh-btn">
+          <i class="fa-solid fa-rotate"></i> Refresh
+        </button>
+      </section>
+
+      <article class="glass-card immersion-detail-sheet" id="immersion-detail-sheet" hidden>
+        <header class="immersion-detail-header">
+          <div class="immersion-detail-student">
+            <span class="gradecard-student-row-avatar" id="immersion-detail-avatar">??</span>
+            <div>
+              <h2 id="immersion-detail-name">Student</h2>
+              <p class="small-note" id="immersion-detail-meta"></p>
+            </div>
+          </div>
+          <span class="status-badge" id="immersion-work-status-badge">—</span>
+        </header>
+
+        <section class="stats-grid immersion-detail-stats">
+          <article class="glass-card stat-card lq-stat-card">
+            <div class="metric-icon"><i class="fa-solid fa-clock"></i></div>
+            <div>
+              <span class="small-note">Today&apos;s hours</span>
+              <strong class="metric-value" id="immersion-stat-today-hours">—</strong>
+              <span class="metric-note" id="immersion-stat-today-note">—</span>
+            </div>
+          </article>
+          <article class="glass-card stat-card lq-stat-card">
+            <div class="metric-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div>
+              <span class="small-note">Total rendered</span>
+              <strong class="metric-value" id="immersion-stat-total-hours">—</strong>
+              <span class="metric-note" id="immersion-stat-total-note">—</span>
+            </div>
+          </article>
+          <article class="glass-card stat-card lq-stat-card">
+            <div class="metric-icon"><i class="fa-solid fa-flag-checkered"></i></div>
+            <div>
+              <span class="small-note">Hours remaining</span>
+              <strong class="metric-value" id="immersion-stat-remaining-hours">—</strong>
+              <span class="metric-note" id="immersion-stat-remaining-note">—</span>
+            </div>
+          </article>
+          <article class="glass-card stat-card lq-stat-card">
+            <div class="metric-icon"><i class="fa-solid fa-calendar-check"></i></div>
+            <div>
+              <span class="small-note">Days attended</span>
+              <strong class="metric-value" id="immersion-stat-days">—</strong>
+              <span class="metric-note" id="immersion-stat-journals-note">—</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="glass-card content-card immersion-today-card" id="immersion-today-card">
+          <h3><i class="fa-solid fa-location-dot"></i> Today&apos;s session</h3>
+          <div id="immersion-today-body" class="immersion-today-body">
+            <p class="small-note">Loading…</p>
+          </div>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="glass-card content-card full-width">
+            <h3><i class="fa-solid fa-list"></i> Attendance log</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Time in</th>
+                    <th>Time out</th>
+                    <th>Hours</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>Photos</th>
+                  </tr>
+                </thead>
+                <tbody id="immersion-attendance-body">
+                  <tr><td colspan="7" class="small-note">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3><i class="fa-solid fa-book"></i> Daily journals</h3>
+            <div id="immersion-journals-list">
+              <p class="small-note">—</p>
+            </div>
+          </article>
+        </section>
+      </article>
+    </main>
+  </div>
+
+  <div id="immersion-attendance-modal" class="action-modal-backdrop history-detail-backdrop" hidden>
+    <div class="glass-card action-modal history-detail-modal immersion-attendance-modal" role="dialog" aria-modal="true" aria-labelledby="immersion-attendance-modal-title">
+      <div class="action-modal-head">
+        <div class="history-detail-head-text">
+          <h3 id="immersion-attendance-modal-title">Attendance details</h3>
+          <p class="small-note" id="immersion-attendance-modal-subtitle"></p>
+        </div>
+        <button type="button" class="btn btn-secondary history-detail-close" id="immersion-attendance-modal-close" aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="history-detail-body" id="immersion-attendance-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="immersion-photo-lightbox" class="immersion-photo-lightbox" hidden role="dialog" aria-modal="true" aria-label="Full size photo">
+    <button type="button" class="immersion-photo-lightbox-close" id="immersion-photo-lightbox-close" aria-label="Close photo">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="immersion-photo-lightbox-inner">
+      <img id="immersion-photo-lightbox-img" alt="" />
+    </div>
+  </div>
+</body>
+</html>

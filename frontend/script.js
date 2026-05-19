@@ -946,6 +946,12 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
       { id: "gradecard", href: "teacher-student-gradecard.html", icon: "fa-id-card", label: "Student Gradecard" },
       {
+        id: "immersion-attendance",
+        href: "teacher-immersion-attendance.html",
+        icon: "fa-briefcase",
+        label: "Immersion Attendance",
+      },
+      {
         id: "student-registration",
         href: "teacher-student-registration.html",
         icon: "fa-user-plus",
@@ -977,6 +983,7 @@ const TEACHER_ONLY_PAGE_PATHS = new Set([
   "teacher-subject-lessons.html",
   "ai-result.html",
   "teacher-student-gradecard.html",
+  "teacher-immersion-attendance.html",
   "teacher-student-registration.html",
   "teacher-settings.html",
 ]);
@@ -989,6 +996,7 @@ const TEACHER_PATH_TO_SIDEBAR_ID = {
   "ai-result.html": "ai-result",
   "leaderboard.html": "leaderboard",
   "teacher-student-gradecard.html": "gradecard",
+  "teacher-immersion-attendance.html": "immersion-attendance",
   "teacher-student-registration.html": "student-registration",
   "teacher-settings.html": "settings",
 };
@@ -1905,20 +1913,32 @@ function fmtImmersionDetailTimestamp(iso) {
 
 function buildImmersionAttendanceDetailHtml(row) {
   const esc = escapeHtml;
+  const escAttr = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;");
   const photoSrc = (url) => {
     if (!url) return "";
     const u = String(url);
     if (u.startsWith("http://") || u.startsWith("https://") || u.startsWith("data:")) return u;
-    return apiUrl(u);
+    let full = apiUrl(u);
+    if (u.includes("/teacher/immersion/attendance-photo")) {
+      const sess = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+      if (sess && sess.access_token) {
+        full += `${full.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(sess.access_token)}`;
+      }
+    }
+    return full;
   };
   const section = (title, photoUrl, location, coords, ts, pendingNote) => {
     const src = photoSrc(photoUrl);
     const photoBlock = src
       ? `<div class="immersion-detail-photo">
-          <button type="button" class="immersion-detail-photo-thumb" data-photo-src="${esc(src)}" data-photo-label="${esc(title)}" aria-label="View full ${esc(title)} photo">
-            <img src="${esc(src)}" alt="${esc(title)} verification photo" loading="lazy" />
+          <button type="button" class="immersion-detail-photo-thumb" data-photo-src="${escAttr(src)}" data-photo-label="${esc(title)}" aria-label="View full ${esc(title)} photo">
+            <img src="${escAttr(src)}" alt="${esc(title)} verification photo" loading="lazy" />
           </button>
-          <button type="button" class="btn btn-ghost btn-sm immersion-see-photo-btn" data-photo-src="${esc(src)}" data-photo-label="${esc(title)}">
+          <button type="button" class="btn btn-ghost btn-sm immersion-see-photo-btn" data-photo-src="${escAttr(src)}" data-photo-label="${esc(title)}">
             <i class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i> See photo
           </button>
         </div>`

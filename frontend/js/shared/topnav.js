@@ -67,7 +67,7 @@
     const file = path.split("/").pop() || "";
     const sel = '[data-lms-module="teacher-app"] a[data-nav-id]';
     document.querySelectorAll(sel).forEach((a) => a.classList.remove("is-active"));
-    if (path.includes("teacher-immersion.html")) {
+    if (path.includes("teacher-immersion-attendance.html") || path.includes("teacher-immersion.html")) {
       const l = document.querySelector('[data-lms-module="teacher-app"] a[data-nav-id="immersion-monitor"]');
       if (l) l.classList.add("is-active");
       return;

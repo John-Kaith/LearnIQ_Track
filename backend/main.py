@@ -29,6 +29,12 @@ from supabase_client import is_configured
 _backend_env = Path(__file__).resolve().parent / ".env"
 load_dotenv(_backend_env, override=True)
 
+if not email_service.smtp_configured():
+    print(
+        "[LearnIQ] Email SMTP not configured — add SMTP_USER and SMTP_PASSWORD "
+        f"to {_backend_env} (Gmail App Password). Registration emails will not send."
+    )
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 UPLOADS_DIR = immersion_upload.UPLOAD_ROOT
@@ -291,6 +297,7 @@ def health():
         "ok": True,
         "has_api_key": bool(API_KEY and API_KEY.strip()),
         "has_supabase": is_configured(),
+        "email_smtp_configured": email_service.smtp_configured(),
     }
 
 
@@ -559,6 +566,30 @@ async def validate_session(body: dict):
 
 _STUDENT_STRANDS = frozenset({"ABM", "HUMSS", "STEM", "TVL-HE"})
 _STUDENT_GRADE_LEVELS = frozenset({"11", "12"})
+
+
+def _friendly_registration_error(exc: Exception) -> tuple[str, int]:
+    """Map Supabase/Postgres errors to short messages for teachers/admins."""
+    msg = str(exc)
+    low = msg.lower()
+    if "(lrn)=" in low or "profiles_id_number_key" in low or "profiles_lrn" in low:
+        m = re.search(r"\(lrn\)=\(([^)]+)\)", msg)
+        if m:
+            return (
+                f"LRN {m.group(1)} is already registered. Use a different LRN or ask admin to remove the old account.",
+                409,
+            )
+        return (
+            "This LRN is already registered. Use a different learner reference number.",
+            409,
+        )
+    if "duplicate" in low and "email" in low:
+        return "This email is already registered. Use a different email address.", 409
+    if "duplicate" in low or "unique" in low or "23505" in msg:
+        return "An account with this LRN or email already exists.", 409
+    return msg, 400
+
+
 def _normalize_name_suffix(raw: str) -> str | None:
     s = (raw or "").strip()
     if not s:
@@ -724,7 +755,8 @@ async def register_user(body: dict):
             "credentials_email_error": credentials_email_error,
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+        friendly, status = _friendly_registration_error(e)
+        return JSONResponse({"error": friendly}, status_code=status)
 
 
 @app.get("/users")
@@ -2849,6 +2881,213 @@ def teacher_gradecard_strands_endpoint(
     try:
         strands = db_supabase.list_gradecard_strands_for_teacher(tid)
         return {"strands": strands, "count": len(strands)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _resolve_teacher_or_admin_id(
+    authorization: str | None,
+    teacher_id_number: str | None,
+) -> tuple[str | None, JSONResponse | None]:
+    """Bearer token must be teacher (own id) or admin (optional teacher_id_number override)."""
+    token_idn = student_id_number_from_authorization(authorization)
+    if not token_idn:
+        return None, JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        prof = db_supabase.get_profile_by_id_number(token_idn)
+    except Exception:
+        prof = None
+    role = str((prof or {}).get("role") or "").strip().lower()
+    if role == "admin":
+        tid = str(teacher_id_number or token_idn).strip()
+        return (tid or None), (
+            JSONResponse({"error": "teacher_id_number is required for admin."}, status_code=400)
+            if not tid
+            else None
+        )
+    if role == "teacher":
+        q_tid = str(teacher_id_number or "").strip()
+        if q_tid and q_tid != token_idn:
+            return None, JSONResponse(
+                {"error": "teacher_id_number does not match signed-in teacher."},
+                status_code=403,
+            )
+        return token_idn, None
+    return None, JSONResponse({"error": "Teacher or admin access only."}, status_code=403)
+
+
+@app.get("/teacher/immersion/strands")
+def teacher_immersion_strands_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+):
+    """Grade 12 immersion: strand tiles with student counts (teacher roster)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    try:
+        strands = db_supabase.list_gradecard_strands_for_teacher(tid)
+        return {"strands": strands, "grade_level": "12", "count": len(strands)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/immersion/students")
+def teacher_immersion_students_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    strand: str = Query(...),
+    q: str | None = Query(default=None),
+):
+    """Grade 12 students in a strand enrolled in the teacher's subjects."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    st = str(strand or "").strip()
+    if not st:
+        return JSONResponse({"error": "strand is required"}, status_code=400)
+    try:
+        students = db_supabase.list_gradecard_students_for_teacher(
+            tid, st, search=q, grade_level="12"
+        )
+        return {
+            "strand": st,
+            "grade_level": "12",
+            "students": students,
+            "count": len(students),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _bearer_token(authorization: str | None, access_token: str | None = None) -> str | None:
+    if authorization and authorization.lower().startswith("bearer "):
+        t = authorization.split(" ", 1)[1].strip()
+        if t:
+            return t
+    return (access_token or "").strip() or None
+
+
+@app.get("/teacher/immersion/attendance-photo")
+def teacher_immersion_attendance_photo_endpoint(
+    student_id_number: str = Query(...),
+    attendance_id: str = Query(...),
+    kind: str = Query(...),
+    authorization: str | None = Header(default=None),
+    access_token: str | None = Query(default=None),
+    teacher_id_number: str | None = Query(default=None),
+):
+    """Stream verification photo bytes (for img src; pass access_token query if needed)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    token = _bearer_token(authorization, access_token)
+    auth_header = f"Bearer {token}" if token else None
+    tid, bad = _resolve_teacher_or_admin_id(auth_header, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    sid = str(student_id_number or "").strip()
+    aid = str(attendance_id or "").strip()
+    photo_kind = str(kind or "").strip().lower()
+    if photo_kind not in ("time_in", "time_out"):
+        return JSONResponse({"error": "kind must be time_in or time_out"}, status_code=400)
+    if not sid or not aid:
+        return JSONResponse(
+            {"error": "student_id_number and attendance_id are required"},
+            status_code=400,
+        )
+    try:
+        if not db_supabase.teacher_can_view_student_immersion(tid, sid):
+            return JSONResponse({"error": "Access denied."}, status_code=403)
+        row = db_supabase.get_attendance_log_by_id(aid)
+        if not row or not db_supabase._attendance_belongs_to_student(row, sid):
+            return JSONResponse({"error": "Attendance session not found."}, status_code=404)
+        loaded = db_supabase.read_attendance_photo_bytes(row, photo_kind)
+        if not loaded:
+            return JSONResponse({"error": "Photo not found for this session."}, status_code=404)
+        data, mime = loaded
+        return Response(
+            content=data,
+            media_type=mime,
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/immersion/attendance-session")
+def teacher_immersion_attendance_session_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    student_id_number: str = Query(...),
+    attendance_id: str = Query(...),
+):
+    """One clock session with Time In / Time Out verification photos (teacher review)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    sid = str(student_id_number or "").strip()
+    aid = str(attendance_id or "").strip()
+    if not sid or not aid:
+        return JSONResponse(
+            {"error": "student_id_number and attendance_id are required"},
+            status_code=400,
+        )
+    try:
+        session = db_supabase.get_teacher_immersion_attendance_session(tid, sid, aid)
+        return {"session": session}
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/teacher/immersion/student-overview")
+def teacher_immersion_student_overview_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    student_id_number: str = Query(...),
+    limit: int = Query(default=120, ge=1, le=200),
+):
+    """Immersion attendance, hours, and journals for one Grade 12 student."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    try:
+        return db_supabase.build_teacher_immersion_student_overview(
+            tid, sid, limit=limit
+        )
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 

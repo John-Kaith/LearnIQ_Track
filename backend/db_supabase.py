@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 import re
 import secrets
+import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -2271,10 +2273,66 @@ def insert_time_in(student_id_number: str, time_in_iso: str) -> dict[str, Any]:
 
 
 def _upload_url_for_path(path: str | None) -> str | None:
+    """Public URL for a file under uploads/ — only if the file exists on disk."""
     if not path:
         return None
     p = str(path).strip().lstrip("/")
-    return f"/uploads/{p}" if not p.startswith("uploads/") else f"/{p}"
+    if p.startswith("uploads/"):
+        rel = p[len("uploads/") :]
+    else:
+        rel = p
+    if not rel:
+        return None
+    try:
+        import immersion_upload
+
+        disk = immersion_upload.UPLOAD_ROOT / rel.replace("/", os.sep)
+        if not disk.is_file():
+            return None
+    except Exception:
+        return None
+    return f"/uploads/{rel}"
+
+
+def read_attendance_photo_bytes(row: dict[str, Any], kind: str) -> tuple[bytes, str] | None:
+    """Load Time In / Time Out image bytes from DB base64 or disk path."""
+    kind = str(kind or "").strip().lower()
+    if kind == "time_in":
+        b64 = row.get("captured_photo_base64")
+        path = row.get("captured_photo_path")
+    elif kind == "time_out":
+        b64 = row.get("time_out_photo_base64")
+        path = row.get("time_out_photo_path")
+    else:
+        return None
+
+    if isinstance(b64, str) and b64.strip():
+        payload = b64.strip()
+        if payload.startswith("data:") and "," in payload:
+            payload = payload.split(",", 1)[1]
+        try:
+            raw = base64.standard_b64decode(payload)
+        except (binascii.Error, ValueError):
+            raw = b""
+        if raw:
+            return raw, _mime_from_image_bytes(raw[:32])
+
+    if path:
+        p = str(path).strip().lstrip("/")
+        if p.startswith("uploads/"):
+            rel = p[len("uploads/") :]
+        else:
+            rel = p
+        try:
+            import immersion_upload
+
+            disk = immersion_upload.UPLOAD_ROOT / rel.replace("/", os.sep)
+            if disk.is_file():
+                raw = disk.read_bytes()
+                return raw, _mime_from_image_bytes(raw[:32])
+        except Exception as e:
+            print(f"read_attendance_photo_bytes disk {path}: {e}")
+    return None
 
 
 def _mime_from_image_bytes(prefix: bytes) -> str:
@@ -2312,12 +2370,16 @@ def enrich_attendance_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
     row = {**row}
     tin_b64 = row.pop("captured_photo_base64", None)
     tout_b64 = row.pop("time_out_photo_base64", None)
-    tin = _upload_url_for_path(row.get("captured_photo_path"))
-    tout = _upload_url_for_path(row.get("time_out_photo_path"))
-    if not tin and isinstance(tin_b64, str):
+    tin = None
+    tout = None
+    if isinstance(tin_b64, str) and tin_b64.strip():
         tin = _data_url_from_base64_field(tin_b64)
-    if not tout and isinstance(tout_b64, str):
+    if isinstance(tout_b64, str) and tout_b64.strip():
         tout = _data_url_from_base64_field(tout_b64)
+    if not tin:
+        tin = _upload_url_for_path(row.get("captured_photo_path"))
+    if not tout:
+        tout = _upload_url_for_path(row.get("time_out_photo_path"))
     if tin:
         row = {**row, "photo_url": tin, "time_in_photo_url": tin}
     if tout:
@@ -3729,6 +3791,307 @@ def list_gradecard_students_for_teacher(
 
     out.sort(key=lambda x: (x.get("display_name") or x.get("id_number") or "").lower())
     return out
+
+
+IMMERSION_REQUIRED_HOURS = 600
+
+
+def teacher_can_view_student_immersion(
+    teacher_id_number: str,
+    student_id_number: str,
+    *,
+    grade_level: str = "12",
+) -> bool:
+    """True when the student is Grade 12 (by default) and enrolled in the teacher's subjects."""
+    tid = str(teacher_id_number or "").strip()
+    sid = str(student_id_number or "").strip()
+    if not tid or not sid:
+        return False
+    prof = get_profile_by_id_number(sid)
+    if not prof or str(prof.get("role") or "").strip().lower() != "student":
+        return False
+    if grade_level:
+        gl = normalize_profile_grade_level(prof.get("grade_level"))
+        if gl != str(grade_level).strip():
+            return False
+    student_uuid = str(prof.get("id") or "")
+    if not student_uuid:
+        return False
+    enrolled = _student_uuids_enrolled_in_teacher_subjects(tid)
+    return student_uuid in enrolled
+
+
+def _attendance_calendar_day(row: dict[str, Any]) -> str | None:
+    d = row.get("date")
+    if d:
+        return str(d)[:10]
+    tin = row.get("time_in")
+    if not tin:
+        return None
+    s = str(tin).replace("Z", "+00:00")
+    if "T" in s:
+        return s.split("T", 1)[0]
+    return s[:10] if len(s) >= 10 else None
+
+
+def _parse_iso_datetime(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _hours_from_attendance_row(row: dict[str, Any], *, now: datetime | None = None) -> float:
+    th = row.get("total_hours")
+    if th is not None and th != "":
+        try:
+            return max(0.0, float(th))
+        except (TypeError, ValueError):
+            pass
+    tin = _parse_iso_datetime(row.get("time_in"))
+    if not tin:
+        return 0.0
+    tout = _parse_iso_datetime(row.get("time_out"))
+    end = tout or (now or datetime.now(timezone.utc))
+    if end < tin:
+        return 0.0
+    return max(0.0, round((end - tin).total_seconds() / 3600.0, 2))
+
+
+_ATTENDANCE_B64_KEYS = frozenset({"captured_photo_base64", "time_out_photo_base64"})
+_ATTENDANCE_PHOTO_URL_KEYS = frozenset(
+    {"photo_url", "time_in_photo_url", "time_out_photo_url"}
+)
+
+
+def _attendance_photo_flags(row: dict[str, Any] | None) -> tuple[bool, bool]:
+    if not row:
+        return False, False
+    has_in = bool(
+        row.get("captured_photo_path")
+        or row.get("captured_photo_base64")
+        or row.get("photo_url")
+        or row.get("time_in_photo_url")
+    )
+    has_out = bool(
+        row.get("time_out_photo_path")
+        or row.get("time_out_photo_base64")
+        or row.get("time_out_photo_url")
+    )
+    return has_in, has_out
+
+
+def _attach_teacher_photo_api_urls(out: dict[str, Any], student_id_number: str) -> dict[str, Any]:
+    """Use image endpoint URLs (img tags cannot send Bearer headers)."""
+    aid = str(out.get("id") or "")
+    if not aid:
+        return out
+    sid_q = urllib.parse.quote(student_id_number.strip())
+    aid_q = urllib.parse.quote(aid)
+    if out.get("has_time_in_photo"):
+        u = (
+            f"/teacher/immersion/attendance-photo?student_id_number={sid_q}"
+            f"&attendance_id={aid_q}&kind=time_in"
+        )
+        out["photo_url"] = u
+        out["time_in_photo_url"] = u
+    if out.get("has_time_out_photo"):
+        out["time_out_photo_url"] = (
+            f"/teacher/immersion/attendance-photo?student_id_number={sid_q}"
+            f"&attendance_id={aid_q}&kind=time_out"
+        )
+    return out
+
+
+def _attendance_for_teacher_api(
+    row: dict[str, Any] | None,
+    *,
+    include_photos: bool = False,
+    student_id_number: str | None = None,
+) -> dict[str, Any] | None:
+    """Strip raw base64 from payloads; optionally include verification photo URLs."""
+    if not row:
+        return None
+    raw = {**row}
+    has_in, has_out = _attendance_photo_flags(raw)
+    enriched = enrich_attendance_row(raw) or {}
+    out = {k: v for k, v in enriched.items() if k not in _ATTENDANCE_B64_KEYS}
+    out["has_time_in_photo"] = has_in
+    out["has_time_out_photo"] = has_out
+    if include_photos and student_id_number:
+        out = _attach_teacher_photo_api_urls(out, student_id_number)
+    elif not include_photos:
+        for k in _ATTENDANCE_PHOTO_URL_KEYS:
+            out.pop(k, None)
+    return out
+
+
+def _attendance_belongs_to_student(row: dict[str, Any], student_id_number: str) -> bool:
+    sid = str(student_id_number or "").strip()
+    if not sid or not row:
+        return False
+    if str(row.get("student_id_number") or "").strip() == sid:
+        return True
+    pid = profile_uuid_for_id_number(sid)
+    if pid and str(row.get("student_id") or "") == str(pid):
+        return True
+    return False
+
+
+def get_attendance_log_by_id(attendance_id: str) -> dict[str, Any] | None:
+    aid = str(attendance_id or "").strip()
+    if not aid:
+        return None
+    try:
+        res = _sb().table("attendance_logs").select("*").eq("id", aid).limit(1).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception as e:
+        print(f"get_attendance_log_by_id: {e}")
+        return None
+
+
+def get_teacher_immersion_attendance_session(
+    teacher_id_number: str,
+    student_id_number: str,
+    attendance_id: str,
+) -> dict[str, Any]:
+    """Single attendance row with Time In / Time Out photo URLs for teacher review."""
+    if not teacher_can_view_student_immersion(teacher_id_number, student_id_number):
+        raise PermissionError("You do not have access to this student's immersion records.")
+    row = get_attendance_log_by_id(attendance_id)
+    if not row:
+        raise ValueError("Attendance session not found.")
+    if not _attendance_belongs_to_student(row, student_id_number):
+        raise PermissionError("This attendance record does not belong to the selected student.")
+    clean = _attendance_for_teacher_api(
+        row, include_photos=True, student_id_number=student_id_number.strip()
+    )
+    if not clean:
+        raise ValueError("Attendance session not found.")
+    clean["calendar_date"] = _attendance_calendar_day(row)
+    clean["hours_rendered"] = _hours_from_attendance_row(row)
+    return clean
+
+
+def build_teacher_immersion_student_overview(
+    teacher_id_number: str,
+    student_id_number: str,
+    *,
+    limit: int = 120,
+) -> dict[str, Any]:
+    """Immersion summary for teacher monitor: hours, today, active session, logs, journals."""
+    if not teacher_can_view_student_immersion(teacher_id_number, student_id_number):
+        raise PermissionError("You do not have access to this student's immersion records.")
+
+    prof = get_profile_by_id_number(student_id_number.strip())
+    if not prof:
+        raise ValueError("Student profile not found.")
+
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    cap = max(1, min(int(limit), 200))
+
+    raw_rows = list_attendance_by_student(student_id_number.strip())
+    enriched = [enrich_attendance_row(r) for r in raw_rows]
+    sid = student_id_number.strip()
+    active_raw = get_active_attendance(sid)
+    active = _attendance_for_teacher_api(active_raw, include_photos=True, student_id_number=sid)
+
+    total_rendered = 0.0
+    days_attended: set[str] = set()
+    today_row: dict[str, Any] | None = None
+
+    for r in enriched:
+        day = _attendance_calendar_day(r)
+        if day:
+            days_attended.add(day)
+        if day == today and today_row is None:
+            today_row = r
+        st = str(r.get("status") or "").strip().lower()
+        if st == "completed" or r.get("time_out"):
+            total_rendered += _hours_from_attendance_row(r, now=now)
+
+    if today_row is None:
+        for r in enriched:
+            if _attendance_calendar_day(r) == today:
+                today_row = r
+                break
+
+    today_hours = 0.0
+    today_status = "not_started"
+    if active_raw:
+        today_status = "at_work"
+        today_hours = _hours_from_attendance_row(active_raw, now=now)
+        if not today_row:
+            today_row = active_raw
+    elif today_row:
+        today_hours = _hours_from_attendance_row(today_row, now=now)
+        if today_row.get("time_out"):
+            today_status = "completed"
+        elif today_row.get("time_in"):
+            today_status = "clocked_in"
+
+    remaining = max(0.0, round(IMMERSION_REQUIRED_HOURS - total_rendered, 2))
+    percent = (
+        round(min(100.0, (total_rendered / IMMERSION_REQUIRED_HOURS) * 100.0), 1)
+        if IMMERSION_REQUIRED_HOURS > 0
+        else 0.0
+    )
+
+    attendance_out: list[dict[str, Any]] = []
+    for r in enriched[:cap]:
+        clean = _attendance_for_teacher_api(r, include_photos=False, student_id_number=sid)
+        if not clean:
+            continue
+        clean = {**clean, "calendar_date": _attendance_calendar_day(r)}
+        clean["hours_rendered"] = _hours_from_attendance_row(r, now=now)
+        attendance_out.append(clean)
+
+    journals_raw = list_journals_for_student(student_id_number.strip())
+    journals: list[dict[str, Any]] = []
+    for j in journals_raw[:50]:
+        body = (j.get("journal_text") or j.get("body") or "").strip()
+        journals.append(
+            {
+                "id": j.get("id"),
+                "body": body,
+                "entry_date": j.get("entry_date") or _attendance_calendar_day(j),
+                "submitted_at": j.get("submitted_at") or j.get("created_at"),
+                "attendance_id": j.get("attendance_id"),
+            }
+        )
+
+    student = serialize_public_profile(prof)
+    return {
+        "student": student,
+        "required_hours": IMMERSION_REQUIRED_HOURS,
+        "total_hours_rendered": round(total_rendered, 2),
+        "remaining_hours": remaining,
+        "percent_complete": percent,
+        "days_attended": len(days_attended),
+        "journal_count": len(journals_raw),
+        "today_date": today,
+        "today_status": today_status,
+        "today_hours": round(today_hours, 2),
+        "today_session": _attendance_for_teacher_api(today_row, include_photos=True, student_id_number=sid)
+        if today_row
+        else None,
+        "active": active,
+        "is_at_work": bool(active_raw),
+        "attendance": attendance_out,
+        "journals": journals,
+    }
 
 
 # ---------- student_grades (per-subject rows) ----------

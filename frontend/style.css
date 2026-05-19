@@ -8623,6 +8623,73 @@ html[data-theme="light"] .admin-lesson-preview-tabs .workspace-tab.is-active {
   flex-shrink: 0;
 }
 
+/* Teacher immersion attendance detail */
+.immersion-detail-sheet {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.35rem 1.5rem 1.6rem;
+}
+
+.immersion-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.immersion-detail-student {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.immersion-detail-student h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.2rem;
+}
+
+.immersion-detail-stats {
+  margin: 0;
+}
+
+.immersion-today-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.immersion-today-body {
+  margin: 0;
+}
+
+.teacher-immersion-attendance-page .immersion-journal-entry {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.immersion-today-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.immersion-today-photo-item {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.immersion-today-photo-item .immersion-detail-photo-thumb {
+  width: 120px;
+  height: 120px;
+}
+
 .gradecard-detail-toolbar {
   display: flex;
   flex-wrap: wrap;
