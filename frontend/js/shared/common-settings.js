@@ -131,6 +131,27 @@
           </div>
         </article>
 
+        <!-- Backend (Ubuntu API) -->
+        <article class="cs-card">
+          <div class="cs-card-head">
+            <h3><i class="fa-solid fa-server"></i> Backend connection</h3>
+            <p class="small-note">All features use one API host — the Ubuntu laptop running FastAPI (not Windows localhost).</p>
+          </div>
+          <label class="cs-field">
+            <span class="small-note">API base URL</span>
+            <input type="url" id="cs-api-base-input" class="lq-input" placeholder="http://192.168.x.x:8000" autocomplete="off" />
+          </label>
+          <p id="cs-api-base-status" class="small-note" role="status"></p>
+          <div class="cs-row" style="margin-top:0.75rem; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" id="cs-api-base-save" class="btn btn-primary btn-small">
+              <i class="fa-solid fa-floppy-disk"></i> Save API URL
+            </button>
+            <button type="button" id="cs-api-base-test" class="btn btn-secondary btn-small">
+              <i class="fa-solid fa-plug"></i> Test connection
+            </button>
+          </div>
+        </article>
+
         <!-- Notifications -->
         <article class="cs-card">
           <div class="cs-card-head">
@@ -236,6 +257,60 @@
     window.addEventListener("storage", (e) => {
       if (e.key === "learniq-theme") syncThemeButtons();
     });
+
+    function refreshApiBaseStatus() {
+      const statusEl = rootEl.querySelector("#cs-api-base-status");
+      const inputEl = rootEl.querySelector("#cs-api-base-input");
+      if (!statusEl) return;
+      const status =
+        typeof window.LearnIQApi !== "undefined" && window.LearnIQApi.getApiBaseStatus
+          ? window.LearnIQApi.getApiBaseStatus()
+          : { apiBase: typeof getApiBase === "function" ? getApiBase() : "", source: "unknown" };
+      if (inputEl && !inputEl.matches(":focus")) {
+        inputEl.value = status.apiBase || status.stored || status.config || "";
+      }
+      if (status.apiBase) {
+        statusEl.textContent = `Using ${status.apiBase} (${status.source})`;
+      } else if (status.needsConfiguration) {
+        statusEl.textContent =
+          "Not configured. Enter your Ubuntu laptop URL (e.g. http://192.168.1.50:8000) and save.";
+      } else {
+        statusEl.textContent = "API base not set.";
+      }
+    }
+
+    const apiInput = rootEl.querySelector("#cs-api-base-input");
+    const apiSave = rootEl.querySelector("#cs-api-base-save");
+    const apiTest = rootEl.querySelector("#cs-api-base-test");
+    if (apiInput) {
+      refreshApiBaseStatus();
+      apiSave?.addEventListener("click", () => {
+        const val = apiInput.value.trim();
+        if (typeof setLearniqApiBase === "function") setLearniqApiBase(val);
+        else if (typeof window.LearnIQApi !== "undefined") window.LearnIQApi.setApiBase(val);
+        refreshApiBaseStatus();
+        if (typeof showToast === "function") {
+          showToast(val ? "API URL saved for this browser." : "API URL cleared.", "success");
+        }
+      });
+      apiTest?.addEventListener("click", async () => {
+        const val = apiInput.value.trim();
+        if (val && typeof setLearniqApiBase === "function") setLearniqApiBase(val);
+        const testUrl =
+          typeof apiUrl === "function" ? apiUrl("/health") : `${(getApiBase && getApiBase()) || val}/health`;
+        try {
+          const res = await fetch(testUrl);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          if (typeof showToast === "function") showToast("Connected to Ubuntu API.", "success");
+          else alert("Connected to Ubuntu API.");
+        } catch (err) {
+          if (typeof showToast === "function") showToast(`Connection failed: ${err.message}`, "danger");
+          else alert(`Connection failed: ${err.message}`);
+        }
+        refreshApiBaseStatus();
+      });
+    }
 
     // ---- Density toggle (adds .density-compact on <html>)
     const densityEl = rootEl.querySelector("#cs-density-toggle");

@@ -390,50 +390,7 @@ function renderActivitiesInto(targetEl, activities) {
   });
 }
 
-async function readApiJson(response) {
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const err = result.error;
-    const msg =
-      typeof err === "string"
-        ? err
-        : err != null
-        ? JSON.stringify(err)
-        : response.statusText || "Request failed";
-    throw new Error(msg);
-  }
-  if (result && Object.prototype.hasOwnProperty.call(result, "error") && result.error != null) {
-    const err = result.error;
-    throw new Error(typeof err === "string" ? err : JSON.stringify(err));
-  }
-  return result;
-}
-
-/**
- * Backend URL for fetch(). Empty string = same origin (when FastAPI serves the frontend on :8000).
- * Override: localStorage.setItem("learniq-api-base", "http://127.0.0.1:9000")
- */
-function getApiBase() {
-  if (typeof window === "undefined") return "";
-  const custom = localStorage.getItem("learniq-api-base");
-  if (custom && custom.trim()) return custom.trim().replace(/\/$/, "");
-  const { protocol, hostname, port } = window.location;
-  if (protocol === "file:") return "http://127.0.0.1:8000";
-  const isLocal =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "[::1]" ||
-    hostname === "::1";
-  if (!isLocal) return "";
-  if (port === "8000") return "";
-  return "http://127.0.0.1:8000";
-}
-
-function apiUrl(path) {
-  const base = getApiBase();
-  const p = path.startsWith("/") ? path : `/${path}`;
-  return base ? `${base}${p}` : p;
-}
+/* readApiJson, getApiBase, apiUrl → js/core/api.js (load before this file) */
 
 function showToast(message, type = "info") {
   let container = document.querySelector(".toast-container");
@@ -5053,7 +5010,7 @@ async function updateTeacherApiStatus() {
     el.classList.add("is-online");
   } catch {
     el.textContent =
-      "Cannot reach API. Run: cd backend → uvicorn main:app --reload — then open http://127.0.0.1:8000/teacher-dashboard.html (or set localStorage learniq-api-base to your API URL).";
+      "Cannot reach the Ubuntu API. Start FastAPI on the Ubuntu laptop and set learniq-api-base in Settings (or localStorage) to http://YOUR-UBUNTU-IP:8000";
     el.classList.add("is-offline");
   }
 }
@@ -5282,7 +5239,7 @@ function setupTeacherDashboard() {
         if (fileMeta) fileMeta.textContent = "Upload failed. Try again.";
         const msg =
           e && e.message && String(e.message).includes("fetch")
-            ? "Cannot reach API. Start the backend (uvicorn) or check learniq-api-base in localStorage."
+            ? "Cannot reach the Ubuntu API. Check learniq-api-base in Settings points to http://YOUR-UBUNTU-IP:8000"
             : e.message || "Upload failed";
         showToast(msg, "error");
       }
@@ -5640,7 +5597,7 @@ async function renderSubjectsPage() {
     selectionEl.hidden = true;
     emptyEl.hidden = false;
     if (emptyText) {
-      emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+      emptyText.textContent = "Cannot reach the Ubuntu API. Set backend URL in Settings (learniq-api-base).";
     }
   }
 }
@@ -5858,7 +5815,7 @@ async function renderStudentArchivedPage() {
     emptyEl.hidden = false;
     contentEl.hidden = true;
     if (emptyText) {
-      emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+      emptyText.textContent = "Cannot reach the Ubuntu API. Set backend URL in Settings (learniq-api-base).";
     }
     root.innerHTML = "";
   }
@@ -5995,7 +5952,7 @@ async function renderTeacherSubjectsPage() {
     console.log("DEBUG: renderTeacherSubjectsPage failed:", e);
     selectionEl.hidden = true;
     emptyEl.hidden = false;
-    if (emptyText) emptyText.textContent = "Cannot reach the server. Is the LearnIQ Track backend running?";
+    if (emptyText) emptyText.textContent = "Cannot reach the Ubuntu API. Set backend URL in Settings (learniq-api-base).";
   }
 }
 
@@ -8152,7 +8109,7 @@ function showEmpty(message) {
       renderLessonSelection();
     } catch (e) {
       console.log("DEBUG: loadStudentLessons error:", e);
-      showEmpty("Cannot reach the server. Is the LearnIQ Track backend running?");
+      showEmpty("Cannot reach the Ubuntu API. Set the backend URL in Settings (learniq-api-base).");
     }
   }
 
@@ -8167,7 +8124,7 @@ function showEmpty(message) {
       const data = await res.json();
       showLesson(data);
     } catch {
-      showEmpty("Cannot reach the server. Is the LearnIQ Track backend running?");
+      showEmpty("Cannot reach the Ubuntu API. Set the backend URL in Settings (learniq-api-base).");
     }
   }
 

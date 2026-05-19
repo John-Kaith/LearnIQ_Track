@@ -1,0 +1,14 @@
+---
+description: LearnIQ API routing — Ubuntu-only backend, centralized apiUrl
+globs: frontend/**/*.{js,html}
+alwaysApply: true
+---
+
+# LearnIQ API architecture
+
+- **Ubuntu laptop** is the only production backend (FastAPI + `uploads/` + AI).
+- **Windows** is dev only (Cursor, git). Do not assume Windows runs the API.
+- All `fetch()` calls must use `apiUrl("/path")` from `frontend/js/core/api.js`.
+- **Never** hardcode `127.0.0.1:8000`, `localhost:8000`, or relative API paths without `apiUrl`.
+- API base resolution: `localStorage['learniq-api-base']` → `js/learniq-config.js` → page origin (non-localhost only).
+- Load order in HTML: `learniq-config.js`, then `js/core/api.js`, then `script.js`.
