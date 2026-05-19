@@ -8802,8 +8802,9 @@ textarea.gradecard-comments-text {
 .gradecard-footer {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-around;
-  gap: 1.2rem;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem 1rem;
   padding-top: 1rem;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
