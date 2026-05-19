@@ -1,0 +1,451 @@
+/**
+ * LearnIQ — fixed app sidebar (global navigation shell)
+ * Used by every page with `.dashboard-shell > .sidebar`.
+ * Do not style page content here — navigation + layout offset only.
+ */
+
+:root {
+  --lq-sidebar-gutter: clamp(1rem, 2.5vw, 1.75rem);
+}
+
+/* ── Shell: offset main content, never overlap sidebar ── */
+.dashboard-shell {
+  display: block;
+  min-width: 0;
+  min-height: 100vh;
+  gap: 0;
+  padding: 0;
+}
+
+.dashboard-shell.container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 1.15rem var(--lq-sidebar-gutter) 2rem calc(var(--lq-sidebar-width) + var(--lq-sidebar-gutter));
+  box-sizing: border-box;
+}
+
+.page-shell.container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 1rem var(--lq-sidebar-gutter) 2rem calc(var(--lq-sidebar-width) + var(--lq-sidebar-gutter));
+  box-sizing: border-box;
+}
+
+.page-shell .dashboard-shell {
+  display: block;
+  padding: 0;
+  min-height: 0;
+}
+
+.page-shell .dashboard-shell > .sidebar {
+  /* Sidebar is viewport-fixed; page-shell supplies horizontal offset */
+}
+
+.dashboard-shell > .main-panel,
+.page-shell .dashboard-shell > .main-panel {
+  min-width: 0;
+  width: 100%;
+  align-self: stretch;
+}
+
+/* ── Fixed sidebar panel ── */
+.dashboard-shell > .sidebar.lq-sidebar,
+.dashboard-shell > .sidebar,
+.dashboard-shell > aside.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
+  width: var(--lq-sidebar-width);
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 1.15rem 0.95rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-right: 1px solid var(--lq-border-accent);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(14, 24, 48, 0.98) 0%,
+      rgba(7, 13, 28, 0.99) 42%,
+      rgba(4, 8, 18, 1) 100%
+    );
+  box-shadow:
+    inset -1px 0 0 rgba(167, 139, 250, 0.06),
+    4px 0 32px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.dashboard-shell > .sidebar::before,
+.dashboard-shell > aside.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 45% at 50% -5%, rgba(139, 92, 246, 0.14), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 100% 100%, rgba(59, 130, 246, 0.08), transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dashboard-shell > .sidebar > *,
+.dashboard-shell > aside.sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Undo floating glass-card on sidebar only */
+.dashboard-shell > .sidebar.glass-card,
+.dashboard-shell > aside.sidebar.glass-card {
+  border-radius: 0;
+}
+
+/* ── Brand header ── */
+.dashboard-shell > .sidebar .sidebar-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.55rem 0.65rem;
+  padding: 0 0.15rem 1rem;
+  margin: 0 0 0.65rem;
+  border-bottom: 1px solid var(--lq-border-subtle);
+}
+
+.dashboard-shell > .sidebar .sidebar-header > .brand,
+.dashboard-shell > .sidebar .sidebar-header > a.brand,
+.dashboard-shell > .sidebar .sidebar-header > .brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.dashboard-shell > .sidebar .brand strong {
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--lq-text-primary);
+}
+
+.dashboard-shell > .sidebar .brand small {
+  font-size: 0.78rem;
+  color: var(--lq-text-muted);
+  margin-top: 0.12rem;
+}
+
+.dashboard-shell > .sidebar .brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  background: var(--lq-gradient-accent);
+  box-shadow:
+    0 0 0 1px rgba(167, 139, 250, 0.28),
+    0 10px 28px rgba(99, 102, 241, 0.32),
+    0 0 20px rgba(99, 102, 241, 0.12);
+}
+
+.dashboard-shell > .sidebar .sidebar-header > .small-note {
+  flex: 1 0 100%;
+  margin: 0.15rem 0 0;
+  padding: 0 0.1rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--lq-text-muted);
+}
+
+.dashboard-shell > .sidebar .theme-toggle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid var(--lq-border-subtle);
+  background: rgba(8, 15, 29, 0.65);
+  box-shadow: var(--lq-glow-inset);
+  color: var(--lq-text-secondary);
+}
+
+.dashboard-shell > .sidebar .theme-toggle-btn:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: var(--lq-border-accent-soft);
+  box-shadow: var(--lq-glow-purple-sm);
+  color: var(--lq-text-primary);
+}
+
+/* ── Navigation links ── */
+.dashboard-shell > .sidebar .side-links {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 0.28rem;
+  align-content: start;
+  grid-auto-rows: min-content;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0.1rem;
+  margin: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.dashboard-shell > .sidebar .side-links a {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  padding: 0.72rem 0.85rem;
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid transparent;
+  color: var(--lq-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.25;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+
+.dashboard-shell > .sidebar .side-links a i {
+  width: 1.1rem;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 0.95rem;
+  opacity: 0.82;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.dashboard-shell > .sidebar .side-links a:hover {
+  color: var(--lq-text-secondary);
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 18px rgba(99, 102, 241, 0.06);
+}
+
+.dashboard-shell > .sidebar .side-links a:hover i {
+  opacity: 1;
+}
+
+.dashboard-shell > .sidebar .side-links a.active {
+  color: var(--lq-text-primary);
+  font-weight: 600;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.2) 0%,
+    rgba(59, 130, 246, 0.1) 48%,
+    rgba(139, 92, 246, 0.08) 100%
+  );
+  border: 1px solid rgba(99, 102, 241, 0.32);
+  border-left: 1px solid rgba(99, 102, 241, 0.32);
+  padding-left: 0.85rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 22px rgba(99, 102, 241, 0.1);
+}
+
+.dashboard-shell > .sidebar .side-links a.active i {
+  opacity: 1;
+  color: var(--lq-accent-violet-soft);
+}
+
+/* ── Profile footer (mini premium card) ── */
+.dashboard-shell > .sidebar .sidebar-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: 0.85rem 0.1rem 0;
+  border-top: 1px solid var(--lq-border-subtle);
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .user-chip.user-chip-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  width: 100%;
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--lq-radius-md);
+  border: 1px solid var(--lq-border-subtle);
+  background: linear-gradient(
+    145deg,
+    rgba(10, 18, 36, 0.75) 0%,
+    rgba(5, 11, 22, 0.88) 100%
+  );
+  box-shadow: var(--lq-glow-inset), 0 8px 24px rgba(2, 6, 23, 0.28);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .user-chip.user-chip-profile-link:hover {
+  border-color: var(--lq-border-accent-soft);
+  background: linear-gradient(
+    145deg,
+    rgba(15, 23, 42, 0.82) 0%,
+    rgba(8, 14, 28, 0.92) 100%
+  );
+  box-shadow: var(--lq-glow-inset), var(--lq-glow-purple-sm);
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .user-chip-text {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .user-chip-profile-link #student-display-name,
+.dashboard-shell > .sidebar .sidebar-footer .user-chip-text strong {
+  display: block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  color: var(--lq-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .user-chip-text small,
+.dashboard-shell > .sidebar .sidebar-footer .small-note {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--lq-text-muted);
+  line-height: 1.35;
+}
+
+.dashboard-shell > .sidebar .sidebar-footer .avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+/* ── Logout (premium dark red glass) ── */
+.dashboard-shell > .sidebar #sidebar-logout,
+.dashboard-shell > .sidebar #logout-button,
+.dashboard-shell > .sidebar .sidebar-logout-btn {
+  width: 100%;
+  margin: 0;
+  padding: 0.72rem 1rem;
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: linear-gradient(
+    165deg,
+    rgba(69, 10, 10, 0.55) 0%,
+    rgba(28, 8, 12, 0.72) 100%
+  );
+  color: #fca5a5;
+  font-weight: 600;
+  font-size: 0.88rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dashboard-shell > .sidebar #sidebar-logout:hover,
+.dashboard-shell > .sidebar #logout-button:hover,
+.dashboard-shell > .sidebar .sidebar-logout-btn:hover {
+  background: linear-gradient(
+    165deg,
+    rgba(127, 29, 29, 0.5) 0%,
+    rgba(45, 12, 16, 0.78) 100%
+  );
+  border-color: rgba(248, 113, 113, 0.38);
+  color: #fecaca;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 20px rgba(239, 68, 68, 0.12);
+  transform: translateY(-1px);
+}
+
+/* ── Light theme ── */
+html[data-theme="light"] .dashboard-shell > .sidebar,
+html[data-theme="light"] .dashboard-shell > aside.sidebar {
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.99) 0%,
+    rgba(241, 245, 249, 0.98) 50%,
+    rgba(226, 232, 240, 0.96) 100%
+  );
+  border-right-color: var(--lq-border-accent);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .dashboard-shell > .sidebar .side-links a.active {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.14) 0%,
+    rgba(59, 130, 246, 0.08) 100%
+  );
+  color: var(--lq-text-primary);
+}
+
+html[data-theme="light"] .dashboard-shell > .sidebar .sidebar-footer .user-chip.user-chip-profile-link {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--lq-border-subtle);
+}
+
+html[data-theme="light"] .dashboard-shell > .sidebar .sidebar-logout-btn,
+html[data-theme="light"] .dashboard-shell > .sidebar #sidebar-logout {
+  background: linear-gradient(165deg, rgba(254, 226, 226, 0.9), rgba(254, 242, 242, 0.95));
+  color: #b91c1c;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+/* ── Responsive: stack sidebar above content (no overlap, no drawer) ── */
+@media (max-width: 1080px) {
+  .dashboard-shell.container,
+  .page-shell.container {
+    padding-left: var(--lq-sidebar-gutter);
+    padding-right: var(--lq-sidebar-gutter);
+  }
+
+  .dashboard-shell > .sidebar,
+  .dashboard-shell > aside.sidebar {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+    height: auto;
+    max-height: min(70vh, 520px);
+    margin-bottom: 0.25rem;
+    border-right: none;
+    border-bottom: 1px solid var(--lq-border-accent);
+    border-radius: var(--lq-radius-xl);
+    box-shadow: var(--lq-glow-inset), var(--lq-shadow-card);
+  }
+
+  .page-shell .dashboard-shell > .sidebar {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --lq-sidebar-gutter: 0.85rem;
+  }
+
+  .dashboard-shell > .sidebar,
+  .dashboard-shell > aside.sidebar {
+    max-height: none;
+    padding: 1rem 0.85rem;
+  }
+
+  .dashboard-shell > .sidebar .side-links a {
+    padding: 0.65rem 0.75rem;
+  }
+}

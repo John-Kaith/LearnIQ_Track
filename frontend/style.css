@@ -1,5 +1,7 @@
 /* LearnIQ Design System — tokens & primitives (benchmark: Learning IQ card) */
 @import url("css/learniq-design-system.css");
+@import url("css/learniq-sidebar.css");
+@import url("css/learniq-light-theme.css");
 
 :root {
   /* Semantic aliases (defined in learniq-design-system.css) */
@@ -1691,18 +1693,32 @@ html[data-theme="light"] .landing-footer-bar-inner p {
   inset: 0;
   z-index: 0;
   background-color: #1a2332;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  overflow: hidden;
   filter: brightness(0.55) saturate(1.05);
 }
 
-.login-page .auth-page-media {
-  background-image: url("images/psbcbuilding_1712794431.jpg");
+.auth-page-media--slideshow .auth-page-media-slide {
+  position: absolute;
+  inset: 0;
+  background-color: #1a2332;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 2.4s ease-in-out;
+  will-change: opacity;
 }
 
-.signup-page .auth-page-media {
-  background-image: url("images/120037430_358883125154225_420387870410868505_n_1655452949.jpg");
+.auth-page-media--slideshow .auth-page-media-slide.is-active {
+  opacity: 1;
+}
+
+html.reduce-motion .auth-page-media--slideshow .auth-page-media-slide {
+  transition: none;
+}
+
+html.reduce-motion .auth-page-media--slideshow .auth-page-media-slide:not(.is-active) {
+  display: none;
 }
 
 .login-page .auth-page-scrim,
@@ -2008,43 +2024,16 @@ textarea {
   padding: 0.8rem 0.9rem;
 }
 
-.dashboard-shell {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 1rem;
-  padding: 1rem;
-  min-width: 0;
-}
+/* .dashboard-shell layout + fixed sidebar → css/learniq-sidebar.css */
 
 .dashboard-shell > .sidebar,
 .dashboard-shell > .main-panel {
   min-width: 0;
 }
 
-/* Main column should stay content-height. Otherwise the sidebar (tall nav)
-   stretches this column; inner .main-panel rows then grow (align-content
-   default) and the first "header" card absorbs the extra height — looks like
-   huge padding even when title copy is short. */
+/* Main column stays content-height (see learniq-sidebar.css for shell layout). */
 .dashboard-shell > .main-panel {
   align-self: start;
-}
-
-.sidebar {
-  position: sticky;
-  top: 1rem;
-  /* Don't stretch to match the main panel's row height — that's what
-     was leaving a huge empty area below the Logout button on pages
-     with few nav items. */
-  align-self: start;
-  max-height: calc(100vh - 2rem);
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.sidebar-header {
-  flex: 0 0 auto;
 }
 
 /* The nav links flex-grow and scroll independently when there are too many
@@ -2092,52 +2081,17 @@ textarea {
   flex: 0 0 auto;
 }
 
-.side-links a {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.8rem 0.9rem;
-  border-radius: 12px;
-}
-
-/* .side-links active/hover → learniq-design-system.css */
-
-.sidebar-footer {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  padding-bottom: 0.35rem;
-  border-top: 1px solid var(--border);
-}
+/* .side-links / .sidebar-footer / logout → css/learniq-sidebar.css (dashboard shell) */
 
 #sidebar-logout,
 #logout-button,
 .sidebar-logout-btn {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-  transition: all 0.3s ease;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
   box-sizing: border-box;
-}
-
-.sidebar-footer .sidebar-logout-btn {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-#sidebar-logout:hover,
-#logout-button:hover,
-.sidebar-logout-btn:hover {
-  background: rgba(239, 68, 68, 0.22);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fecaca;
-  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.2);
-  transform: translateY(-1px);
 }
 
 .user-chip {
@@ -2159,40 +2113,7 @@ textarea {
   font-size: 0.85rem;
 }
 
-.sidebar-footer .user-chip.user-chip-profile-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 1rem;
-  padding: 0.65rem 0.75rem;
-  text-decoration: none;
-  color: inherit;
-  border-radius: 16px;
-  border: 1px solid transparent;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.sidebar-footer .user-chip.user-chip-profile-link:hover {
-  background: rgba(96, 165, 250, 0.16);
-  border-color: rgba(148, 163, 184, 0.28);
-  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12);
-}
-
-.sidebar-footer .user-chip-text {
-  min-width: 0;
-  flex: 1;
-  text-align: left;
-}
-
-.sidebar-footer .user-chip-profile-link #student-display-name {
-  display: block;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.25;
-}
+/* Sidebar profile chip → css/learniq-sidebar.css */
 
 /* LearnIQ dashboard: center title + subtitle (same padding/size as other panel-header cards) */
 /* Centered top-level page headers across every dashboard (student / teacher /
@@ -5200,17 +5121,7 @@ html[data-theme="light"] .history-quiz-choice.is-student:not(.is-correct) {
   padding: 1.25rem;
 }
 
-.sidebar {
-  padding: 1.25rem;
-}
-
-.side-links a {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.95rem 1rem;
-  border-radius: 16px;
-}
+/* Sidebar padding / nav density → css/learniq-sidebar.css */
 
 .status-badge {
   min-width: 72px;
@@ -6191,11 +6102,6 @@ body.lq-modal-open {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .sidebar {
-    position: relative;
-    top: 0;
-  }
-
   .topbar-search {
     width: 100%;
   }
@@ -7053,12 +6959,17 @@ html[data-theme="light"] #student-quiz-body .student-quiz-choice:has(input:check
   width: 100%;
   padding: 0.875rem 1.125rem;
   border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border: 1px solid var(--lq-auth-input-border);
+  background: var(--lq-auth-input-bg);
+  color: var(--lq-auth-input-text);
   font-size: 1rem;
   font-family: inherit;
   transition: all 0.3s ease;
+}
+
+.auth-form input::placeholder {
+  color: var(--lq-text-muted);
+  opacity: 0.85;
 }
 
 .auth-form select {
@@ -7080,9 +6991,9 @@ html[data-theme="light"] #student-quiz-body .student-quiz-choice:has(input:check
   right: 0.65rem;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--lq-auth-toggle-bg);
+  border: 1px solid var(--lq-auth-toggle-border);
+  color: var(--lq-auth-toggle-color);
   cursor: pointer;
   padding: 0.28rem;
   border-radius: 0.4rem;
@@ -7097,21 +7008,20 @@ html[data-theme="light"] #student-quiz-body .student-quiz-choice:has(input:check
 }
 
 .password-toggle-btn:hover {
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(147, 197, 253, 0.3);
-  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.2);
+  color: var(--lq-auth-input-text);
+  background: var(--lq-auth-input-bg);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: var(--lq-focus-ring);
 }
 
 .password-toggle-btn:active {
   transform: translateY(-50%) scale(0.95);
-  color: rgba(255, 255, 255, 1);
 }
 
 .password-toggle-btn:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.4);
-  color: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--lq-focus-ring);
+  color: var(--lq-auth-input-text);
 }
 
 .password-toggle-btn i {
@@ -9391,7 +9301,7 @@ html.reduce-motion *::after {
 /* ========== LearnIQ global overrides (Learning IQ benchmark) ========== */
 /* See also: css/learniq-global-overrides.css (source copy) */
 
-body {
+html:not([data-theme="light"]) body {
   background:
     radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.2), transparent 32%),
     radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.16), transparent 28%),
@@ -9399,13 +9309,7 @@ body {
     linear-gradient(165deg, var(--lq-bg-mid) 0%, var(--lq-bg-deep) 48%, #020617 100%);
 }
 
-.dashboard-shell > .sidebar.glass-card,
-.dashboard-shell .sidebar {
-  background: linear-gradient(165deg, rgba(10, 18, 36, 0.92) 0%, rgba(5, 11, 22, 0.96) 100%);
-  border: 1px solid var(--lq-border-accent);
-  box-shadow: var(--lq-glow-inset), var(--lq-shadow-card), var(--lq-glow-purple);
-  backdrop-filter: blur(var(--lq-blur-glass));
-}
+/* Fixed app sidebar → css/learniq-sidebar.css */
 
 .dashboard-shell .main-panel > .glass-card.panel-header,
 .dashboard-shell .main-panel > section.panel-header.glass-card,
@@ -9469,7 +9373,7 @@ body {
 .table-card,
 .result-card,
 .top-rank-card {
-  background: rgba(5, 11, 22, 0.55);
+  background: var(--lq-surface-nested-bg);
   border: 1px solid var(--lq-border-subtle);
   border-radius: var(--lq-radius-md);
   box-shadow: var(--lq-glow-inset);
@@ -9555,7 +9459,7 @@ body {
 .teacher-subject-upload-form {
   border: 1px dashed var(--lq-border-accent-soft);
   border-radius: var(--lq-radius-lg);
-  background: rgba(5, 11, 22, 0.45);
+  background: var(--lq-upload-surface-bg);
 }
 
 .toast {
@@ -9568,12 +9472,6 @@ body {
 .profile-photo-avatar {
   border: 2px solid rgba(167, 139, 250, 0.35);
   box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
-}
-
-.sidebar-footer .user-chip.user-chip-profile-link:hover {
-  background: rgba(99, 102, 241, 0.14);
-  border-color: var(--lq-border-accent);
-  box-shadow: var(--lq-glow-purple-sm);
 }
 
 .theme-toggle-btn:hover {
@@ -9618,12 +9516,6 @@ html[data-theme="light"] body {
 html[data-theme="light"] .lesson-card {
   background: var(--panel);
   border-color: var(--lq-border-subtle);
-}
-
-html[data-theme="light"] .dashboard-shell > .sidebar.glass-card,
-html[data-theme="light"] .dashboard-shell .sidebar {
-  background: var(--panel);
-  border-color: var(--lq-border-accent);
 }
 
 /* Class attendance (teacher subject + student my-lesson) */
@@ -9757,4 +9649,3 @@ html[data-theme="light"] .dashboard-shell .sidebar {
 .class-attendance-submitted-view .class-attendance-loc-badge {
   margin-top: 0.15rem;
 }
-

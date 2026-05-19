@@ -61,6 +61,25 @@
   --lq-space-lg: 1.35rem;
   --lq-space-xl: 1.75rem;
 
+  /* App shell */
+  --lq-sidebar-width: 300px;
+
+  /* Form fields */
+  --lq-input-bg: rgba(8, 15, 29, 0.95);
+  --lq-input-border: var(--lq-border-subtle);
+  --lq-input-text: var(--lq-text-body);
+
+  /* Auth pages (glass on photo background) */
+  --lq-auth-input-bg: rgba(255, 255, 255, 0.08);
+  --lq-auth-input-border: rgba(255, 255, 255, 0.18);
+  --lq-auth-input-text: #f8fafc;
+  --lq-auth-toggle-bg: rgba(255, 255, 255, 0.08);
+  --lq-auth-toggle-border: rgba(255, 255, 255, 0.15);
+  --lq-auth-toggle-color: rgba(255, 255, 255, 0.72);
+
+  --lq-surface-nested-bg: rgba(5, 11, 22, 0.55);
+  --lq-upload-surface-bg: rgba(5, 11, 22, 0.45);
+
   /* Map legacy vars → design system (single source of truth) */
   --bg: var(--lq-bg-deep);
   --bg-soft: var(--lq-bg-soft);
@@ -90,6 +109,17 @@ html[data-theme="light"] {
   --lq-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.08);
   --panel: rgba(255, 255, 255, 0.96);
   --panel-strong: #ffffff;
+  --lq-input-bg: #ffffff;
+  --lq-input-border: rgba(15, 23, 42, 0.14);
+  --lq-input-text: var(--lq-text-body);
+  --lq-auth-input-bg: #ffffff;
+  --lq-auth-input-border: rgba(15, 23, 42, 0.14);
+  --lq-auth-input-text: var(--lq-text-body);
+  --lq-auth-toggle-bg: #f1f5f9;
+  --lq-auth-toggle-border: rgba(15, 23, 42, 0.12);
+  --lq-auth-toggle-color: var(--lq-text-muted);
+  --lq-surface-nested-bg: rgba(255, 255, 255, 0.96);
+  --lq-upload-surface-bg: rgba(241, 245, 249, 0.95);
 }
 
 /* ── Premium surface (Learning IQ benchmark) ── */
@@ -307,9 +337,9 @@ select,
 textarea,
 .form-select {
   border-radius: var(--lq-radius-md);
-  border: 1px solid var(--lq-border-subtle);
-  background: rgba(8, 15, 29, 0.95);
-  color: var(--lq-text-body);
+  border: 1px solid var(--lq-input-border);
+  background: var(--lq-input-bg);
+  color: var(--lq-input-text);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -322,7 +352,7 @@ textarea:focus,
   box-shadow: var(--lq-focus-ring);
 }
 
-/* ── Navigation (sidebar) ── */
+/* ── Navigation (generic links; fixed app sidebar → css/learniq-sidebar.css) ── */
 .lq-nav-item,
 .side-links a {
   border-radius: var(--lq-radius-sm);

@@ -14,7 +14,7 @@ import requests
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 from supabase import create_client, Client
@@ -365,10 +365,7 @@ def test_db():
 
 @app.get("/")
 def home():
-    index_file = FRONTEND_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"message": "LearnIQ Track API is running"}
+    return RedirectResponse(url="/login.html", status_code=302)
 
 
 # --- Profiles (replaces local-only auth storage for the API side) ---

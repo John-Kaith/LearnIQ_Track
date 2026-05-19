@@ -4,7 +4,7 @@
  */
 
 /* —— Ambient canvas —— */
-body {
+html:not([data-theme="light"]) body {
   background:
     radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.2), transparent 32%),
     radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.16), transparent 28%),
@@ -12,14 +12,7 @@ body {
     linear-gradient(165deg, var(--lq-bg-mid) 0%, var(--lq-bg-deep) 48%, #020617 100%);
 }
 
-/* —— Shell: sidebar & main cards —— */
-.dashboard-shell > .sidebar.glass-card,
-.dashboard-shell .sidebar {
-  background: linear-gradient(165deg, rgba(10, 18, 36, 0.92) 0%, rgba(5, 11, 22, 0.96) 100%);
-  border: 1px solid var(--lq-border-accent);
-  box-shadow: var(--lq-glow-inset), var(--lq-shadow-card), var(--lq-glow-purple);
-  backdrop-filter: blur(var(--lq-blur-glass));
-}
+/* —— Shell: fixed sidebar → css/learniq-sidebar.css (imported via style.css) —— */
 
 .dashboard-shell .main-panel > .glass-card.panel-header,
 .dashboard-shell .main-panel > section.panel-header.glass-card,
@@ -85,7 +78,7 @@ body {
 .table-card,
 .result-card,
 .top-rank-card {
-  background: rgba(5, 11, 22, 0.55);
+  background: var(--lq-surface-nested-bg);
   border: 1px solid var(--lq-border-subtle);
   border-radius: var(--lq-radius-md);
   box-shadow: var(--lq-glow-inset);
@@ -177,7 +170,7 @@ body {
 .teacher-subject-upload-form {
   border: 1px dashed var(--lq-border-accent-soft);
   border-radius: var(--lq-radius-lg);
-  background: rgba(5, 11, 22, 0.45);
+  background: var(--lq-upload-surface-bg);
 }
 
 /* —— Toasts —— */
@@ -248,10 +241,4 @@ html[data-theme="light"] body {
 html[data-theme="light"] .lesson-card {
   background: var(--panel);
   border-color: var(--lq-border-subtle);
-}
-
-html[data-theme="light"] .dashboard-shell > .sidebar.glass-card,
-html[data-theme="light"] .dashboard-shell .sidebar {
-  background: var(--panel);
-  border-color: var(--lq-border-accent);
 }

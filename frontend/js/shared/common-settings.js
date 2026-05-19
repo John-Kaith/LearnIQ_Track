@@ -326,7 +326,7 @@
         if (typeof logoutAdmin === "function") return logoutAdmin();
         if (typeof window.logout === "function") return window.logout();
         try { sessionStorage.clear(); } catch (e) { /* ignore */ }
-        window.location.href = "index.html";
+        window.location.href = "login.html";
       });
     }
   }
