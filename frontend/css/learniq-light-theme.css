@@ -1,88 +1,88 @@
 /**
- * LearnIQ light theme — corrects dark-only rules loaded elsewhere.
+ * LearnIQ default-light corrections (yellow & white benchmark).
  * Import last in style.css so these overrides win.
  */
 
 /* —— Cards & nested surfaces (global override layer uses dark rgba) —— */
-html[data-theme="light"] .hero-stats article,
-html[data-theme="light"] .mini-card,
-html[data-theme="light"] .step-item,
-html[data-theme="light"] .feature-stack div,
-html[data-theme="light"] .leaderboard-mini li,
-html[data-theme="light"] .time-log-item,
-html[data-theme="light"] .quiz-item,
-html[data-theme="light"] .activity-item,
-html[data-theme="light"] .journal-entry,
-html[data-theme="light"] .upload-hint,
-html[data-theme="light"] .preview-snippet,
-html[data-theme="light"] .rank-row,
-html[data-theme="light"] .chart-item,
-html[data-theme="light"] .leaderboard-card,
-html[data-theme="light"] .preview-card,
-html[data-theme="light"] .table-card,
-html[data-theme="light"] .result-card,
-html[data-theme="light"] .top-rank-card {
+html:not([data-theme="dark"]) .hero-stats article,
+html:not([data-theme="dark"]) .mini-card,
+html:not([data-theme="dark"]) .step-item,
+html:not([data-theme="dark"]) .feature-stack div,
+html:not([data-theme="dark"]) .leaderboard-mini li,
+html:not([data-theme="dark"]) .time-log-item,
+html:not([data-theme="dark"]) .quiz-item,
+html:not([data-theme="dark"]) .activity-item,
+html:not([data-theme="dark"]) .journal-entry,
+html:not([data-theme="dark"]) .upload-hint,
+html:not([data-theme="dark"]) .preview-snippet,
+html:not([data-theme="dark"]) .rank-row,
+html:not([data-theme="dark"]) .chart-item,
+html:not([data-theme="dark"]) .leaderboard-card,
+html:not([data-theme="dark"]) .preview-card,
+html:not([data-theme="dark"]) .table-card,
+html:not([data-theme="dark"]) .result-card,
+html:not([data-theme="dark"]) .top-rank-card {
   background: var(--panel-strong);
   border-color: var(--lq-border-subtle);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .glass-card,
-html[data-theme="light"] .lq-surface-glass {
+html:not([data-theme="dark"]) .glass-card,
+html:not([data-theme="dark"]) .lq-surface-glass {
   background: var(--panel);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .stat-card {
+html:not([data-theme="dark"]) .stat-card {
   background: var(--panel-strong);
   border-color: var(--lq-border-subtle);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .stat-card i {
+html:not([data-theme="dark"]) .stat-card i {
   color: var(--lq-accent-violet-soft);
 }
 
-html[data-theme="light"] .content-card,
-html[data-theme="light"] .panel-header.glass-card {
+html:not([data-theme="dark"]) .content-card,
+html:not([data-theme="dark"]) .panel-header.glass-card {
   color: var(--lq-text-body);
 }
 
 /* —— Auth (login / signup / module selection) —— */
-html[data-theme="light"] .auth-form label > span {
+html:not([data-theme="dark"]) .auth-form label > span {
   color: var(--lq-text-secondary);
   font-weight: 600;
 }
 
-html[data-theme="light"] .auth-form input,
-html[data-theme="light"] .auth-form select,
-html[data-theme="light"] .auth-form .password-input-container input {
+html:not([data-theme="dark"]) .auth-form input,
+html:not([data-theme="dark"]) .auth-form select,
+html:not([data-theme="dark"]) .auth-form .password-input-container input {
   background: var(--lq-auth-input-bg);
   border-color: var(--lq-auth-input-border);
   color: var(--lq-auth-input-text);
 }
 
-html[data-theme="light"] .auth-form input:focus,
-html[data-theme="light"] .auth-form select:focus {
+html:not([data-theme="dark"]) .auth-form input:focus,
+html:not([data-theme="dark"]) .auth-form select:focus {
   border-color: rgba(99, 102, 241, 0.45);
   box-shadow: var(--lq-focus-ring);
 }
 
-html[data-theme="light"] .auth-info h1,
-html[data-theme="light"] .auth-info h2,
-html[data-theme="light"] .auth-form-card h2,
-html[data-theme="light"] .auth-info .brand strong {
+html:not([data-theme="dark"]) .auth-info h1,
+html:not([data-theme="dark"]) .auth-info h2,
+html:not([data-theme="dark"]) .auth-form-card h2,
+html:not([data-theme="dark"]) .auth-info .brand strong {
   color: var(--lq-text-primary);
 }
 
-html[data-theme="light"] .auth-info p,
-html[data-theme="light"] .auth-form .small-note {
+html:not([data-theme="dark"]) .auth-info p,
+html:not([data-theme="dark"]) .auth-form .small-note {
   color: var(--lq-text-muted);
 }
 
-html[data-theme="light"] .login-page .auth-page-scrim,
-html[data-theme="light"] .signup-page .auth-page-scrim {
+html:not([data-theme="dark"]) .login-page .auth-page-scrim,
+html:not([data-theme="dark"]) .signup-page .auth-page-scrim {
   background: linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.35) 0%,
@@ -91,85 +91,85 @@ html[data-theme="light"] .signup-page .auth-page-scrim {
   );
 }
 
-html[data-theme="light"] .login-page .auth-page-media,
-html[data-theme="light"] .signup-page .auth-page-media {
+html:not([data-theme="dark"]) .login-page .auth-page-media,
+html:not([data-theme="dark"]) .signup-page .auth-page-media {
   filter: brightness(0.92) saturate(1.02);
 }
 
 /* —— Shell & nav —— */
-html[data-theme="light"] .lms-topnav {
+html:not([data-theme="dark"]) .lms-topnav {
   background: rgba(255, 255, 255, 0.96);
   border-color: var(--lq-border-subtle);
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
 }
 
-html[data-theme="light"] .topbar {
+html:not([data-theme="dark"]) .topbar {
   background: rgba(255, 255, 255, 0.94);
   border-color: var(--lq-border-subtle);
 }
 
-html[data-theme="light"] .upload-box,
-html[data-theme="light"] .teacher-subject-upload-form {
+html:not([data-theme="dark"]) .upload-box,
+html:not([data-theme="dark"]) .teacher-subject-upload-form {
   background: rgba(241, 245, 249, 0.95);
   border-color: var(--lq-border-accent-soft);
 }
 
-html[data-theme="light"] .lesson-card,
-html[data-theme="light"] .subject-card-themed.lesson-card {
+html:not([data-theme="dark"]) .lesson-card,
+html:not([data-theme="dark"]) .subject-card-themed.lesson-card {
   background: var(--panel-strong);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .module-card {
+html:not([data-theme="dark"]) .module-card {
   background: var(--panel-strong);
   border-color: var(--lq-border-subtle);
 }
 
-html[data-theme="light"] .module-card:hover {
+html:not([data-theme="dark"]) .module-card:hover {
   border-color: var(--lq-border-accent);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
 }
 
-html[data-theme="light"] .workspace-tab,
-html[data-theme="light"] .teacher-subject-tab {
+html:not([data-theme="dark"]) .workspace-tab,
+html:not([data-theme="dark"]) .teacher-subject-tab {
   color: var(--lq-text-secondary);
 }
 
-html[data-theme="light"] .workspace-tab.is-active,
-html[data-theme="light"] .teacher-subject-tab.is-active {
+html:not([data-theme="dark"]) .workspace-tab.is-active,
+html:not([data-theme="dark"]) .teacher-subject-tab.is-active {
   color: var(--lq-text-primary);
 }
 
 /* —— Tables & modals —— */
-html[data-theme="light"] .data-table th {
+html:not([data-theme="dark"]) .data-table th {
   color: var(--lq-accent-indigo);
 }
 
-html[data-theme="light"] .data-table td {
+html:not([data-theme="dark"]) .data-table td {
   color: var(--lq-text-body);
   border-bottom-color: var(--lq-border-subtle);
 }
 
-html[data-theme="light"] .lq-modal,
-html[data-theme="light"] .action-modal,
-html[data-theme="light"] .photo-crop-modal-card {
+html:not([data-theme="dark"]) .lq-modal,
+html:not([data-theme="dark"]) .action-modal,
+html:not([data-theme="dark"]) .photo-crop-modal-card {
   background: var(--panel-strong);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .lq-modal-backdrop,
-html[data-theme="light"] .action-modal-backdrop {
+html:not([data-theme="dark"]) .lq-modal-backdrop,
+html:not([data-theme="dark"]) .action-modal-backdrop {
   background: rgba(15, 23, 42, 0.4);
 }
 
 /* —— Misc dark panels —— */
-html[data-theme="light"] .immersion-time-in-summary,
-html[data-theme="light"] .role-card {
+html:not([data-theme="dark"]) .immersion-time-in-summary,
+html:not([data-theme="dark"]) .role-card {
   background: var(--panel-strong);
   border-color: var(--lq-border-subtle);
   color: var(--lq-text-body);
 }
 
-html[data-theme="light"] .side-links a:not(.active) {
+html:not([data-theme="dark"]) .side-links a:not(.active) {
   color: var(--lq-text-muted);
 }

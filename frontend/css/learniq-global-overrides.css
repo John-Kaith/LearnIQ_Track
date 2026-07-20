@@ -1,10 +1,10 @@
 /**
  * LearnIQ — system-wide visual layer (loads AFTER style.css)
- * Benchmark: Learning IQ card. Link this file after style.css on every page.
+ * Benchmark: Learning IQ card. Default = yellow & white light.
  */
 
-/* —— Ambient canvas —— */
-html:not([data-theme="light"]) body {
+/* —— Ambient canvas (dark mode opt-in) —— */
+html[data-theme="dark"] body {
   background:
     radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.2), transparent 32%),
     radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.16), transparent 28%),
@@ -30,33 +30,59 @@ html:not([data-theme="light"]) body {
 /* —— Lesson & subject cards —— */
 .lesson-card,
 .subject-card-themed.lesson-card {
-  background: linear-gradient(145deg, rgba(10, 18, 36, 0.72) 0%, rgba(5, 11, 22, 0.92) 100%);
+  background: var(--panel);
   border: 1px solid var(--lq-border-subtle);
   border-radius: var(--lq-radius-lg);
-  box-shadow: var(--lq-glow-inset), 0 10px 28px rgba(2, 6, 23, 0.32);
+  box-shadow: var(--lq-glow-inset), 0 4px 16px rgba(120, 53, 15, 0.08);
 }
 
 .lesson-card:hover {
   border-color: var(--lq-border-accent);
-  box-shadow: var(--lq-glow-inset), 0 14px 32px rgba(2, 6, 23, 0.38), var(--lq-glow-purple-sm);
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.78) 0%, rgba(7, 13, 28, 0.95) 100%);
+  box-shadow: var(--lq-glow-inset), 0 8px 22px rgba(120, 53, 15, 0.12), var(--lq-glow-purple-sm);
+  background: var(--panel-strong);
 }
 
 .lesson-card.selected {
-  border-color: rgba(167, 139, 250, 0.55);
-  box-shadow: var(--lq-glow-inset), 0 0 0 1px rgba(99, 102, 241, 0.35) inset, var(--lq-glow-purple-sm);
+  border-color: rgba(217, 119, 6, 0.45);
+  box-shadow: var(--lq-glow-inset), 0 0 0 1px rgba(234, 179, 8, 0.28) inset, var(--lq-glow-purple-sm);
 }
 
 .lesson-card-icon {
   color: var(--lq-accent-violet-soft);
-  background: rgba(99, 102, 241, 0.18);
-  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(217, 119, 6, 0.22);
 }
 
 .lesson-card-pill {
+  border-color: rgba(217, 119, 6, 0.2);
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--lq-text-secondary);
+}
+
+html[data-theme="dark"] .lesson-card,
+html[data-theme="dark"] .subject-card-themed.lesson-card {
+  background: linear-gradient(145deg, rgba(10, 18, 36, 0.72) 0%, rgba(5, 11, 22, 0.92) 100%);
+  box-shadow: var(--lq-glow-inset), 0 10px 28px rgba(2, 6, 23, 0.32);
+}
+
+html[data-theme="dark"] .lesson-card:hover {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.78) 0%, rgba(7, 13, 28, 0.95) 100%);
+  box-shadow: var(--lq-glow-inset), 0 14px 32px rgba(2, 6, 23, 0.38), var(--lq-glow-purple-sm);
+}
+
+html[data-theme="dark"] .lesson-card.selected {
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow: var(--lq-glow-inset), 0 0 0 1px rgba(99, 102, 241, 0.35) inset, var(--lq-glow-purple-sm);
+}
+
+html[data-theme="dark"] .lesson-card-icon {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.22);
+}
+
+html[data-theme="dark"] .lesson-card-pill {
   border-color: rgba(99, 102, 241, 0.2);
   background: rgba(99, 102, 241, 0.1);
-  color: var(--lq-text-secondary);
 }
 
 /* —— Nested list / mini surfaces —— */
@@ -96,11 +122,21 @@ html:not([data-theme="light"]) body {
 }
 
 .data-table tbody tr:hover td {
+  background: rgba(251, 191, 36, 0.1);
+}
+
+html[data-theme="dark"] .data-table tbody tr:hover td {
   background: rgba(99, 102, 241, 0.06);
 }
 
 /* —— Top nav (admin) —— */
 .lms-topnav {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--lq-border-subtle);
+  box-shadow: 0 4px 24px rgba(120, 53, 15, 0.08);
+}
+
+html[data-theme="dark"] .lms-topnav {
   background: linear-gradient(135deg, rgba(10, 18, 36, 0.94), rgba(5, 11, 22, 0.98));
   border: 1px solid var(--lq-border-accent);
   box-shadow: var(--lq-glow-inset), var(--lq-glow-purple-sm);
@@ -108,12 +144,24 @@ html:not([data-theme="light"]) body {
 
 .lms-topnav-links a:hover,
 .lms-topnav-links a.is-active {
-  background: rgba(99, 102, 241, 0.14);
-  border-color: rgba(99, 102, 241, 0.28);
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(217, 119, 6, 0.24);
   color: var(--lq-text-primary);
 }
 
+html[data-theme="dark"] .lms-topnav-links a:hover,
+html[data-theme="dark"] .lms-topnav-links a.is-active {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.28);
+}
+
 .topbar {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: var(--lq-border-subtle);
+  box-shadow: 0 4px 20px rgba(120, 53, 15, 0.08);
+}
+
+html[data-theme="dark"] .topbar {
   background: linear-gradient(135deg, rgba(10, 18, 36, 0.9), rgba(5, 11, 22, 0.95));
   border-color: var(--lq-border-accent);
   box-shadow: var(--lq-glow-inset), var(--lq-glow-purple-sm);
@@ -231,14 +279,14 @@ html:not([data-theme="light"]) body {
   background: linear-gradient(90deg, rgba(99, 102, 241, 0.14), rgba(59, 130, 246, 0.06));
 }
 
-html[data-theme="light"] body {
+html:not([data-theme="dark"]) body {
   background:
-    radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.1), transparent 32%),
-    radial-gradient(circle at 88% 6%, rgba(139, 92, 246, 0.08), transparent 28%),
-    linear-gradient(165deg, #f8fafc 0%, #eef2ff 45%, #f1f5f9 100%);
+    radial-gradient(circle at 12% 8%, rgba(251, 191, 36, 0.16), transparent 32%),
+    radial-gradient(circle at 88% 6%, rgba(234, 179, 8, 0.12), transparent 28%),
+    linear-gradient(165deg, #ffffff 0%, #fffbeb 45%, #fef9c3 100%);
 }
 
-html[data-theme="light"] .lesson-card {
+html:not([data-theme="dark"]) .lesson-card {
   background: var(--panel);
   border-color: var(--lq-border-subtle);
 }

@@ -102,11 +102,11 @@
           <div class="cs-row">
             <div class="cs-row-text">
               <strong>Theme</strong>
-              <span class="small-note">Switch between dark and light interface.</span>
+              <span class="small-note">Light (yellow &amp; white) is default. Dark blue is optional.</span>
             </div>
             <div class="cs-segmented" role="group" aria-label="Theme">
-              <button type="button" class="cs-seg-btn" data-cs-theme="dark"><i class="fa-solid fa-moon"></i> Dark</button>
               <button type="button" class="cs-seg-btn" data-cs-theme="light"><i class="fa-solid fa-sun"></i> Light</button>
+              <button type="button" class="cs-seg-btn" data-cs-theme="dark"><i class="fa-solid fa-moon"></i> Dark blue</button>
             </div>
           </div>
           <div class="cs-row">
@@ -238,7 +238,7 @@
     // ---- Theme segmented control
     const themeBtns = rootEl.querySelectorAll("[data-cs-theme]");
     const syncThemeButtons = () => {
-      const current = (window.LearnIQTheme && window.LearnIQTheme.get && window.LearnIQTheme.get()) || "dark";
+      const current = (window.LearnIQTheme && window.LearnIQTheme.get && window.LearnIQTheme.get()) || "light";
       themeBtns.forEach((b) => {
         b.classList.toggle("is-active", b.getAttribute("data-cs-theme") === current);
         b.setAttribute("aria-pressed", b.getAttribute("data-cs-theme") === current ? "true" : "false");

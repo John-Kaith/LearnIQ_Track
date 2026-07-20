@@ -3233,9 +3233,9 @@ function setupLoginPage() {
         try {
           if (window.LearnIQTheme && typeof window.LearnIQTheme.set === "function") {
             const themeFromDom =
-              document.documentElement.getAttribute("data-theme") === "light"
-                ? "light"
-                : "dark";
+              document.documentElement.getAttribute("data-theme") === "dark"
+                ? "dark"
+                : "light";
             window.LearnIQTheme.set(themeFromDom);
           }
         } catch (_) {
