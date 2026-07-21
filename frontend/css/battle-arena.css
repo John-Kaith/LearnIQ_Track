@@ -1,0 +1,112 @@
+/**
+ * AI Battle Arena — Phase 1 styles (page-scoped).
+ * Linked only from battle-arena.html so it can be removed without affecting LearnIQ.
+ */
+
+.battle-arena-page .battle-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.battle-arena-page .battle-mode-card {
+  position: relative;
+  display: block;
+  margin: 0;
+  cursor: pointer;
+  border-radius: var(--lq-radius-lg);
+  border: 1px solid var(--lq-border-subtle);
+  background: var(--panel);
+  box-shadow: var(--lq-glow-inset);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.battle-arena-page .battle-mode-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.battle-arena-page .battle-mode-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+}
+
+.battle-arena-page .battle-mode-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-bottom: 0.25rem;
+  border-radius: var(--lq-radius-sm);
+  background: rgba(251, 191, 36, 0.18);
+  color: var(--lq-accent-indigo);
+  font-size: 1.1rem;
+}
+
+html[data-theme="dark"] .battle-arena-page .battle-mode-icon {
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--lq-accent-violet-soft);
+}
+
+.battle-arena-page .battle-mode-card.is-selected {
+  border-color: var(--lq-border-accent);
+  box-shadow: var(--lq-glow-inset), var(--lq-glow-purple-sm);
+}
+
+.battle-arena-page .battle-mode-card.is-disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.battle-arena-page .battle-mode-card:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  border-color: var(--lq-border-accent-soft);
+}
+
+.battle-arena-page .battle-arena-lesson-card {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.battle-arena-page .battle-arena-lesson-card.selected {
+  border-color: var(--lq-border-accent);
+  box-shadow: var(--lq-glow-inset), 0 0 0 1px rgba(234, 179, 8, 0.28) inset, var(--lq-glow-purple-sm);
+}
+
+html[data-theme="dark"] .battle-arena-page .battle-arena-lesson-card.selected {
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow: var(--lq-glow-inset), 0 0 0 1px rgba(99, 102, 241, 0.35) inset, var(--lq-glow-purple-sm);
+}
+
+.battle-arena-page .battle-arena-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.1rem;
+}
+
+.battle-arena-page .battle-arena-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.battle-arena-page #battle-arena-lessons-empty.empty-state {
+  margin-top: 0.75rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.battle-arena-page #battle-arena-lessons-empty.empty-state i {
+  font-size: 1.75rem;
+  color: var(--lq-accent-violet-soft);
+  margin-bottom: 0.5rem;
+}

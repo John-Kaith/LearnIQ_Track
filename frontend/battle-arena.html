@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Battle Arena | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=202605213" />
+  <link rel="stylesheet" href="css/battle-arena.css" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=202605214" defer></script>
+  <script src="js/pages/battle-arena.entry.js" defer></script>
+</head>
+<body class="battle-arena-page" data-sidebar-active="battle-arena">
+  <div class="dashboard-shell container">
+    <aside class="sidebar lq-sidebar">
+      <div class="sidebar-header">
+        <a class="brand" href="login.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>LearnIQ Module</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-links">
+        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="student-archived.html"><i class="fa-solid fa-box-archive"></i> Archived</a>
+        <a class="active" href="battle-arena.html"><i class="fa-solid fa-gamepad"></i> AI Battle Arena</a>
+        <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div class="user-chip-text">
+            <span id="student-display-name">Student</span>
+            <div class="small-note" id="student-display-track">STEM - 12 A</div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>AI Battle Arena</h1>
+          <p>Pick a published lesson and a battle mode. Battles start in a later update — this page is setup only.</p>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="content-stack lesson-workspace-main">
+          <article class="glass-card content-card">
+            <div class="content-card-header-row">
+              <div>
+                <h3>Available Lessons</h3>
+                <p class="content-subtitle">Select one published lesson from your subjects.</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-small" id="battle-arena-refresh-btn">
+                <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p id="battle-arena-lessons-status" class="small-note" role="status">Loading lessons…</p>
+            <div id="battle-arena-lessons-empty" class="empty-state" hidden>
+              <i class="fa-solid fa-book-open" aria-hidden="true"></i>
+              <h3>No published lessons yet</h3>
+              <p>Join a subject and wait for your teacher to publish a lesson, then come back here.</p>
+            </div>
+            <div id="battle-arena-lesson-list" class="lesson-grid" hidden></div>
+          </article>
+
+          <article class="glass-card content-card">
+            <h3>Battle Mode</h3>
+            <p class="content-subtitle">Choose how you want to compete.</p>
+            <div class="battle-mode-grid" role="radiogroup" aria-label="Battle mode">
+              <label class="battle-mode-card is-selected">
+                <input type="radio" name="battle-mode" value="ai" checked />
+                <span class="battle-mode-card-body">
+                  <span class="battle-mode-icon" aria-hidden="true"><i class="fa-solid fa-robot"></i></span>
+                  <strong>Battle AI</strong>
+                  <span class="small-note">Challenge an AI opponent using this lesson.</span>
+                </span>
+              </label>
+              <label class="battle-mode-card is-disabled" aria-disabled="true">
+                <input type="radio" name="battle-mode" value="player" disabled />
+                <span class="battle-mode-card-body">
+                  <span class="battle-mode-icon" aria-hidden="true"><i class="fa-solid fa-users"></i></span>
+                  <strong>Battle Player</strong>
+                  <span class="small-note">Coming Soon</span>
+                </span>
+              </label>
+            </div>
+          </article>
+
+          <article class="glass-card content-card battle-arena-actions">
+            <button type="button" class="btn btn-primary" id="battle-arena-start-btn" disabled>
+              <i class="fa-solid fa-play" aria-hidden="true"></i> Start Battle
+            </button>
+            <p class="small-note" id="battle-arena-start-hint">Select a lesson to enable Start Battle.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
