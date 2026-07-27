@@ -6,7 +6,7 @@
   <title>AI Battle Arena | LearnIQ Track</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=202605213" />
@@ -60,15 +60,17 @@
       <section class="glass-card panel-header">
         <div class="panel-title">
           <h1>AI Battle Arena</h1>
-          <p>Pick a published lesson and a battle mode. Battles start in a later update — this page is setup only.</p>
+          <p>Battle lobby — select a lesson, choose a mode, review your setup, then start when ready.</p>
         </div>
       </section>
 
-      <section class="dashboard-grid">
+      <section class="dashboard-grid" id="battle-lobby-screen">
         <div class="content-stack lesson-workspace-main">
+          <!-- Step 1 -->
           <article class="glass-card content-card">
             <div class="content-card-header-row">
               <div>
+                <p class="battle-step-label small-note">Step 1</p>
                 <h3>Available Lessons</h3>
                 <p class="content-subtitle">Select one published lesson from your subjects.</p>
               </div>
@@ -85,7 +87,9 @@
             <div id="battle-arena-lesson-list" class="lesson-grid" hidden></div>
           </article>
 
+          <!-- Step 2 -->
           <article class="glass-card content-card">
+            <p class="battle-step-label small-note">Step 2</p>
             <h3>Battle Mode</h3>
             <p class="content-subtitle">Choose how you want to compete.</p>
             <div class="battle-mode-grid" role="radiogroup" aria-label="Battle mode">
@@ -108,15 +112,176 @@
             </div>
           </article>
 
+          <!-- Step 3 -->
+          <article class="glass-card content-card" id="battle-selected-panel" aria-live="polite">
+            <p class="battle-step-label small-note">Step 3</p>
+            <h3>Selected Lesson</h3>
+            <p id="battle-selected-empty" class="content-subtitle">No lesson selected.</p>
+            <div id="battle-selected-details" class="battle-selected-details" hidden>
+              <dl class="battle-info-list">
+                <div class="battle-info-row">
+                  <dt>Lesson Name</dt>
+                  <dd id="battle-info-name">—</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>File Type</dt>
+                  <dd id="battle-info-type">—</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>Created Date</dt>
+                  <dd id="battle-info-date">—</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>Status</dt>
+                  <dd>Ready for Battle</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>Estimated Battle</dt>
+                  <dd>5-10 minutes</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>Question Count</dt>
+                  <dd>Coming Soon</dd>
+                </div>
+                <div class="battle-info-row">
+                  <dt>AI Difficulty</dt>
+                  <dd>Normal</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+
+          <!-- Step 4 -->
           <article class="glass-card content-card battle-arena-actions">
+            <p class="battle-step-label small-note">Step 4</p>
             <button type="button" class="btn btn-primary" id="battle-arena-start-btn" disabled>
-              <i class="fa-solid fa-play" aria-hidden="true"></i> Start Battle
+              <i class="fa-solid fa-play" aria-hidden="true"></i>
+              <span id="battle-arena-start-label">Start Battle</span>
             </button>
-            <p class="small-note" id="battle-arena-start-hint">Select a lesson to enable Start Battle.</p>
+            <p class="small-note" id="battle-arena-start-hint">Select a lesson and battle mode to continue.</p>
           </article>
         </div>
       </section>
     </main>
+  </div>
+
+  <section class="battle-fight-screen" id="battle-fight-screen" hidden>
+    <div class="battle-fight-inner">
+      <div class="battle-stage">
+        <div class="battle-stage-bg" aria-hidden="true">
+          <div class="battle-stage-sky"></div>
+          <div class="battle-stage-ground"></div>
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-small battle-exit-btn" id="battle-exit-btn">
+          <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Exit
+        </button>
+
+        <div class="battle-vs-badge">VS</div>
+
+        <div class="battle-fighter battle-fighter-player" id="battle-player-fighter">
+          <div class="battle-fighter-sprite" id="battle-player-sprite" aria-hidden="true">🧑‍🎓</div>
+          <div class="battle-fighter-panel">
+            <strong id="battle-fight-player-name">You</strong>
+            <div class="battle-hp-row">
+              <div class="battle-hp-bar"><div class="battle-hp-bar-fill" id="battle-player-hp-fill"></div></div>
+              <span class="battle-hp-value" id="battle-player-hp-value">100/100</span>
+            </div>
+            <div class="battle-hearts" id="battle-player-hearts" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div class="battle-fighter battle-fighter-ai" id="battle-ai-fighter">
+          <div class="battle-fighter-sprite" id="battle-ai-sprite" aria-hidden="true">🤖</div>
+          <div class="battle-fighter-panel battle-fighter-panel-right">
+            <strong id="battle-fight-ai-name">AI Rival</strong>
+            <div class="battle-hp-row">
+              <span class="battle-hp-value" id="battle-ai-hp-value">100/100</span>
+              <div class="battle-hp-bar"><div class="battle-hp-bar-fill" id="battle-ai-hp-fill"></div></div>
+            </div>
+            <div class="battle-hearts" id="battle-ai-hearts" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="battle-fight-board">
+        <div class="battle-board-main">
+          <p class="small-note" id="battle-vocab-note" hidden></p>
+          <div class="battle-word-preview" id="battle-word-preview" aria-live="polite">
+            <span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to build a word…</span>
+          </div>
+          <div class="battle-word-actions">
+            <button type="button" class="btn btn-secondary btn-small" id="battle-clear-btn">Clear</button>
+            <button type="button" class="btn btn-secondary btn-small" id="battle-scramble-btn">
+              <i class="fa-solid fa-shuffle" aria-hidden="true"></i> Scramble
+            </button>
+            <button type="button" class="btn btn-primary" id="battle-attack-btn" disabled>
+              <i class="fa-solid fa-bolt" aria-hidden="true"></i> Attack
+            </button>
+          </div>
+          <div class="battle-letter-grid" id="battle-letter-grid" role="group" aria-label="Letter tiles"></div>
+        </div>
+
+        <aside class="battle-words-used">
+          <h4>Words Used</h4>
+          <ul class="battle-words-used-list" id="battle-words-used-list">
+            <li class="battle-words-used-empty" id="battle-words-used-empty">No words yet — start attacking!</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <div
+    id="battle-arena-modal"
+    class="action-modal-backdrop"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="battle-arena-modal-title"
+  >
+    <div class="action-modal glass-card">
+      <div class="action-modal-head">
+        <h3 id="battle-arena-modal-title">Battle Arena</h3>
+        <button type="button" class="btn btn-ghost btn-small" id="battle-arena-modal-close" aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <dl class="battle-info-list battle-modal-summary">
+        <div class="battle-info-row">
+          <dt>Selected Lesson</dt>
+          <dd id="battle-modal-lesson">—</dd>
+        </div>
+        <div class="battle-info-row">
+          <dt>Mode</dt>
+          <dd id="battle-modal-mode">Battle AI</dd>
+        </div>
+      </dl>
+      <p class="small-note" style="margin-top: 0.85rem;">Ready to battle using this lesson's key words?</p>
+      <div class="action-modal-actions">
+        <button type="button" class="btn btn-primary" id="battle-arena-modal-ok">Start Battle</button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="battle-result-modal"
+    class="action-modal-backdrop"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="battle-result-modal-title"
+  >
+    <div class="action-modal glass-card">
+      <div class="action-modal-head">
+        <h3 id="battle-result-modal-title">Battle Result</h3>
+      </div>
+      <p class="small-note" id="battle-result-modal-body">—</p>
+      <div class="action-modal-actions">
+        <button type="button" class="btn btn-secondary" id="battle-result-secondary-btn">Back to Lobby</button>
+        <button type="button" class="btn btn-primary" id="battle-result-primary-btn">Battle Again</button>
+      </div>
+    </div>
   </div>
 </body>
 </html>

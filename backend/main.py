@@ -2163,6 +2163,96 @@ async def generate_question(body: dict):
     return {"questions": questions_data, "count": len(questions_data)}
 
 
+def normalize_battle_words(words: object) -> list[str]:
+    if not isinstance(words, list):
+        return []
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for w in words:
+        cleaned = re.sub(r"[^a-z]", "", str(w).strip().lower())
+        if len(cleaned) < 4 or len(cleaned) > 10:
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+    return normalized[:15]
+
+
+@app.post("/generate-battle-words")
+async def generate_battle_words(body: dict):
+    print("AI GENERATION REQUEST RECEIVED: /generate-battle-words")
+    key_err = require_gemini_key()
+    if key_err is not None:
+        return key_err
+    db_err = require_supabase()
+    if db_err is not None:
+        return db_err
+
+    file_id = body.get("file_id")
+    lesson = db_supabase.get_lesson_row(str(file_id)) if file_id else None
+    if not lesson:
+        return JSONResponse({"error": "File not found"}, status_code=404)
+
+    if not body.get("skip_cooldown"):
+        cd_err = check_ai_generation_cooldown("battle_words", str(file_id))
+        if cd_err is not None:
+            return cd_err
+
+    text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
+    if text_err:
+        return JSONResponse({"error": text_err}, status_code=400)
+
+    prompt = (
+        "You are an educational game designer picking vocabulary for a word-spelling battle game "
+        "(the student forms these words from a letter grid to attack an opponent).\n"
+        "TASK: From the lesson text below, choose 12 to 15 important vocabulary words or key terms "
+        "a student should learn.\n"
+        "Rules:\n"
+        "- Each entry must be a SINGLE word: letters only, no spaces, no punctuation, no numbers.\n"
+        "- Each word must be 4 to 10 letters long.\n"
+        "- Only use words that actually appear in, or are directly implied by, the lesson text.\n"
+        "- Prefer subject-specific or technical terms over common filler words.\n"
+        "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences) with this schema:\n"
+        '{ "words": ["word1", "word2", ...] }\n\n'
+        "LESSON TEXT:\n"
+        f"{text}"
+    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    print("SENDING TO AI API (battle_words)")
+    response = requests.post(url, json=payload, timeout=120)
+    result = response.json()
+    print("AI RAW RESPONSE STATUS (battle_words):", response.status_code)
+
+    if response.status_code != 200:
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
+
+    raw_output = gemini_text_from_result(result)
+    if not raw_output:
+        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
+
+    try:
+        parsed = parse_model_json(raw_output)
+        words = normalize_battle_words(parsed.get("words") if isinstance(parsed, dict) else None)
+    except (json.JSONDecodeError, ValueError):
+        return JSONResponse({"error": "Failed to parse battle words. Please retry."}, status_code=502)
+
+    if len(words) < 5:
+        return JSONResponse({"error": "AI could not find enough usable words in this lesson."}, status_code=502)
+
+    try:
+        db_supabase.set_battle_words(str(file_id), words)
+    except Exception as e:
+        print("AI GENERATION ERROR (db write battle_words):", str(e))
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+    if not body.get("skip_cooldown"):
+        start_ai_generation_cooldown("battle_words", str(file_id))
+    return {"words": words}
+
+
 @app.post("/generate-activities")
 async def generate_activities(body: dict):
     print(f"[DEBUG] /generate-activities called with body: {body}")
@@ -2351,6 +2441,7 @@ def get_content(file_id: str):
             "reviewer": gen.get("reviewer"),
             "quiz": gen.get("quiz") or [],
             "activities": gen.get("activities"),
+            "battle_words": gen.get("battle_words") or [],
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
