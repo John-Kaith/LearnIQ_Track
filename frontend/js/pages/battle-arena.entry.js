@@ -15,25 +15,99 @@
   var GRID_SIZE = 20;
   var PLAYER_MAX_HP = 100;
   var AI_MAX_HP = 100;
-  var STOPWORDS = new Set([
-    "this", "that", "these", "those", "with", "from", "have", "has", "had",
-    "were", "will", "would", "could", "should", "which", "their", "there",
-    "about", "into", "than", "then", "them", "they", "your", "each", "some",
-    "when", "what", "where", "while", "such", "also", "only", "over", "more",
-    "most", "other", "after", "before", "because", "being", "does", "doing",
-    "here", "same", "very", "just", "like", "make", "made", "used", "using",
-    "known", "shown", "given", "based", "called",
-  ]);
-  var FALLBACK_WORDS = [
-    "analysis", "concept", "evidence", "process", "structure", "theory",
-    "context", "summary", "factor", "method", "principle", "reaction",
-    "variable", "hypothesis", "system",
+  var FALLBACK_QUESTIONS = [
+    { question: "What word means breaking something down into its parts to understand it?", answer: "analysis", meaning: "Examining something closely by studying its parts." },
+    { question: "What word means an idea or principle behind something?", answer: "concept", meaning: "A general idea behind a topic or theory." },
+    { question: "What word means information that supports a claim?", answer: "evidence", meaning: "Facts or information showing something is true." },
+    { question: "What word means a series of steps to reach a result?", answer: "process", meaning: "A series of actions taken to achieve a result." },
+    { question: "What word means the arrangement of parts within something?", answer: "structure", meaning: "The way parts are arranged to form a whole." },
+    { question: "What word means a set of ideas explaining how something works?", answer: "theory", meaning: "An explanation based on general principles." },
+    { question: "What word means the setting or background of a situation?", answer: "context", meaning: "The circumstances surrounding an idea or event." },
+    { question: "What word means a brief overview of the main points?", answer: "summary", meaning: "A short statement of the main points." },
+    { question: "What word means something that contributes to a result?", answer: "factor", meaning: "Something that contributes to a result." },
+    { question: "What word means a particular way of doing something?", answer: "method", meaning: "A particular way of doing something." },
+    { question: "What word means a fundamental rule or belief?", answer: "principle", meaning: "A fundamental rule or belief guiding behavior." },
+    { question: "What word means a response triggered by something else?", answer: "reaction", meaning: "A response triggered by an action or event." },
+    { question: "What word means something that can change or vary?", answer: "variable", meaning: "Something that can change or vary." },
+    { question: "What word means an educated guess to be tested?", answer: "hypothesis", meaning: "A proposed explanation to be tested." },
+    { question: "What word means a set of connected parts working together?", answer: "system", meaning: "A set of connected parts working as a whole." },
   ];
   var LETTER_FILLER =
     "eeeeeeeeeeeeaaaaaaaaaiiiiiiiiiooooooooonnnnnnnrrrrrrrttttttllllssssuuuu" +
     "ddddggg" + "bbccmmppffhhvvwwyykjxqz";
 
   var fight = null;
+  var audioCtx = null;
+
+  /* ----------------------------------------------------------
+   * Retro sound effects — synthesized with Web Audio, no audio
+   * files needed. Lazily created on first use (autoplay policies
+   * require a user gesture, and every caller here fires from a
+   * click handler already).
+   * ---------------------------------------------------------- */
+
+  function getAudioCtx() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    if (!audioCtx) audioCtx = new Ctx();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, type, delay) {
+    var ctx = getAudioCtx();
+    if (!ctx) return;
+    var startAt = ctx.currentTime + (delay || 0) / 1000;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = type || "square";
+    osc.frequency.setValueAtTime(freq, startAt);
+    gain.gain.setValueAtTime(0.09, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + duration);
+  }
+
+  function playClickSound() {
+    playTone(720, 0.05, "square");
+  }
+
+  function playScrambleSound() {
+    playTone(500, 0.05, "square");
+    playTone(650, 0.05, "square", 40);
+  }
+
+  function playErrorSound() {
+    playTone(140, 0.22, "sawtooth");
+  }
+
+  function playAttackSound(who) {
+    if (who === "ai") {
+      playTone(330, 0.07, "square");
+      playTone(220, 0.09, "square", 60);
+    } else {
+      playTone(440, 0.06, "square");
+      playTone(660, 0.09, "square", 50);
+    }
+  }
+
+  function playHitSound() {
+    playTone(160, 0.14, "square");
+  }
+
+  function playVictorySound() {
+    playTone(523, 0.12, "square", 0);
+    playTone(659, 0.12, "square", 120);
+    playTone(784, 0.22, "square", 240);
+  }
+
+  function playDefeatSound() {
+    playTone(392, 0.16, "sawtooth", 0);
+    playTone(330, 0.16, "sawtooth", 140);
+    playTone(262, 0.3, "sawtooth", 280);
+  }
 
   function esc(text) {
     if (typeof escapeHtml === "function") return escapeHtml(text);
@@ -301,74 +375,39 @@
   }
 
   /* ----------------------------------------------------------
-   * Phase 3 — vocab extraction
+   * Phase 3 — per-question letter grid
+   * Builds the grid directly from the current answer's exact
+   * letters (guaranteed formable) plus random filler letters,
+   * shuffled — no probabilistic pool needed since there's only
+   * one valid word at a time.
    * ---------------------------------------------------------- */
 
-  function addWordsFromText(freq, text, weight) {
-    if (!text) return;
-    String(text)
-      .toLowerCase()
-      .split(/[^a-z]+/)
-      .forEach(function (w) {
-        if (w.length < 4 || w.length > 9) return;
-        if (STOPWORDS.has(w)) return;
-        freq[w] = (freq[w] || 0) + weight;
-      });
-  }
-
-  function extractVocabWords(reviewerText, quiz) {
-    var freq = {};
-    addWordsFromText(freq, reviewerText, 1);
-    (Array.isArray(quiz) ? quiz : []).forEach(function (q) {
-      if (!q || typeof q !== "object") return;
-      addWordsFromText(freq, q.question, 1);
-      var choices = q.choices || q.options || [];
-      if (Array.isArray(choices)) {
-        choices.forEach(function (c) {
-          addWordsFromText(freq, c, 1);
-        });
-      } else if (choices && typeof choices === "object") {
-        Object.keys(choices).forEach(function (k) {
-          addWordsFromText(freq, choices[k], 1);
-        });
-      }
-      addWordsFromText(freq, q.answer || q.correct_answer, 4);
+  function buildAnswerGrid(answer, size) {
+    var letters = String(answer || "").split("");
+    while (letters.length < size) {
+      letters.push(LETTER_FILLER[Math.floor(Math.random() * LETTER_FILLER.length)]);
+    }
+    letters = letters.slice(0, size);
+    for (var i = letters.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = letters[i];
+      letters[i] = letters[j];
+      letters[j] = tmp;
+    }
+    return letters.map(function (ch) {
+      return { letter: ch };
     });
-
-    return Object.keys(freq)
-      .sort(function (a, b) {
-        var diff = freq[b] - freq[a];
-        return diff !== 0 ? diff : b.length - a.length;
-      })
-      .slice(0, 14);
   }
 
-  /* ----------------------------------------------------------
-   * Phase 3 — letter pool / grid
-   * ---------------------------------------------------------- */
-
-  function buildLetterPool(vocabWords) {
-    var pool = [];
-    vocabWords.forEach(function (w) {
-      String(w)
-        .split("")
-        .forEach(function (ch) {
-          pool.push(ch);
-          pool.push(ch);
-        });
-    });
-    for (var i = 0; i < LETTER_FILLER.length; i++) pool.push(LETTER_FILLER[i]);
-    return pool;
-  }
-
-  function drawLetter(pool) {
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  function drawGrid(pool, size) {
-    var grid = [];
-    for (var i = 0; i < size; i++) grid.push({ letter: drawLetter(pool) });
-    return grid;
+  function shuffleArray(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
+    }
+    return a;
   }
 
   /* ----------------------------------------------------------
@@ -390,17 +429,15 @@
       throw new Error((data && data.error) || "Could not load lesson content.");
     }
     return {
-      reviewer: typeof data.reviewer === "string" ? data.reviewer : "",
-      quiz: Array.isArray(data.quiz) ? data.quiz : [],
-      battleWords: Array.isArray(data.battle_words) ? data.battle_words : [],
+      battleQuestions: Array.isArray(data.battle_questions) ? data.battle_questions : [],
     };
   }
 
-  async function generateBattleWordsWithAi(fileId) {
+  async function generateBattleQuestionsWithAi(fileId) {
     if (typeof apiUrl !== "function") {
       throw new Error("API helper missing. Check js/core/api.js.");
     }
-    var res = await fetch(apiUrl("/generate-battle-words"), {
+    var res = await fetch(apiUrl("/generate-battle-questions"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file_id: fileId }),
@@ -412,21 +449,54 @@
       data = {};
     }
     if (!res.ok) {
-      throw new Error((data && data.error) || "Could not generate battle words.");
+      throw new Error((data && data.error) || "Could not generate battle questions.");
     }
-    return Array.isArray(data.words) ? data.words : [];
+    return Array.isArray(data.questions) ? data.questions : [];
+  }
+
+  function normalizeQuestionEntries(rawEntries) {
+    var out = [];
+    (Array.isArray(rawEntries) ? rawEntries : []).forEach(function (entry) {
+      if (!entry || typeof entry !== "object") return;
+      var questionText = String(entry.question || "").trim();
+      var answer = String(entry.answer || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
+      if (!questionText || answer.length < 4 || answer.length > 10) return;
+      out.push({
+        question: questionText,
+        answer: answer,
+        meaning: String(entry.meaning || "").trim(),
+      });
+    });
+    return out;
   }
 
   function showLobbyScreen() {
     document.querySelector(".dashboard-shell")?.removeAttribute("hidden");
+    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
     document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
     document.body.classList.remove("battle-fullscreen-active");
   }
 
   function showFightScreenEl() {
     document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
+    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
     document.getElementById("battle-fight-screen")?.removeAttribute("hidden");
     document.body.classList.add("battle-fullscreen-active");
+  }
+
+  function showLoadingScreen() {
+    document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
+    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
+    document.getElementById("battle-loading-screen")?.removeAttribute("hidden");
+    document.body.classList.add("battle-fullscreen-active");
+  }
+
+  function setLoadingHint(text) {
+    var hint = document.getElementById("battle-loading-hint");
+    if (hint) hint.textContent = text;
   }
 
   function renderVocabNote() {
@@ -434,7 +504,7 @@
     if (!note || !fight) return;
     if (fight.usingFallback) {
       note.hidden = false;
-      note.textContent = "Using general vocabulary — no AI content yet for this lesson.";
+      note.textContent = "Using general questions — no AI content yet for this lesson.";
     } else {
       note.hidden = true;
     }
@@ -474,17 +544,22 @@
     var listEl = document.getElementById("battle-words-used-list");
     if (!listEl || !fight) return;
     if (!fight.wordsUsed.length) {
-      listEl.innerHTML = '<li class="battle-words-used-empty" id="battle-words-used-empty">No words yet — start attacking!</li>';
+      listEl.innerHTML = '<li class="battle-words-used-empty" id="battle-words-used-empty">No answers yet — start attacking!</li>';
       return;
     }
     listEl.innerHTML = fight.wordsUsed
       .map(function (entry) {
+        var meaningHtml = entry.meaning
+          ? '<span class="battle-word-meaning">' + esc(entry.meaning) + "</span>"
+          : "";
         return (
-          "<li><span>" +
+          "<li><div class='battle-words-used-row'><span>" +
           esc(entry.word.toUpperCase()) +
           '</span><span class="small-note">+' +
           entry.damage +
-          " dmg</span></li>"
+          " dmg</span></div>" +
+          meaningHtml +
+          "</li>"
         );
       })
       .join("");
@@ -496,7 +571,7 @@
     if (!previewEl || !fight) return;
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("");
     if (!word) {
-      previewEl.innerHTML = '<span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to build a word…</span>';
+      previewEl.innerHTML = '<span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to spell the answer…</span>';
     } else {
       previewEl.textContent = word;
     }
@@ -530,6 +605,7 @@
     var idx = Number(btn.getAttribute("data-tile-index"));
     if (Number.isNaN(idx) || fight.selected.indexOf(idx) !== -1) return;
     fight.selected.push(idx);
+    playClickSound();
     renderGrid();
     renderWordPreview();
   }
@@ -543,8 +619,29 @@
 
   function onScrambleClick() {
     if (!fight) return;
-    fight.grid = drawGrid(fight.pool, GRID_SIZE);
+    fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
     fight.selected = [];
+    playScrambleSound();
+    renderGrid();
+    renderWordPreview();
+  }
+
+  function renderQuestion() {
+    var textEl = document.getElementById("battle-question-text");
+    if (!textEl || !fight) return;
+    var current = fight.questions[fight.questionIndex];
+    textEl.textContent = current ? current.question : "";
+  }
+
+  function advanceToQuestion(index) {
+    if (!fight || !fight.questions.length) return;
+    fight.questionIndex = index % fight.questions.length;
+    var current = fight.questions[fight.questionIndex];
+    fight.currentAnswer = current.answer;
+    fight.currentMeaning = current.meaning || "";
+    fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
+    fight.selected = [];
+    renderQuestion();
     renderGrid();
     renderWordPreview();
   }
@@ -596,72 +693,67 @@
     }
   }
 
-  function resolveAiCounterAttack() {
-    if (!fight || fight.aiHp <= 0) return;
-    var dmg = 6 + Math.floor(Math.random() * 9);
-    fight.playerHp = Math.max(0, fight.playerHp - dmg);
-    renderHp();
-    triggerAttackAnim("ai");
-    setTimeout(function () {
-      triggerHitAnim("player", dmg);
-    }, 200);
-    if (typeof showToast === "function") {
-      showToast((document.getElementById("battle-fight-ai-name")?.textContent || "AI Rival") + " hits back for " + dmg + "!", "info");
+  function onAttackClick() {
+    if (!fight || !fight.selected.length) return;
+    var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
+
+    if (word === fight.currentAnswer) {
+      var dmg = damageForWordLength(word.length);
+      var meaning = fight.currentMeaning || "";
+      fight.aiHp = Math.max(0, fight.aiHp - dmg);
+      fight.wordsUsed.unshift({ word: word, damage: dmg, meaning: meaning });
+
+      renderHp();
+      renderWordsUsed();
+      triggerAttackAnim("player");
+      playAttackSound("player");
+      setTimeout(function () {
+        triggerHitAnim("ai", dmg);
+        playHitSound();
+      }, 200);
+
+      if (typeof showToast === "function") {
+        showToast("Correct! " + dmg + " damage dealt." + (meaning ? " " + meaning : ""), "success");
+      }
+
+      if (fight.aiHp <= 0) {
+        endBattle("win");
+        return;
+      }
+      setTimeout(function () {
+        advanceToQuestion(fight.questionIndex + 1);
+      }, 700);
+      return;
     }
+
+    playErrorSound();
+    var counterDmg = 6 + Math.floor(Math.random() * 9);
+    fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
+    fight.selected = [];
+
+    renderHp();
+    renderGrid();
+    renderWordPreview();
+    triggerAttackAnim("ai");
+    playAttackSound("ai");
+    setTimeout(function () {
+      triggerHitAnim("player", counterDmg);
+      playHitSound();
+    }, 200);
+
+    if (typeof showToast === "function") {
+      showToast("Not quite — the AI hits back for " + counterDmg + "!", "error");
+    }
+
     if (fight.playerHp <= 0) {
       endBattle("lose");
     }
   }
 
-  function onAttackClick() {
-    if (!fight || !fight.selected.length) return;
-    var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
-
-    if (word.length < 3) {
-      if (typeof showToast === "function") showToast("Words must be at least 3 letters.", "error");
-      return;
-    }
-    if (fight.vocabWords.indexOf(word) === -1) {
-      if (typeof showToast === "function") {
-        showToast('"' + word.toUpperCase() + '" isn\'t one of this lesson\'s key words. Try another!', "error");
-      }
-      return;
-    }
-
-    var dmg = damageForWordLength(word.length);
-    fight.aiHp = Math.max(0, fight.aiHp - dmg);
-    fight.wordsUsed.unshift({ word: word, damage: dmg });
-
-    var usedIndexes = fight.selected.slice();
-    usedIndexes.forEach(function (idx) {
-      fight.grid[idx] = { letter: drawLetter(fight.pool) };
-    });
-    fight.selected = [];
-
-    renderHp();
-    renderWordsUsed();
-    renderGrid();
-    renderWordPreview();
-    triggerAttackAnim("player");
-    setTimeout(function () {
-      triggerHitAnim("ai", dmg);
-    }, 200);
-
-    if (typeof showToast === "function") {
-      showToast('"' + word.toUpperCase() + '" hits for ' + dmg + " damage!", "success");
-    }
-
-    if (fight.aiHp <= 0) {
-      endBattle("win");
-      return;
-    }
-    setTimeout(resolveAiCounterAttack, 700);
-  }
-
   function battleResultSummary() {
     var count = fight ? fight.wordsUsed.length : 0;
     var totalDamage = fight ? fight.wordsUsed.reduce(function (sum, e) { return sum + e.damage; }, 0) : 0;
-    return count + " word" + (count === 1 ? "" : "s") + " used, " + totalDamage + " total damage dealt.";
+    return count + " correct answer" + (count === 1 ? "" : "s") + ", " + totalDamage + " total damage dealt.";
   }
 
   function openResultModal(outcome) {
@@ -690,6 +782,11 @@
   }
 
   function endBattle(outcome) {
+    if (outcome === "win") {
+      playVictorySound();
+    } else {
+      playDefeatSound();
+    }
     openResultModal(outcome);
   }
 
@@ -698,12 +795,10 @@
     fight.playerHp = PLAYER_MAX_HP;
     fight.aiHp = AI_MAX_HP;
     fight.wordsUsed = [];
-    fight.selected = [];
-    fight.grid = drawGrid(fight.pool, GRID_SIZE);
+    fight.questions = shuffleArray(fight.questions);
     renderHp();
     renderWordsUsed();
-    renderGrid();
-    renderWordPreview();
+    advanceToQuestion(0);
   }
 
   function exitToLobby() {
@@ -716,48 +811,41 @@
     if (!isLobbyReady() || !selectedLesson) return;
 
     var fileId = selectedLessonId;
-    var okBtn = document.getElementById("battle-arena-modal-ok");
-    var originalLabel = okBtn ? okBtn.textContent : "Start Battle";
-    if (okBtn) {
-      okBtn.disabled = true;
-      okBtn.textContent = "Loading…";
-    }
+    closeBattleModal();
+    showLoadingScreen();
+    setLoadingHint("Preparing your battle…");
 
     try {
       var content = await loadLessonContentAndVocab(fileId);
-      var vocab = Array.isArray(content.battleWords) ? content.battleWords.slice() : [];
-      var usingAi = vocab.length >= 5;
+      var questions = normalizeQuestionEntries(content.battleQuestions);
+      var usingAi = questions.length >= 5;
       var usingFallback = false;
 
       if (!usingAi) {
-        if (okBtn) okBtn.textContent = "Generating battle words…";
+        setLoadingHint("Generating battle questions with AI…");
         try {
-          vocab = await generateBattleWordsWithAi(fileId);
-          usingAi = vocab.length >= 5;
+          var aiQuestions = await generateBattleQuestionsWithAi(fileId);
+          questions = normalizeQuestionEntries(aiQuestions);
+          usingAi = questions.length >= 5;
         } catch (aiErr) {
           if (typeof showToast === "function") {
-            showToast((aiErr && aiErr.message) || "Could not generate AI battle words.", "error");
+            showToast((aiErr && aiErr.message) || "Could not generate AI battle questions.", "error");
           }
         }
       }
 
       if (!usingAi) {
-        vocab = extractVocabWords(content.reviewer, content.quiz);
-        if (vocab.length < 5) {
-          FALLBACK_WORDS.forEach(function (w) {
-            if (vocab.indexOf(w) === -1) vocab.push(w);
-          });
-          usingFallback = true;
-        }
+        questions = FALLBACK_QUESTIONS.slice();
+        usingFallback = true;
       }
-      vocab = vocab.slice(0, 15);
-
-      closeBattleModal();
+      questions = shuffleArray(questions).slice(0, 12);
 
       fight = {
         lessonId: fileId,
-        vocabWords: vocab,
-        pool: buildLetterPool(vocab),
+        questions: questions,
+        questionIndex: 0,
+        currentAnswer: "",
+        currentMeaning: "",
         grid: [],
         selected: [],
         playerHp: PLAYER_MAX_HP,
@@ -765,7 +853,6 @@
         wordsUsed: [],
         usingFallback: usingFallback,
       };
-      fight.grid = drawGrid(fight.pool, GRID_SIZE);
 
       var playerNameEl = document.getElementById("battle-fight-player-name");
       if (playerNameEl) {
@@ -776,17 +863,12 @@
       renderVocabNote();
       renderHp();
       renderWordsUsed();
-      renderGrid();
-      renderWordPreview();
+      advanceToQuestion(0);
     } catch (err) {
       fight = null;
+      showLobbyScreen();
       if (typeof showToast === "function") {
         showToast((err && err.message) || "Could not start battle.", "error");
-      }
-    } finally {
-      if (okBtn) {
-        okBtn.disabled = false;
-        okBtn.textContent = originalLabel;
       }
     }
   }

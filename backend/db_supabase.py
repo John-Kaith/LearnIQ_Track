@@ -794,8 +794,8 @@ def set_quiz(lesson_id: str, quiz: list[Any]) -> None:
     _sb().table("lesson_content").update({"quiz": quiz}).eq("lesson_id", lesson_id).execute()
 
 
-def set_battle_words(lesson_id: str, words: list[str]) -> None:
-    _sb().table("lesson_content").update({"battle_words": words}).eq("lesson_id", lesson_id).execute()
+def set_battle_questions(lesson_id: str, questions: list[Any]) -> None:
+    _sb().table("lesson_content").update({"battle_questions": questions}).eq("lesson_id", lesson_id).execute()
 
 
 def append_quiz_question(lesson_id: str, question: dict[str, Any]) -> list[Any]:

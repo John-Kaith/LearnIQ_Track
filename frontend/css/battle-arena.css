@@ -220,17 +220,128 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
  * fa-solid icon markup in the combatant avatars.
  * ============================================================ */
 
-.battle-fight-screen {
-  --arcade-bg-deep: #0d0221;
-  --arcade-bg-mid: #1b1440;
-  --arcade-panel: #201a4a;
+.battle-arena-page .toast-container {
+  z-index: 6000;
+}
+
+/* Any modal/confirm dialog on this page must render above the fullscreen
+   battle overlay (z-index 5000) — otherwise it's invisible but still
+   functionally "open", eating clicks with nothing visible to click. */
+.battle-arena-page .action-modal-backdrop {
+  z-index: 6000 !important;
+}
+
+.battle-arena-page {
+  --arcade-bg-deep: #150c30;
+  --arcade-bg-mid: #201347;
+  --arcade-panel: #271a54;
   --arcade-ink: #f4f1ff;
-  --arcade-cyan: #00e5ff;
-  --arcade-magenta: #ff2d95;
-  --arcade-yellow: #ffe600;
+  --arcade-cyan: var(--lq-accent-violet);
+  --arcade-magenta: var(--lq-accent-indigo);
+  --arcade-yellow: var(--lq-accent-violet-soft);
   --arcade-green: #39ff14;
   --arcade-red: #ff2d55;
+}
 
+.battle-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 5500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--arcade-bg-deep);
+  color: var(--arcade-ink);
+  font-family: "Press Start 2P", "Inter", system-ui, sans-serif;
+}
+
+.battle-loading-screen[hidden] {
+  display: none;
+}
+
+.battle-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.battle-loading-sprite {
+  font-size: 5rem;
+  filter: drop-shadow(3px 3px 0 #000);
+  animation: fighter-idle 1s ease-in-out infinite;
+}
+
+.battle-loading-title {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.12em;
+  color: var(--arcade-yellow);
+  text-shadow: 3px 3px 0 #000;
+}
+
+.battle-loading-dots span {
+  animation: loading-dot-blink 1.2s ease-in-out infinite;
+}
+
+.battle-loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.battle-loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes loading-dot-blink {
+  0%, 80%, 100% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.battle-loading-bar {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.battle-loading-bar span {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-bg-mid);
+  animation: loading-block-pulse 1.2s ease-in-out infinite;
+}
+
+.battle-loading-bar span:nth-child(1) { animation-delay: 0s; }
+.battle-loading-bar span:nth-child(2) { animation-delay: 0.1s; }
+.battle-loading-bar span:nth-child(3) { animation-delay: 0.2s; }
+.battle-loading-bar span:nth-child(4) { animation-delay: 0.3s; }
+.battle-loading-bar span:nth-child(5) { animation-delay: 0.4s; }
+.battle-loading-bar span:nth-child(6) { animation-delay: 0.5s; }
+.battle-loading-bar span:nth-child(7) { animation-delay: 0.6s; }
+.battle-loading-bar span:nth-child(8) { animation-delay: 0.7s; }
+
+@keyframes loading-block-pulse {
+  0%, 100% {
+    background: var(--arcade-bg-mid);
+  }
+  50% {
+    background: var(--arcade-yellow);
+  }
+}
+
+.battle-loading-hint {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: rgba(244, 241, 255, 0.7);
+}
+
+.battle-fight-screen {
   position: fixed;
   inset: 0;
   z-index: 5000;
@@ -545,6 +656,31 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   color: rgba(244, 241, 255, 0.7);
 }
 
+.battle-question-panel {
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 3px 3px 0 #000;
+  background: var(--arcade-bg-mid);
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.battle-question-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--arcade-cyan);
+}
+
+.battle-question-text {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--arcade-ink);
+}
+
 .battle-word-preview {
   min-height: 3rem;
   display: flex;
@@ -569,6 +705,7 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
 .battle-word-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.6rem;
   margin: 0.9rem 0;
 }
@@ -611,6 +748,11 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
   max-width: 22rem;
+  margin: 0 auto;
+  padding: 0.85rem;
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 3px 3px 0 #000;
+  background: var(--arcade-bg-mid);
 }
 
 .battle-tile {
@@ -645,6 +787,8 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
 
 .battle-words-used {
   min-width: 0;
+  padding-left: 1.1rem;
+  border-left: 3px solid var(--arcade-ink);
 }
 
 .battle-words-used h4 {
@@ -672,8 +816,20 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   font-size: 0.8rem;
   font-weight: 700;
   display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.battle-words-used-row {
+  display: flex;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.battle-word-meaning {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(244, 241, 255, 0.65);
 }
 
 .battle-words-used-empty {
@@ -683,17 +839,17 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
 
 /* Win/lose modal, arcade-flavored (title stays pixel font, body stays readable) */
 .battle-arena-page #battle-result-modal .action-modal {
-  background: var(--arcade-bg-mid, #1b1440);
-  border: 4px solid #f4f1ff;
+  background: var(--arcade-bg-mid);
+  border: 4px solid var(--arcade-ink);
   border-radius: 0;
   box-shadow: 6px 6px 0 #000;
-  color: #f4f1ff;
+  color: var(--arcade-ink);
 }
 
 .battle-arena-page #battle-result-modal-title {
   font-family: "Press Start 2P", system-ui, sans-serif;
   font-size: 1rem;
-  color: #ffe600;
+  color: var(--arcade-yellow);
   text-shadow: 2px 2px 0 #000;
 }
 
@@ -704,7 +860,7 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
 
 .battle-arena-page #battle-result-modal .btn {
   border-radius: 0;
-  border: 3px solid #f4f1ff;
+  border: 3px solid var(--arcade-ink);
   box-shadow: 4px 4px 0 #000;
   font-family: "Press Start 2P", system-ui, sans-serif;
   font-size: 0.6rem;
@@ -717,13 +873,64 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
 }
 
 .battle-arena-page #battle-result-modal .btn-primary {
-  background: var(--arcade-magenta, #ff2d95);
+  background: var(--arcade-magenta);
   color: #fff;
 }
 
 .battle-arena-page #battle-result-modal .btn-secondary {
-  background: var(--arcade-cyan, #00e5ff);
-  color: #0d0221;
+  background: var(--arcade-cyan);
+  color: var(--arcade-bg-deep);
+}
+
+/* Shared confirm dialog (window.LearnIQConfirm.show), pixel-arcade styled to match */
+.battle-arena-page .learniq-confirm-panel {
+  background: var(--arcade-bg-mid);
+  border: 4px solid var(--arcade-ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #000;
+  color: var(--arcade-ink);
+  backdrop-filter: none;
+}
+
+.battle-arena-page .learniq-confirm-panel h3 {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: var(--arcade-yellow);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.battle-arena-page .learniq-confirm-message {
+  font-family: "Inter", system-ui, sans-serif;
+  color: rgba(244, 241, 255, 0.85);
+}
+
+.battle-arena-page .learniq-confirm-actions .btn {
+  border-radius: 0;
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 4px 4px 0 #000;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+
+.battle-arena-page .learniq-confirm-actions .btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 #000;
+}
+
+.battle-arena-page .learniq-confirm-actions .btn-ghost {
+  background: var(--arcade-panel);
+  color: var(--arcade-ink);
+}
+
+.battle-arena-page .learniq-confirm-actions .btn-danger {
+  background: var(--arcade-red);
+  color: #fff;
+}
+
+.battle-arena-page .learniq-confirm-actions .btn-primary {
+  background: var(--arcade-magenta);
+  color: #fff;
 }
 
 @media (max-width: 720px) {

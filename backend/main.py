@@ -2163,25 +2163,35 @@ async def generate_question(body: dict):
     return {"questions": questions_data, "count": len(questions_data)}
 
 
-def normalize_battle_words(words: object) -> list[str]:
-    if not isinstance(words, list):
+def normalize_battle_questions(questions: object) -> list[dict[str, str]]:
+    if not isinstance(questions, list):
         return []
-    seen: set[str] = set()
-    normalized: list[str] = []
-    for w in words:
-        cleaned = re.sub(r"[^a-z]", "", str(w).strip().lower())
-        if len(cleaned) < 4 or len(cleaned) > 10:
+    seen_answers: set[str] = set()
+    normalized: list[dict[str, str]] = []
+    for entry in questions:
+        if not isinstance(entry, dict):
             continue
-        if cleaned in seen:
+        question_text = str(entry.get("question") or "").strip()
+        if not question_text:
             continue
-        seen.add(cleaned)
-        normalized.append(cleaned)
-    return normalized[:15]
+        if len(question_text) > 220:
+            question_text = question_text[:217].rstrip() + "..."
+        answer = re.sub(r"[^a-z]", "", str(entry.get("answer") or "").strip().lower())
+        if len(answer) < 4 or len(answer) > 10:
+            continue
+        if answer in seen_answers:
+            continue
+        seen_answers.add(answer)
+        meaning = str(entry.get("meaning") or "").strip()
+        if len(meaning) > 140:
+            meaning = meaning[:137].rstrip() + "..."
+        normalized.append({"question": question_text, "answer": answer, "meaning": meaning})
+    return normalized[:12]
 
 
-@app.post("/generate-battle-words")
-async def generate_battle_words(body: dict):
-    print("AI GENERATION REQUEST RECEIVED: /generate-battle-words")
+@app.post("/generate-battle-questions")
+async def generate_battle_questions(body: dict):
+    print("AI GENERATION REQUEST RECEIVED: /generate-battle-questions")
     key_err = require_gemini_key()
     if key_err is not None:
         return key_err
@@ -2195,7 +2205,7 @@ async def generate_battle_words(body: dict):
         return JSONResponse({"error": "File not found"}, status_code=404)
 
     if not body.get("skip_cooldown"):
-        cd_err = check_ai_generation_cooldown("battle_words", str(file_id))
+        cd_err = check_ai_generation_cooldown("battle_questions", str(file_id))
         if cd_err is not None:
             return cd_err
 
@@ -2204,27 +2214,30 @@ async def generate_battle_words(body: dict):
         return JSONResponse({"error": text_err}, status_code=400)
 
     prompt = (
-        "You are an educational game designer picking vocabulary for a word-spelling battle game "
-        "(the student forms these words from a letter grid to attack an opponent).\n"
-        "TASK: From the lesson text below, choose 12 to 15 important vocabulary words or key terms "
-        "a student should learn.\n"
+        "You are an educational game designer creating a quiz-battle game. The student reads a "
+        "question, then must spell the answer using letter tiles to attack an opponent. A wrong "
+        "answer lets the opponent attack the student instead, so questions must be answerable "
+        "from the lesson text alone.\n"
+        "TASK: From the lesson text below, write 10 to 12 short questions, each with exactly ONE "
+        "single-word answer.\n"
         "Rules:\n"
-        "- Each entry must be a SINGLE word: letters only, no spaces, no punctuation, no numbers.\n"
-        "- Each word must be 4 to 10 letters long.\n"
-        "- Only use words that actually appear in, or are directly implied by, the lesson text.\n"
-        "- Prefer subject-specific or technical terms over common filler words.\n"
+        "- Each question must be answerable with exactly ONE word — no phrases, no multi-word answers.\n"
+        "- The answer word must be letters only (no spaces/punctuation/numbers), 4 to 10 letters long.\n"
+        "- Base every question only on facts, terms, or concepts that actually appear in the lesson text.\n"
+        "- Keep each question under 20 words and unambiguous.\n"
+        "- Also include a one-sentence meaning/explanation of the answer term.\n"
         "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences) with this schema:\n"
-        '{ "words": ["word1", "word2", ...] }\n\n'
+        '{ "questions": [ { "question": "...", "answer": "...", "meaning": "..." } ] }\n\n'
         "LESSON TEXT:\n"
         f"{text}"
     )
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    print("SENDING TO AI API (battle_words)")
+    print("SENDING TO AI API (battle_questions)")
     response = requests.post(url, json=payload, timeout=120)
     result = response.json()
-    print("AI RAW RESPONSE STATUS (battle_words):", response.status_code)
+    print("AI RAW RESPONSE STATUS (battle_questions):", response.status_code)
 
     if response.status_code != 200:
         return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
@@ -2235,22 +2248,22 @@ async def generate_battle_words(body: dict):
 
     try:
         parsed = parse_model_json(raw_output)
-        words = normalize_battle_words(parsed.get("words") if isinstance(parsed, dict) else None)
+        questions = normalize_battle_questions(parsed.get("questions") if isinstance(parsed, dict) else None)
     except (json.JSONDecodeError, ValueError):
-        return JSONResponse({"error": "Failed to parse battle words. Please retry."}, status_code=502)
+        return JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=502)
 
-    if len(words) < 5:
-        return JSONResponse({"error": "AI could not find enough usable words in this lesson."}, status_code=502)
+    if len(questions) < 5:
+        return JSONResponse({"error": "AI could not build enough usable questions from this lesson."}, status_code=502)
 
     try:
-        db_supabase.set_battle_words(str(file_id), words)
+        db_supabase.set_battle_questions(str(file_id), questions)
     except Exception as e:
-        print("AI GENERATION ERROR (db write battle_words):", str(e))
+        print("AI GENERATION ERROR (db write battle_questions):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
     if not body.get("skip_cooldown"):
-        start_ai_generation_cooldown("battle_words", str(file_id))
-    return {"words": words}
+        start_ai_generation_cooldown("battle_questions", str(file_id))
+    return {"questions": questions}
 
 
 @app.post("/generate-activities")
@@ -2441,7 +2454,7 @@ def get_content(file_id: str):
             "reviewer": gen.get("reviewer"),
             "quiz": gen.get("quiz") or [],
             "activities": gen.get("activities"),
-            "battle_words": gen.get("battle_words") or [],
+            "battle_questions": gen.get("battle_questions") or [],
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)

@@ -1,7 +1,6 @@
 /**
- * Global light / dark theme.
- * 1st (default): yellow & white light — no data-theme on <html>
- * 2nd (optional): dark blue — data-theme="dark"
+ * Global light / dark theme. Default = dark (no data-theme on <html>).
+ * Dark: sun icon → switch to light. Light: moon icon → switch to dark.
  */
 (function () {
   var THEME_KEY = "learniq-theme";
@@ -13,7 +12,7 @@
     return null;
   }
 
-  /** Resolved effective theme (default light). */
+    /** Resolved effective theme for UI (default light). */
   function getTheme() {
     var raw = readStoredTheme();
     return raw === "dark" ? "dark" : "light";
@@ -41,7 +40,7 @@
     }
     m.setAttribute(
       "content",
-      document.documentElement.getAttribute("data-theme") === "dark" ? "#050b16" : "#fffbeb"
+      document.documentElement.getAttribute("data-theme") === "light" ? "#f1f5f9" : "#050b16"
     );
   }
 
@@ -57,13 +56,12 @@
   /** Update DOM only (no storage writes). Safe for initial load / bfcache / storage events. */
   function applyVisualTheme(theme) {
     var root = document.documentElement;
-    if (theme === "dark") {
-      root.setAttribute("data-theme", "dark");
-      root.style.colorScheme = "dark";
+    if (theme === "light") {
+      root.setAttribute("data-theme", "light");
     } else {
       root.removeAttribute("data-theme");
-      root.style.colorScheme = "light";
     }
+    root.style.colorScheme = theme === "light" ? "light" : "dark";
     setMetaThemeColor();
     document.querySelectorAll(".theme-toggle-btn").forEach(updateBtnIcon);
   }
@@ -75,21 +73,18 @@
   }
 
   function updateBtnIcon(btn) {
-    var isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    var isLight = document.documentElement.getAttribute("data-theme") === "light";
     btn.innerHTML = "";
     var i = document.createElement("i");
     i.setAttribute("aria-hidden", "true");
-    i.className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
+    i.className = isLight ? "fa-solid fa-moon" : "fa-solid fa-sun";
     btn.appendChild(i);
-    btn.setAttribute(
-      "aria-label",
-      isDark ? "Switch to light theme (yellow and white)" : "Switch to dark blue theme"
-    );
-    btn.setAttribute("title", isDark ? "Light mode" : "Dark blue mode");
+    btn.setAttribute("aria-label", isLight ? "Switch to dark theme" : "Switch to light theme");
+    btn.setAttribute("title", isLight ? "Dark mode" : "Light mode");
   }
 
   function toggleTheme() {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
   }
 
   function mountSidebarToggles() {
@@ -158,7 +153,7 @@
   window.addEventListener("storage", function (e) {
     if (e.key !== THEME_KEY || e.storageArea !== localStorage) return;
     var t = normalizeStored(e.newValue);
-    applyVisualTheme(t === "dark" ? "dark" : "light");
+    applyVisualTheme(t === "light" ? "light" : "dark");
   });
 
   window.addEventListener("pageshow", function (ev) {
