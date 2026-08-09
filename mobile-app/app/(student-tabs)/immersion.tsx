@@ -1,3 +1,5 @@
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,13 +10,44 @@ import { SectionRow } from '@/components/student-immersion/SectionRow';
 import { TodayAttendanceCard } from '@/components/student-immersion/TodayAttendanceCard';
 import { TodayJournalCard } from '@/components/student-immersion/TodayJournalCard';
 import { Colors } from '@/constants/colors';
-import { studentImmersionMock } from '@/data/studentImmersionMock';
+import { studentImmersionMock, type AttendanceLogEntry } from '@/data/studentImmersionMock';
 import { useImmersionAttendance } from '@/hooks/useImmersionAttendance';
+import { fetchAttendanceHistory, IMMERSION_REQUIRED_HOURS } from '@/services/immersion';
 
 export default function StudentImmersionScreen() {
   const insets = useSafeAreaInsets();
-  const { progress, todayDate, recentLogs, info } = studentImmersionMock;
+  // `info` (company/supervisor) has no backend field yet — stays mock; flagged as a known gap.
+  const { info } = studentImmersionMock;
   const attendance = useImmersionAttendance();
+  const [recentLogs, setRecentLogs] = useState<AttendanceLogEntry[]>([]);
+  const [completedHours, setCompletedHours] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAttendanceHistory()
+        .then(({ logs, totalHoursRendered }) => {
+          setRecentLogs(logs);
+          setCompletedHours(totalHoursRendered);
+        })
+        .catch((e) => {
+          Alert.alert(
+            'Could not load attendance history',
+            e instanceof Error ? e.message : 'Please try again.',
+          );
+        });
+    }, []),
+  );
+
+  const remainingHours = Math.max(0, Math.round((IMMERSION_REQUIRED_HOURS - completedHours) * 10) / 10);
+  const percentComplete = Math.round(
+    Math.min(100, (completedHours / IMMERSION_REQUIRED_HOURS) * 100),
+  );
+  const todayDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   return (
     <View style={styles.root}>
@@ -30,10 +63,10 @@ export default function StudentImmersionScreen() {
         </Text>
 
         <ImmersionProgressCard
-          completedHours={progress.completedHours}
-          requiredHours={progress.requiredHours}
-          remainingHours={progress.remainingHours}
-          percentComplete={progress.percentComplete}
+          completedHours={completedHours}
+          requiredHours={IMMERSION_REQUIRED_HOURS}
+          remainingHours={remainingHours}
+          percentComplete={percentComplete}
         />
 
         <TodayAttendanceCard
@@ -72,7 +105,7 @@ export default function StudentImmersionScreen() {
         <ImmersionInfoCard
           company={info.company}
           supervisor={info.supervisor}
-          requiredHours={info.requiredHours}
+          requiredHours={IMMERSION_REQUIRED_HOURS}
         />
       </ScrollView>
     </View>

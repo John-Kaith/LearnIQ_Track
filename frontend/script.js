@@ -3305,6 +3305,99 @@ function setupForgotPasswordPage() {
   });
 }
 
+function setupResetPasswordPage() {
+  const form = document.querySelector("#reset-password-form");
+  const message = document.querySelector("#reset-password-message");
+  const fieldError = document.querySelector("#reset-password-field-error");
+  const subtitle = document.querySelector("#reset-password-subtitle");
+  const submitBtn = document.querySelector("#reset-password-submit-btn");
+  if (!form) return;
+
+  // Supabase sends the recovery token as a hash fragment (implicit flow)
+  // or as a ?code= query param (PKCE flow) — support both.
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const queryParams = new URLSearchParams(window.location.search);
+  const accessToken = hashParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token");
+  const code = queryParams.get("code");
+  const hasRecoveryLink = (accessToken && refreshToken) || !!code;
+
+  if (!hasRecoveryLink) {
+    if (subtitle) subtitle.textContent = "This reset link is invalid or has expired.";
+    form.style.display = "none";
+    showAuthMessage(
+      "This reset link is invalid or has expired. Request a new one from the forgot password page.",
+      message,
+      "error"
+    );
+    return;
+  }
+
+  // Scrub the token out of the visible URL/history once read.
+  try {
+    window.history.replaceState(null, "", window.location.pathname);
+  } catch (e) {
+    /* ignore */
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!message) return;
+
+    const newPassword = document.querySelector("#reset-new-password").value;
+    const confirmPassword = document.querySelector("#reset-confirm-password").value;
+    if (fieldError) fieldError.style.display = "none";
+
+    if (newPassword.length < 8) {
+      showAuthMessage("Password must be at least 8 characters.", fieldError || message, "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAuthMessage("Passwords don't match.", fieldError || message, "error");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Updating…";
+    }
+
+    try {
+      const response = await fetch(apiUrl("/reset-password"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          code: code,
+          new_password: newPassword
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Could not reset password.");
+      }
+
+      form.reset();
+      form.style.display = "none";
+      showAuthMessage(result.message || "Password updated. Redirecting to login…", message, "success");
+      showToast("Password updated successfully.", "success");
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 1800);
+    } catch (error) {
+      showAuthMessage(error.message || "Could not reset password. Please try again.", message, "error");
+      showToast(`Reset failed: ${error.message}`, "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Update Password";
+      }
+    }
+  });
+}
+
 function togglePassword(inputId, button) {
   const passwordInput = document.getElementById(inputId);
   const icon = button.querySelector('i');
@@ -8683,6 +8776,7 @@ const STUDENT_HISTORY_KEYS = {
   quiz: "learniq_history_quiz",
   reviewer: "learniq_history_reviewer",
   activity: "learniq_history_activity",
+  battle: "learniq_history_battle",
 };
 const STUDENT_HISTORY_MAX_PER_TYPE = 100;
 let activeHistoryTab = "quiz";
@@ -8694,6 +8788,7 @@ let studentHistoryServerCache = {
   quiz: [],
   reviewer: [],
   activity: [],
+  battle: [],
 };
 
 function getStudentHistoryUserKey() {
@@ -8765,6 +8860,7 @@ async function fetchStudentHistoryFromServer() {
     studentHistoryServerCache.quiz = Array.isArray(data.quiz) ? data.quiz : [];
     studentHistoryServerCache.reviewer = Array.isArray(data.reviewer) ? data.reviewer : [];
     studentHistoryServerCache.activity = Array.isArray(data.activity) ? data.activity : [];
+    studentHistoryServerCache.battle = Array.isArray(data.battle) ? data.battle : [];
     studentHistoryServerCache.loaded = true;
     syncServerHistoryToLocalStorage();
     if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
@@ -8779,7 +8875,7 @@ async function fetchStudentHistoryFromServer() {
 }
 
 function syncServerHistoryToLocalStorage() {
-  ["quiz", "reviewer", "activity"].forEach((type) => {
+  ["quiz", "reviewer", "activity", "battle"].forEach((type) => {
     const merged = readStudentHistoryList(type);
     if (merged.length) writeStudentHistoryList(type, merged);
   });
@@ -8884,6 +8980,11 @@ function buildHistoryItemHtml(type, item, index) {
   } else if (type === "activity") {
     iconHtml = '<i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>';
     summary = '<span class="small-note">Activity opened</span>';
+  } else if (type === "battle") {
+    const won = String(item.outcome || "").toLowerCase() === "win";
+    const correct = Number(item.correct_answers || 0);
+    iconHtml = '<i class="fa-solid fa-gamepad" aria-hidden="true"></i>';
+    summary = `<span class="history-summary-pill">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct)</span></span>`;
   }
 
   return `
@@ -8924,6 +9025,10 @@ function renderStudentHistoryList(type) {
       activity: {
         title: "No activity history yet",
         body: "Generate or open activities from My lesson and they will appear here.",
+      },
+      battle: {
+        title: "No Battle Arena history yet",
+        body: "Finish a battle in AI Battle Arena and the result will appear here.",
       },
     };
     const l = labels[type] || labels.quiz;
@@ -9138,9 +9243,35 @@ function openHistoryItemDetail(type, index) {
     void renderReviewerDetailIntoModal(item);
   } else if (type === "activity") {
     void renderActivityDetailIntoModal(item);
+  } else if (type === "battle") {
+    renderBattleDetailIntoModal(item);
   } else {
     setHistoryDetailBody('<p class="small-note">Nothing to show.</p>');
   }
+}
+
+function renderBattleDetailIntoModal(item) {
+  const won = String(item.outcome || "").toLowerCase() === "win";
+  const correct = Number(item.correct_answers || 0);
+  const damage = Number(item.total_damage || 0);
+  setHistoryDetailBody(`
+    <article class="history-battle-detail">
+      <p class="history-summary-pill ${won ? "is-ok" : "is-bad"}">
+        <i class="fa-solid ${won ? "fa-trophy" : "fa-skull"}" aria-hidden="true"></i>
+        ${won ? "Victory" : "Defeated"}
+      </p>
+      <dl class="battle-info-list">
+        <div class="battle-info-row">
+          <dt>Words answered correctly</dt>
+          <dd>${correct}</dd>
+        </div>
+        <div class="battle-info-row">
+          <dt>Total damage dealt</dt>
+          <dd>${damage}</dd>
+        </div>
+      </dl>
+    </article>
+  `);
 }
 
 async function downloadHistoryDetailAsPdf() {
@@ -9198,14 +9329,14 @@ async function downloadHistoryDetailAsPdf() {
 }
 
 function updateStudentHistoryTabCounts() {
-  ["quiz", "reviewer", "activity"].forEach((type) => {
+  ["quiz", "reviewer", "activity", "battle"].forEach((type) => {
     const el = document.getElementById(`history-tab-count-${type}`);
     if (el) el.textContent = String(readStudentHistoryList(type).length);
   });
 }
 
 function setStudentHistoryActiveTab(type) {
-  const valid = ["quiz", "reviewer", "activity"];
+  const valid = ["quiz", "reviewer", "activity", "battle"];
   if (!valid.includes(type)) type = "quiz";
   activeHistoryTab = type;
   document.querySelectorAll(".workspace-tab[data-history-tab]").forEach((btn) => {

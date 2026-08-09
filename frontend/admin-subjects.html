@@ -53,8 +53,19 @@
       <section class="main-panel">
         <section class="glass-card panel-header fade-up delay-1">
           <div class="panel-title">
+            <a href="#" id="admin-subjects-back-link" class="admin-subjects-back-link" hidden>
+              <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> <span id="admin-subjects-back-text">Back</span>
+            </a>
             <h1 id="admin-subjects-title">Teachers</h1>
             <p id="admin-subjects-subtitle">Pick a teacher to see the subjects they have uploaded lessons for.</p>
+          </div>
+          <div class="panel-header-actions">
+            <button type="button" class="btn btn-secondary btn-small" id="admin-subjects-refresh-btn">
+              <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+            </button>
+            <button type="button" class="btn btn-primary" id="admin-add-subject-btn" hidden>
+              <i class="fa-solid fa-circle-plus" aria-hidden="true"></i> Add Subject
+            </button>
           </div>
         </section>
 

@@ -3955,8 +3955,8 @@ def insert_student_learning_event(
     """Persist reviewer / activity history event."""
     idn = (student_id_number or "").strip()
     et = (event_type or "").strip().lower()
-    if et not in ("reviewer", "activity"):
-        raise ValueError("event_type must be reviewer or activity")
+    if et not in ("reviewer", "activity", "battle"):
+        raise ValueError("event_type must be reviewer, activity, or battle")
     student_uuid = profile_uuid_for_id_number(idn) if idn else None
     lesson_id = payload.get("lesson_id")
     meta = {
@@ -4124,11 +4124,13 @@ def get_student_learning_history(student_id_number: str) -> dict[str, list[dict[
     quiz = list_student_quiz_history(student_id_number)
     reviewer = list_student_learning_events(student_id_number, "reviewer")
     activity = list_student_learning_events(student_id_number, "activity")
+    battle = list_student_learning_events(student_id_number, "battle")
     backfill = backfill_student_history_from_lessons(student_id_number)
     return {
         "quiz": _merge_history_by_lesson(quiz, backfill.get("quiz") or []),
         "reviewer": _merge_history_by_lesson(reviewer, backfill.get("reviewer") or []),
         "activity": _merge_history_by_lesson(activity, backfill.get("activity") or []),
+        "battle": battle,
     }
 
 

@@ -733,7 +733,17 @@ img {
   display: grid;
   place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.9), rgba(139, 92, 246, 0.9));
+  background: linear-gradient(135deg, var(--lq-accent-violet-soft), var(--lq-accent-violet));
+  box-shadow: 0 8px 18px rgba(234, 179, 8, 0.35);
+}
+
+html[data-theme="dark"] .mini-card i,
+html[data-theme="dark"] .feature-card i,
+html[data-theme="dark"] .metric-icon,
+html[data-theme="dark"] .upload-icon,
+html[data-theme="dark"] .rank-icon {
+  background: linear-gradient(135deg, var(--lq-accent-blue), var(--lq-accent-blue-strong));
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35);
 }
 
 .chart-card {
@@ -2542,7 +2552,11 @@ html:not([data-theme="dark"]) .teacher-stats-dashboard-page .teacher-stats-activ
   display: grid;
   place-items: center;
   font-weight: 700;
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(139, 92, 246, 0.25));
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.25), rgba(234, 179, 8, 0.25));
+}
+
+html[data-theme="dark"] .avatar {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(59, 130, 246, 0.25));
 }
 
 .main-panel {
@@ -4581,6 +4595,60 @@ html:not([data-theme="dark"]) .workspace-tab.is-active .users-tab-count {
   font-size: 0.85rem;
 }
 
+.history-summary-pill.is-bad {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #fecdd3;
+}
+
+.history-battle-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.history-battle-detail .history-summary-pill {
+  align-self: flex-start;
+  font-size: 1rem;
+  padding: 0.4rem 0.9rem;
+}
+
+.history-battle-detail .battle-info-list {
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.history-battle-detail .battle-info-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) 1fr;
+  gap: 0.65rem 1rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.history-battle-detail .battle-info-row dt {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.history-battle-detail .battle-info-row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+html:not([data-theme="dark"]) .history-battle-detail .battle-info-row {
+  background: rgba(241, 245, 249, 0.95);
+  border-color: var(--border);
+}
+
+html:not([data-theme="dark"]) .history-battle-detail .battle-info-row dt {
+  color: rgba(71, 85, 105, 0.95);
+}
+
 .history-item-date {
   display: inline-flex;
   align-items: center;
@@ -6228,13 +6296,17 @@ body.lq-modal-open {
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, rgba(96, 165, 250, 0.9), rgba(139, 92, 246, 0.9));
+  background: linear-gradient(90deg, var(--lq-accent-violet-soft), var(--lq-accent-violet));
   opacity: 0.85;
+}
+
+html[data-theme="dark"] .learniq-dashboard-page .overview-item::before {
+  background: linear-gradient(90deg, var(--lq-accent-blue), var(--lq-accent-blue-strong));
 }
 
 .learniq-dashboard-page .overview-item:hover {
   transform: translateY(-2px);
-  border-color: rgba(139, 92, 246, 0.45);
+  border-color: var(--lq-border-accent);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
     0 16px 36px rgba(3, 7, 18, 0.5);
@@ -6250,7 +6322,7 @@ html:not([data-theme="dark"]) .learniq-dashboard-page .overview-item {
 }
 
 html:not([data-theme="dark"]) .learniq-dashboard-page .overview-item:hover {
-  border-color: rgba(139, 92, 246, 0.4);
+  border-color: var(--lq-border-accent);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 16px 36px rgba(15, 23, 42, 0.12);
@@ -6265,8 +6337,13 @@ html:not([data-theme="dark"]) .learniq-dashboard-page .overview-item:hover {
   flex-shrink: 0;
   color: #fff;
   font-size: 1.05rem;
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), rgba(139, 92, 246, 0.95));
-  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.35);
+  background: linear-gradient(135deg, var(--lq-accent-violet-soft), var(--lq-accent-violet));
+  box-shadow: 0 8px 18px rgba(234, 179, 8, 0.35);
+}
+
+html[data-theme="dark"] .learniq-dashboard-page .overview-icon {
+  background: linear-gradient(135deg, var(--lq-accent-blue), var(--lq-accent-blue-strong));
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35);
 }
 
 .learniq-dashboard-page .overview-content {
@@ -9519,7 +9596,12 @@ html[data-theme="dark"] .lesson-card-pill {
 
 .avatar,
 .profile-photo-avatar {
-  border: 2px solid rgba(167, 139, 250, 0.35);
+  border: 2px solid var(--lq-border-accent);
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.2);
+}
+
+html[data-theme="dark"] .avatar,
+html[data-theme="dark"] .profile-photo-avatar {
   box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
 }
 

@@ -511,6 +511,13 @@ async def refresh_access_token(body: dict):
         return JSONResponse({"error": msg}, status_code=401)
 
 
+def _reset_password_redirect_url() -> str:
+    """Same host/port as APP_LOGIN_URL (whatever that's set to per-environment), pointed at reset-password.html."""
+    login_url = (os.getenv("APP_LOGIN_URL") or "http://127.0.0.1:8000/login.html").strip()
+    base = login_url.rsplit("/", 1)[0]
+    return f"{base}/reset-password.html"
+
+
 @app.post("/forgot-password")
 async def forgot_password(body: dict):
     err = require_supabase()
@@ -518,18 +525,54 @@ async def forgot_password(body: dict):
         return err
     try:
         email = (body.get("email") or "").strip()
-        
+
         if not email:
             return JSONResponse({"error": "Email is required."}, status_code=400)
-        
+
         # Use Supabase Auth to send password reset email
+        redirect_to = _reset_password_redirect_url()
+        print(f"[DEBUG] /forgot-password redirectTo = {redirect_to!r}")
         supabase.auth.reset_password_for_email(email, {
-            "redirectTo": "http://localhost:8000/login.html"  # Update this to your frontend URL
+            "redirectTo": redirect_to
         })
-        
+
         return {"message": "Password reset instructions have been sent to your email."}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/reset-password")
+async def reset_password(body: dict):
+    """Completes a Supabase password recovery: exchanges the recovery
+    token/code from the emailed link for a session, then sets the new
+    password. Frontend (reset-password.html) reads the token/code from
+    the URL and calls this."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    try:
+        new_password = (body.get("new_password") or "").strip()
+        if len(new_password) < 8:
+            return JSONResponse({"error": "Password must be at least 8 characters."}, status_code=400)
+
+        access_token = body.get("access_token")
+        refresh_token = body.get("refresh_token")
+        code = body.get("code")
+
+        if access_token and refresh_token:
+            supabase.auth.set_session(access_token, refresh_token)
+        elif code:
+            supabase.auth.exchange_code_for_session({"auth_code": code})
+        else:
+            return JSONResponse(
+                {"error": "This reset link is invalid or missing. Request a new one."},
+                status_code=400,
+            )
+
+        supabase.auth.update_user({"password": new_password})
+        return {"message": "Password updated. You can now log in with your new password."}
+    except Exception as e:
+        return JSONResponse({"error": "Could not reset password. The link may have expired — request a new one."}, status_code=400)
 
 
 @app.post("/validate-session")
@@ -2481,10 +2524,12 @@ def student_learning_history_endpoint(
             "quiz": data.get("quiz") or [],
             "reviewer": data.get("reviewer") or [],
             "activity": data.get("activity") or [],
+            "battle": data.get("battle") or [],
             "counts": {
                 "quiz": len(data.get("quiz") or []),
                 "reviewer": len(data.get("reviewer") or []),
                 "activity": len(data.get("activity") or []),
+                "battle": len(data.get("battle") or []),
             },
         }
     except Exception as e:
@@ -2502,9 +2547,9 @@ async def student_learning_history_post_endpoint(body: dict = Body(...)):
     event_type = str(payload.get("event_type") or payload.get("type") or "").strip().lower()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
-    if event_type not in ("reviewer", "activity"):
+    if event_type not in ("reviewer", "activity", "battle"):
         return JSONResponse(
-            {"error": "event_type must be reviewer or activity"},
+            {"error": "event_type must be reviewer, activity, or battle"},
             status_code=400,
         )
     try:

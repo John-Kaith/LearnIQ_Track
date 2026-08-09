@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -14,34 +15,46 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
+import { useAuthStore } from '@/store/authStore';
 
 const SIGNUP_URL = 'https://learniqtrack.online/signup';
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const login = useAuthStore((s) => s.login);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  function handleLogin() {
+  async function handleLogin() {
     if (!identifier.trim() || !password) return;
-    setShowRolePicker(true);
-  }
-
-  function loginAsStudent() {
-    router.replace('/(student-tabs)/home');
-  }
-
-  function loginAsTeacher() {
-    router.replace('/(teacher-tabs)/home');
+    setFormError(null);
+    setIsSubmitting(true);
+    try {
+      const user = await login(identifier.trim(), password);
+      if (user.role === 'teacher') {
+        router.replace('/(teacher-tabs)/home');
+      } else if (user.role === 'student') {
+        router.replace('/(student-tabs)/home');
+      } else {
+        setFormError(
+          `This app doesn't support "${user.role}" accounts yet. Use the web platform instead.`,
+        );
+      }
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Login failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function openWebSignup() {
     Linking.openURL(SIGNUP_URL);
   }
 
-  const canSubmit = identifier.trim().length > 0 && password.length > 0;
+  const canSubmit = identifier.trim().length > 0 && password.length > 0 && !isSubmitting;
 
   return (
     <KeyboardAvoidingView
@@ -91,6 +104,8 @@ export default function LoginScreen() {
             />
           </View>
 
+          {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
+
           <Pressable
             onPress={handleLogin}
             disabled={!canSubmit}
@@ -99,28 +114,12 @@ export default function LoginScreen() {
               pressed && styles.loginBtnPressed,
               !canSubmit && styles.loginBtnDisabled,
             ]}>
-            <Text style={styles.loginBtnText}>Login</Text>
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginBtnText}>Login</Text>
+            )}
           </Pressable>
-
-          {showRolePicker ? (
-            <View style={styles.rolePicker}>
-              <Text style={styles.rolePickerLabel}>Temporary — choose a role to test</Text>
-              <Pressable
-                onPress={loginAsStudent}
-                style={({ pressed }) => [styles.roleBtnStudent, pressed && styles.roleBtnPressed]}>
-                <Text style={styles.roleBtnText}>Login as Student</Text>
-              </Pressable>
-              <Pressable
-                onPress={loginAsTeacher}
-                style={({ pressed }) => [styles.roleBtnTeacher, pressed && styles.roleBtnPressed]}>
-                <Text style={styles.roleBtnText}>Login as Teacher</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <Text style={styles.demoHint}>
-            Testing only: enter any ID and password, then pick Student or Teacher.
-          </Text>
         </View>
 
         <Pressable onPress={openWebSignup} style={styles.webLink} hitSlop={8}>
@@ -226,46 +225,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  rolePicker: {
-    marginTop: 16,
-    gap: 10,
-  },
-  rolePickerLabel: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  roleBtnStudent: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.45)',
-  },
-  roleBtnTeacher: {
-    backgroundColor: '#7c3aed',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
-  },
-  roleBtnPressed: {
-    opacity: 0.9,
-  },
-  roleBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  demoHint: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 14,
+  errorText: {
+    color: '#f87171',
+    fontSize: 13,
     lineHeight: 18,
+    marginTop: -4,
+    marginBottom: 14,
   },
   webLink: {
     marginTop: 24,

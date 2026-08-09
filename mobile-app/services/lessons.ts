@@ -1,3 +1,6 @@
+import { apiRequest } from '@/services/apiClient';
+import { useAuthStore } from '@/store/authStore';
+import type { StudentSubject } from '@/data/studentLearnMock';
 import {
   activitiesByLesson,
   getSubjectTitle,
@@ -11,31 +14,153 @@ import {
   type QuizQuestion,
 } from '@/data/studentLearnFlowMock';
 
-const DEFAULT_REVIEWER =
-  'Reviewer content for this lesson. Your teacher will publish detailed notes here.';
+const DEFAULT_QUIZ: QuizQuestion[] = [];
+const DEFAULT_ACTIVITIES: ActivityItem[] = [];
 
-const DEFAULT_QUIZ: QuizQuestion[] = [
-  {
-    id: 'q1',
-    question: 'Which statement best summarizes this lesson?',
-    choices: [
-      { id: 'a', label: 'Option A' },
-      { id: 'b', label: 'Option B' },
-      { id: 'c', label: 'Option C' },
-      { id: 'd', label: 'Option D' },
-    ],
-  },
-];
-
-const DEFAULT_ACTIVITIES: ActivityItem[] = [
-  { id: 'act-default-1', title: 'Written Response', type: 'Essay' },
-  { id: 'act-default-2', title: 'Lesson Reflection', type: 'Reflection' },
-];
-
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function requireStudentIdNumber(): string {
+  const idNumber = useAuthStore.getState().user?.id_number;
+  if (!idNumber) throw new Error('You must be signed in to view lessons.');
+  return idNumber;
+}
+
+/**
+ * `GET /student/lessons` already embeds `reviewer`, `quiz`, and `activities` per
+ * lesson (backend/db_supabase.py list_published_lessons_with_content) — one call
+ * covers subject list, lesson list, and lesson content, so every fetch* function
+ * below shares this cache instead of hitting `/get-content/{file_id}` separately.
+ */
+type RawLesson = {
+  file_id: string;
+  filename: string;
+  file_type: string;
+  created_at: string | null;
+  reviewer: string;
+  quiz: { question: string; choices: string[]; answer: string }[];
+  activities: (| { activity_type: 'essay'; question: string; answer?: string }
+    | { activity_type: 'flashcards'; cards: { front: string; back: string }[] })[];
+  subject_id: string | null;
+  subject_name: string;
+  subject_color: string;
+  teacher_id_number: string;
+};
+
+const lessonsById = new Map<string, RawLesson>();
+const lessonsBySubjectCache = new Map<string, RawLesson[]>();
+let subjectsCache: StudentSubject[] | null = null;
+let subjectTeacherNameById = new Map<string, string>();
+
+function cacheLessons(rows: RawLesson[]) {
+  for (const row of rows) {
+    lessonsById.set(row.file_id, row);
+  }
+}
+
+async function fetchRawLessons(subjectId?: string): Promise<RawLesson[]> {
+  const studentIdNumber = requireStudentIdNumber();
+  const res = await apiRequest<{ lessons: RawLesson[] }>('/student/lessons', {
+    query: { student_id_number: studentIdNumber, subject_id: subjectId },
+  });
+  const rows = res.lessons ?? [];
+  cacheLessons(rows);
+  if (subjectId) lessonsBySubjectCache.set(subjectId, rows);
+  return rows;
+}
+
+async function fetchRawLessonById(lessonId: string): Promise<RawLesson | null> {
+  if (lessonsById.has(lessonId)) return lessonsById.get(lessonId) ?? null;
+  await fetchRawLessons();
+  return lessonsById.get(lessonId) ?? null;
+}
+
+function filenameToTitle(filename: string): string {
+  return filename.replace(/\.[a-zA-Z0-9]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Untitled Lesson';
+}
+
+function formatPublishedDate(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function toLessonSummary(row: RawLesson, index: number): LessonSummary {
+  return {
+    id: row.file_id,
+    subjectId: row.subject_id ?? '',
+    number: index + 1,
+    title: filenameToTitle(row.filename),
+  };
+}
+
+function toLessonDetail(row: RawLesson): LessonDetail {
+  return {
+    id: row.file_id,
+    subjectId: row.subject_id ?? '',
+    title: filenameToTitle(row.filename),
+    teacherName: subjectTeacherNameById.get(row.subject_id ?? '') || 'Your teacher',
+    publishedDate: formatPublishedDate(row.created_at),
+    description: row.subject_name
+      ? `Published lesson content for ${row.subject_name}.`
+      : 'Published lesson content.',
+  };
+}
+
+function toQuizQuestions(raw: RawLesson['quiz']): QuizQuestion[] {
+  const letters = ['a', 'b', 'c', 'd'];
+  return raw
+    .filter((q) => q.question && Array.isArray(q.choices) && q.choices.length === 4)
+    .map((q, index) => ({
+      id: `q${index + 1}`,
+      question: q.question,
+      choices: q.choices.map((label, ci) => ({ id: letters[ci], label })),
+    }));
+}
+
+function toActivityItems(raw: RawLesson['activities']): ActivityItem[] {
+  const items: ActivityItem[] = [];
+  raw.forEach((activity, index) => {
+    if (activity.activity_type === 'flashcards') {
+      const count = activity.cards?.length ?? 0;
+      items.push({
+        id: `act-${index}-flashcards`,
+        title: `Flashcards (${count} card${count === 1 ? '' : 's'})`,
+        type: 'Flashcards',
+      });
+    } else if (activity.activity_type === 'essay' && activity.question) {
+      const title =
+        activity.question.length > 70 ? `${activity.question.slice(0, 67)}...` : activity.question;
+      items.push({ id: `act-${index}-essay`, title, type: 'Essay' });
+    }
+  });
+  return items;
+}
+
+export async function fetchStudentSubjects(): Promise<StudentSubject[]> {
+  const studentIdNumber = requireStudentIdNumber();
+  const res = await apiRequest<{
+    subjects: {
+      id: string;
+      name: string;
+      published_lesson_count?: number;
+      teacher_name?: string;
+    }[];
+  }>('/student/subjects', { query: { student_id_number: studentIdNumber } });
+  const subjects = res.subjects ?? [];
+  subjectTeacherNameById = new Map(
+    subjects.map((s) => [String(s.id), s.teacher_name || '']),
+  );
+  subjectsCache = subjects.map((s) => ({
+    id: String(s.id),
+    title: s.name || 'Subject',
+    lessonCount: s.published_lesson_count ?? 0,
+  }));
+  return subjectsCache;
 }
 
 export async function fetchSubjectTitle(subjectId: string): Promise<string> {
@@ -43,8 +168,8 @@ export async function fetchSubjectTitle(subjectId: string): Promise<string> {
     await delay(100);
     return getSubjectTitle(subjectId);
   }
-  // Future: apiRequest(`/subjects/${subjectId}`)
-  return getSubjectTitle(subjectId);
+  const subjects = subjectsCache ?? (await fetchStudentSubjects());
+  return subjects.find((s) => s.id === subjectId)?.title ?? 'Subject';
 }
 
 export async function fetchSubjectLessons(subjectId: string): Promise<LessonSummary[]> {
@@ -52,8 +177,11 @@ export async function fetchSubjectLessons(subjectId: string): Promise<LessonSumm
     await delay(150);
     return lessonsBySubject[subjectId] ?? [];
   }
-  // Future: apiRequest(`/subjects/${subjectId}/lessons`)
-  return [];
+  const rows = await fetchRawLessons(subjectId);
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+  );
+  return sorted.map(toLessonSummary);
 }
 
 export async function fetchLessonDetail(lessonId: string): Promise<LessonDetail | null> {
@@ -61,8 +189,8 @@ export async function fetchLessonDetail(lessonId: string): Promise<LessonDetail 
     await delay(150);
     return lessonDetails[lessonId] ?? null;
   }
-  // Future: apiRequest(`/lessons/${lessonId}`)
-  return null;
+  const row = await fetchRawLessonById(lessonId);
+  return row ? toLessonDetail(row) : null;
 }
 
 export async function fetchLessonReviewer(lessonId: string): Promise<string> {
@@ -73,8 +201,8 @@ export async function fetchLessonReviewer(lessonId: string): Promise<string> {
       'Reviewer content will appear here once your teacher publishes it.'
     );
   }
-  // Future: lesson_content.reviewer
-  return '';
+  const row = await fetchRawLessonById(lessonId);
+  return row?.reviewer || 'Reviewer content will appear here once your teacher publishes it.';
 }
 
 export async function fetchLessonQuiz(lessonId: string): Promise<QuizQuestion[]> {
@@ -82,8 +210,8 @@ export async function fetchLessonQuiz(lessonId: string): Promise<QuizQuestion[]>
     await delay(150);
     return quizByLesson[lessonId] ?? DEFAULT_QUIZ;
   }
-  // Future: lesson_content.quiz
-  return [];
+  const row = await fetchRawLessonById(lessonId);
+  return row ? toQuizQuestions(row.quiz) : DEFAULT_QUIZ;
 }
 
 export async function fetchLessonActivities(lessonId: string): Promise<ActivityItem[]> {
@@ -91,8 +219,8 @@ export async function fetchLessonActivities(lessonId: string): Promise<ActivityI
     await delay(150);
     return activitiesByLesson[lessonId] ?? DEFAULT_ACTIVITIES;
   }
-  // Future: lesson_content.activities
-  return [];
+  const row = await fetchRawLessonById(lessonId);
+  return row ? toActivityItems(row.activities) : DEFAULT_ACTIVITIES;
 }
 
-export type { ActivityItem, LessonDetail, LessonSummary, QuizQuestion };
+export type { ActivityItem, LessonDetail, LessonSummary, QuizQuestion, StudentSubject };

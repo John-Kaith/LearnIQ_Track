@@ -7,10 +7,12 @@ import { ProfileCard } from '@/components/student-profile/ProfileCard';
 import { SettingsItem } from '@/components/student-profile/SettingsItem';
 import { Colors } from '@/constants/colors';
 import { profileSettingsItems, studentProfileMock } from '@/data/studentProfileMock';
+import { useAuthStore } from '@/store/authStore';
 
 export default function StudentProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const logout = useAuthStore((s) => s.logout);
   const profile = studentProfileMock;
 
   function handleLogout() {
@@ -19,7 +21,10 @@ export default function StudentProfileScreen() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => router.replace('/(auth)/login'),
+        onPress: async () => {
+          await logout();
+          router.replace('/(auth)/login');
+        },
       },
     ]);
   }

@@ -1,10 +1,12 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
+import { useAuthStore } from '@/store/authStore';
 
 const navigationTheme = {
   ...DarkTheme,
@@ -19,6 +21,12 @@ const navigationTheme = {
 };
 
 export default function RootLayout() {
+  const hydrate = useAuthStore((s) => s.hydrate);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider value={navigationTheme}>

@@ -1,23 +1,36 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JoinSubjectCard } from '@/components/student-learn/JoinSubjectCard';
 import { MySubjectsHeader } from '@/components/student-learn/MySubjectsHeader';
 import { SubjectCard } from '@/components/student-learn/SubjectCard';
 import { Colors } from '@/constants/colors';
-import { studentLearnMock, type StudentSubject } from '@/data/studentLearnMock';
+import type { StudentSubject } from '@/data/studentLearnMock';
+import { fetchStudentSubjects } from '@/services/lessons';
 
 export default function StudentLearnScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [subjects, setSubjects] = useState<StudentSubject[]>(studentLearnMock.subjects);
+  const [subjects, setSubjects] = useState<StudentSubject[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  function handleRefresh() {
-    setSubjects([...studentLearnMock.subjects]);
-    Alert.alert('Refreshed', 'Subject list updated (mock).');
-  }
+  const loadSubjects = useCallback(async () => {
+    try {
+      setSubjects(await fetchStudentSubjects());
+    } catch (e) {
+      Alert.alert('Could not load subjects', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSubjects();
+    }, [loadSubjects]),
+  );
 
   return (
     <View style={styles.root}>
@@ -35,17 +48,25 @@ export default function StudentLearnScreen() {
 
         <JoinSubjectCard />
 
-        <MySubjectsHeader onRefresh={handleRefresh} />
+        <MySubjectsHeader onRefresh={loadSubjects} />
 
-        {subjects.map((subject) => (
-          <SubjectCard
-            key={subject.id}
-            subject={subject}
-            onOpen={() =>
-              router.push({ pathname: '/subject/[id]', params: { id: subject.id } })
-            }
-          />
-        ))}
+        {isLoading ? (
+          <ActivityIndicator color={Colors.primary} style={styles.loading} />
+        ) : subjects.length === 0 ? (
+          <Text style={styles.empty}>
+            You&apos;re not enrolled in any subjects yet.
+          </Text>
+        ) : (
+          subjects.map((subject) => (
+            <SubjectCard
+              key={subject.id}
+              subject={subject}
+              onOpen={() =>
+                router.push({ pathname: '/subject/[id]', params: { id: subject.id } })
+              }
+            />
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -71,5 +92,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 22,
+  },
+  loading: {
+    marginTop: 24,
+  },
+  empty: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 24,
   },
 });

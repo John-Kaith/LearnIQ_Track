@@ -788,6 +788,19 @@
       playDefeatSound();
     }
     openResultModal(outcome);
+    saveBattleResultToHistory(outcome);
+  }
+
+  function saveBattleResultToHistory(outcome) {
+    if (!fight || typeof recordStudentHistory !== "function") return;
+    var totalDamage = fight.wordsUsed.reduce(function (sum, e) { return sum + e.damage; }, 0);
+    recordStudentHistory("battle", {
+      lesson_id: fight.lessonId || null,
+      lesson_title: selectedLesson ? lessonTitle(selectedLesson) : "Battle Arena",
+      outcome: outcome,
+      correct_answers: fight.wordsUsed.length,
+      total_damage: totalDamage,
+    });
   }
 
   function resetFightForRebattle() {

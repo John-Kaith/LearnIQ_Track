@@ -40,7 +40,7 @@
     }
     m.setAttribute(
       "content",
-      document.documentElement.getAttribute("data-theme") === "light" ? "#f1f5f9" : "#050b16"
+      document.documentElement.getAttribute("data-theme") === "dark" ? "#050b16" : "#f1f5f9"
     );
   }
 
@@ -53,15 +53,16 @@
     } catch (e) {}
   }
 
-  /** Update DOM only (no storage writes). Safe for initial load / bfcache / storage events. */
+  /** Update DOM only (no storage writes). Safe for initial load / bfcache / storage events.
+   * Matches the CSS/theme-boot.js convention: dark = data-theme="dark" present, light = attribute absent. */
   function applyVisualTheme(theme) {
     var root = document.documentElement;
-    if (theme === "light") {
-      root.setAttribute("data-theme", "light");
+    if (theme === "dark") {
+      root.setAttribute("data-theme", "dark");
     } else {
       root.removeAttribute("data-theme");
     }
-    root.style.colorScheme = theme === "light" ? "light" : "dark";
+    root.style.colorScheme = theme === "dark" ? "dark" : "light";
     setMetaThemeColor();
     document.querySelectorAll(".theme-toggle-btn").forEach(updateBtnIcon);
   }
@@ -73,18 +74,19 @@
   }
 
   function updateBtnIcon(btn) {
-    var isLight = document.documentElement.getAttribute("data-theme") === "light";
+    var isDark = document.documentElement.getAttribute("data-theme") === "dark";
     btn.innerHTML = "";
     var i = document.createElement("i");
     i.setAttribute("aria-hidden", "true");
-    i.className = isLight ? "fa-solid fa-moon" : "fa-solid fa-sun";
+    i.className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
     btn.appendChild(i);
-    btn.setAttribute("aria-label", isLight ? "Switch to dark theme" : "Switch to light theme");
-    btn.setAttribute("title", isLight ? "Dark mode" : "Light mode");
+    btn.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+    btn.setAttribute("title", isDark ? "Light mode" : "Dark mode");
   }
 
   function toggleTheme() {
-    applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
+    var isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    applyTheme(isDark ? "light" : "dark");
   }
 
   function mountSidebarToggles() {
