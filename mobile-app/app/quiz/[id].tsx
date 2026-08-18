@@ -16,8 +16,12 @@ export default function QuizScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchLessonDetail(id).then((l) => l && setLessonTitle(l.title));
-    fetchLessonQuiz(id).then(setQuestions);
+    fetchLessonDetail(id).then((l) => l && setLessonTitle(l.title)).catch(() => {});
+    fetchLessonQuiz(id)
+      .then(setQuestions)
+      .catch((e) =>
+        Alert.alert('Could not load quiz', e instanceof Error ? e.message : 'Please try again.'),
+      );
   }, [id]);
 
   const question = questions[0];

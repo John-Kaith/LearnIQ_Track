@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StackHeader } from '@/components/navigation/StackHeader';
@@ -15,8 +15,12 @@ export default function ReviewerScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchLessonDetail(id).then((l) => l && setTitle(l.title));
-    fetchLessonReviewer(id).then(setContent);
+    fetchLessonDetail(id).then((l) => l && setTitle(l.title)).catch(() => {});
+    fetchLessonReviewer(id)
+      .then(setContent)
+      .catch((e) =>
+        Alert.alert('Could not load reviewer', e instanceof Error ? e.message : 'Please try again.'),
+      );
   }, [id]);
 
   return (

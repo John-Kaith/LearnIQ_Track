@@ -446,30 +446,94 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
 }
 
 /* ── Responsive: stack sidebar above content (no overlap, no drawer) ── */
+/* ── Mobile nav: hamburger-triggered slide-in drawer ──
+   Below 1080px the fixed sidebar becomes a hidden drawer (translated
+   off-screen) instead of a full-width block stacked above the page —
+   stacking it pushed every page's real content below the fold on phones.
+   A floating hamburger button (injected by initMobileSidebarDrawer() in
+   script.js) toggles `.is-open` on the sidebar + backdrop. */
+.sidebar-mobile-toggle {
+  display: none;
+}
+
+.sidebar-mobile-backdrop {
+  display: none;
+}
+
 @media (max-width: 1080px) {
   .dashboard-shell.container,
   .page-shell.container {
     padding-left: var(--lq-sidebar-gutter);
     padding-right: var(--lq-sidebar-gutter);
+    padding-top: calc(44px + 1.5rem);
   }
 
+  .sidebar-mobile-toggle {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 320;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 12px;
+    background: var(--lq-gradient-accent);
+    color: #fff;
+    font-size: 1.05rem;
+    box-shadow: 0 8px 20px rgba(234, 179, 8, 0.35);
+    cursor: pointer;
+  }
+
+  html[data-theme="dark"] .sidebar-mobile-toggle {
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+  }
+
+  .sidebar-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    /* Below the sidebar's own z-index (200, set in the base rule above) so
+       the drawer renders on top of the dimmed backdrop, not under it. */
+    z-index: 190;
+    background: rgba(2, 6, 23, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .sidebar-mobile-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dashboard-shell > .sidebar.lq-sidebar,
   .dashboard-shell > .sidebar,
   .dashboard-shell > aside.sidebar {
-    position: relative;
-    left: auto;
-    top: auto;
-    width: 100%;
-    height: auto;
-    max-height: min(70vh, 520px);
-    margin-bottom: 0.25rem;
-    border-right: none;
-    border-bottom: 1px solid var(--lq-border-accent);
-    border-radius: var(--lq-radius-xl);
-    box-shadow: var(--lq-glow-inset), var(--lq-shadow-card);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(85vw, 320px);
+    height: 100vh;
+    max-height: none;
+    margin-bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    border-right: 1px solid var(--lq-border-accent);
+    border-bottom: none;
+    border-radius: 0;
+    box-shadow: var(--lq-shadow-elevated);
+  }
+
+  .dashboard-shell > .sidebar.lq-sidebar.is-open,
+  .dashboard-shell > .sidebar.is-open,
+  .dashboard-shell > aside.sidebar.is-open {
+    transform: translateX(0);
   }
 
   .page-shell .dashboard-shell > .sidebar {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
   }
 }
 
@@ -478,12 +542,13 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
     --lq-sidebar-gutter: 0.85rem;
   }
 
+  .dashboard-shell > .sidebar.lq-sidebar,
   .dashboard-shell > .sidebar,
   .dashboard-shell > aside.sidebar {
-    max-height: none;
     padding: 1rem 0.85rem;
   }
 
+  .dashboard-shell > .sidebar.lq-sidebar .side-links a,
   .dashboard-shell > .sidebar .side-links a {
     padding: 0.65rem 0.75rem;
   }

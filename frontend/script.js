@@ -891,6 +891,56 @@ function hydrateStudentSidebarChip() {
   }
 }
 
+/**
+ * Mobile nav: turns the fixed sidebar into a hamburger-triggered slide-in
+ * drawer below 1080px (see css/learniq-sidebar.css) instead of stacking the
+ * full nav list above the page content, which pushed every page below the
+ * fold on phones. Runs on every page — no-ops if there's no sidebar here.
+ */
+function initMobileSidebarDrawer() {
+  const sidebar = document.querySelector(
+    ".dashboard-shell > .sidebar.lq-sidebar, .dashboard-shell > .sidebar, .dashboard-shell > aside.sidebar"
+  );
+  if (!sidebar || document.querySelector(".sidebar-mobile-toggle")) return;
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "sidebar-mobile-toggle";
+  toggleBtn.setAttribute("aria-label", "Open menu");
+  toggleBtn.setAttribute("aria-expanded", "false");
+  toggleBtn.innerHTML = '<i class="fa-solid fa-bars" aria-hidden="true"></i>';
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "sidebar-mobile-backdrop";
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(toggleBtn);
+
+  function openDrawer() {
+    sidebar.classList.add("is-open");
+    backdrop.classList.add("is-open");
+    toggleBtn.setAttribute("aria-expanded", "true");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeDrawer() {
+    sidebar.classList.remove("is-open");
+    backdrop.classList.remove("is-open");
+    toggleBtn.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    if (sidebar.classList.contains("is-open")) closeDrawer();
+    else openDrawer();
+  });
+  backdrop.addEventListener("click", closeDrawer);
+  sidebar.querySelectorAll(".side-links a").forEach((a) => a.addEventListener("click", closeDrawer));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+}
+
 const DASHBOARD_SIDEBAR_BY_ROLE = {
   teacher: {
     brandSubtitle: "Teacher LearnIQ",
@@ -1245,6 +1295,9 @@ async function initLearniqDashboardIfPresent() {
   };
 
   const u = getCurrentUserSession();
+  const greetingName = u ? String(u.first_name || "").trim() || getProfileDisplayName(u) : "Student";
+  setText("dashboard-greeting-name", greetingName);
+
   if (!u?.access_token) {
     setText("dashboard-stat-points", "0");
     setText("dashboard-stat-week", "Sign in to see your stats");
@@ -1293,13 +1346,15 @@ async function initLearniqDashboardIfPresent() {
         ul.innerHTML =
           '<li class="small-note">No rankings yet. Finish a scored quiz in My lesson to appear here.</li>';
       } else {
+        const medals = { 1: "🥇 ", 2: "🥈 ", 3: "🥉 " };
         ul.innerHTML = prev
-          .map(
-            (e) =>
-              `<li><strong>${escapeHtml(String(e.rank))}. ${escapeHtml(
-                learniqPreviewName(e.display_name || getProfileDisplayName(e))
-              )}</strong> <small>${Number(e.total_points || 0).toLocaleString()} pts</small></li>`
-          )
+          .map((e) => {
+            const rank = Number(e.rank) || 0;
+            const medal = medals[rank] || "";
+            return `<li data-rank="${rank}"><strong>${medal}${escapeHtml(String(e.rank))}. ${escapeHtml(
+              learniqPreviewName(e.display_name || getProfileDisplayName(e))
+            )}</strong> <small>${Number(e.total_points || 0).toLocaleString()} pts</small></li>`;
+          })
           .join("");
       }
     }
@@ -7844,13 +7899,49 @@ function showEmpty(message) {
 
   function closeActionModal() {}
 
+  // Fisher-Yates shuffle — returns a new array, does not mutate the input.
+  function shuffleArray(arr) {
+    const copy = Array.isArray(arr) ? arr.slice() : [];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  // Every student reads the same cached quiz questions from the DB (the AI only
+  // regenerates them when a teacher clicks "Generate Quiz"). Without this, the
+  // question order AND the A/B/C/D choice order would be identical for every
+  // student, making it trivial to just share "1-B, 2-D, 3-A..." Shuffling both
+  // per browser session (not saved back to the DB) keeps the same question bank
+  // but breaks that shortcut, without needing extra AI calls per student.
+  function shuffleQuizForStudent(questions) {
+    if (!Array.isArray(questions)) return questions;
+    const letters = ["A", "B", "C", "D"];
+    const reshuffled = questions.map((q) => {
+      if (!q || !Array.isArray(q.choices) || q.choices.length < 2) return q;
+      const correctIndex = letters.indexOf(String(q.answer || "").trim().toUpperCase());
+      const tagged = q.choices.map((choice, i) => ({ choice, wasCorrect: i === correctIndex }));
+      const shuffledChoices = shuffleArray(tagged);
+      const newCorrectIndex = shuffledChoices.findIndex((c) => c.wasCorrect);
+      return {
+        ...q,
+        choices: shuffledChoices.map((c) => c.choice),
+        answer: newCorrectIndex >= 0 ? letters[newCorrectIndex] : q.answer,
+      };
+    });
+    return shuffleArray(reshuffled);
+  }
+
   function showLesson(data) {
     console.log("[DEBUG] showLesson called with data:", data);
     console.log("[DEBUG] data.activities value:", data.activities);
     console.log("[DEBUG] Type of data.activities:", typeof data.activities);
     console.log("[DEBUG] Is data.activities an array?", Array.isArray(data.activities));
-    
-    lessonData = data;
+
+    lessonData = Array.isArray(data?.quiz) && data.quiz.length
+      ? { ...data, quiz: shuffleQuizForStudent(data.quiz) }
+      : data;
     if (emptyEl) emptyEl.hidden = true;
     if (metaCard) metaCard.hidden = false;
     if (reviewerCard) reviewerCard.hidden = false;
@@ -7974,9 +8065,13 @@ function showEmpty(message) {
     const letters = ["A", "B", "C", "D"];
     const saved = studentAnswers[quizIndex];
     const checkedAttr = (val) => (saved === val ? "checked" : "");
-    const formatChoiceText = (choice, letter) => {
+    const formatChoiceText = (choice) => {
+      // Strip any leading "A. "/"B) " label the AI embedded in the choice text —
+      // must match any letter, not just the current render position, since
+      // shuffleQuizForStudent() reorders choices independently of their
+      // originally-generated letter.
       const raw = String(choice || "").trim();
-      const stripped = raw.replace(new RegExp(`^${letter}[.)\\s]+`, "i"), "").trim();
+      const stripped = raw.replace(/^[A-D][.)\s]+/i, "").trim();
       return stripped || raw;
     };
 
@@ -7986,7 +8081,7 @@ function showEmpty(message) {
       ${choices
         .map((c, i) => {
           const letter = letters[i] || String(i);
-          const choiceText = formatChoiceText(c, letter);
+          const choiceText = formatChoiceText(c);
           return `
         <label class="student-quiz-choice">
           <input type="radio" name="student-quiz-opt" value="${letter}" ${checkedAttr(letter)} />
@@ -8428,7 +8523,9 @@ function showEmpty(message) {
         quizScore = 0;
         quizAnswered = false;
         studentAnswers = [];
-        lessonData = selectedLesson;
+        lessonData = Array.isArray(selectedLesson?.quiz) && selectedLesson.quiz.length
+          ? { ...selectedLesson, quiz: shuffleQuizForStudent(selectedLesson.quiz) }
+          : selectedLesson;
       }
       try {
         if (typeof recordStudentHistory === "function" && selectedLesson?.file_id) {
@@ -9404,6 +9501,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initAdminSidebar();
   initRoleAwareDashboardSidebar();
   initTeacherLearniqSidebarProfile();
+  initMobileSidebarDrawer();
   animateProgressBars();
   setupForms();
   setupSignupPage();

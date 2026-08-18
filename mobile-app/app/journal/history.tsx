@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -17,7 +17,11 @@ export default function JournalHistoryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchJournalHistory().then(setEntries);
+      fetchJournalHistory()
+        .then(setEntries)
+        .catch((e) =>
+          Alert.alert('Could not load journals', e instanceof Error ? e.message : 'Please try again.'),
+        );
     }, []),
   );
 

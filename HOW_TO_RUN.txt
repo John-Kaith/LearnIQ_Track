@@ -1,0 +1,128 @@
+====================================================
+LearnIQ Track - How to Run the System (Full Setup)
+====================================================
+This guide sets up and runs all 3 parts of the system on a
+NEW/OTHER machine, independently from any other laptop:
+  1. Backend (FastAPI)
+  2. Web frontend (HTML/CSS/JS)
+  3. Mobile app (Expo / React Native)
+
+
+----------------------------------------------------
+STEP 1 - Prerequisites (check/install once)
+----------------------------------------------------
+Open a terminal and check what you already have:
+
+    git --version
+    python --version      (need 3.10+)
+    node --version         (need 18+)
+    npm --version
+
+If any are missing, install from:
+  - Git:    https://git-scm.com/downloads
+  - Python: https://www.python.org/downloads/
+            (check "Add to PATH" during install)
+  - Node.js (LTS): https://nodejs.org/
+
+
+----------------------------------------------------
+STEP 2 - Get the code
+----------------------------------------------------
+    git clone <your-repo-url>
+    cd LearnIQ_Track
+
+If it's already cloned on this machine but out of date:
+    cd LearnIQ_Track
+    git pull
+
+
+----------------------------------------------------
+STEP 3 - Backend setup
+----------------------------------------------------
+    cd backend
+    python -m venv venv
+    ./venv/Scripts/pip install -r requirements.txt
+
+IMPORTANT: backend/.env is NEVER committed to git
+(it holds live API keys/secrets - kept out of git on
+purpose after an earlier leak incident). You must copy
+this file yourself from a machine that already has it:
+
+  - Use a USB drive, or a private/trusted cloud folder.
+  - Do NOT send it through git, email, or chat.
+  - Place the copied file at:  backend/.env
+
+
+----------------------------------------------------
+STEP 4 - Run the backend
+----------------------------------------------------
+    cd backend
+    ./venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+Verify it's working: open this in a browser on the SAME
+machine:
+    http://localhost:8000/health
+
+You should see:
+    {"ok":true,"has_api_key":true,"has_supabase":true,...}
+
+
+----------------------------------------------------
+STEP 5 - Run the web frontend
+----------------------------------------------------
+    cd frontend
+    py -3 -m http.server 8090
+
+Open in a browser:
+    http://localhost:8090
+
+Then open the browser DevTools console (F12) and run:
+    localStorage.setItem('learniq-api-base', 'http://127.0.0.1:8000')
+
+Reload the page after that.
+
+
+----------------------------------------------------
+STEP 6 - Run the mobile app
+----------------------------------------------------
+    cd mobile-app
+    npm install
+    npx expo start
+
+(npm install is required first - without it, the code editor
+will show errors under almost everything because the
+packages/types aren't downloaded yet. This is normal on a
+fresh machine, not a real code bug.)
+
+Once Metro is running:
+  - Press "w" in that terminal for a web preview, OR
+  - Open the Expo Go app on a phone connected to the SAME
+    Wi-Fi as this machine, and scan the QR code shown in
+    the terminal (or enter the exp:// URL manually).
+
+
+----------------------------------------------------
+Troubleshooting
+----------------------------------------------------
+- Red squiggly lines under everything in VS Code (mobile-app)
+  => run "npm install" inside mobile-app, then restart the
+     TypeScript server (Ctrl+Shift+P -> "TypeScript: Restart
+     TS Server"), or just reopen the folder.
+
+- Phone can't reach the backend
+  => Windows Firewall may be blocking it. In an elevated
+     PowerShell, run:
+     New-NetFirewallRule -DisplayName "LearnIQ Backend (8000)" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+
+  => Also confirm phone and laptop are on the SAME Wi-Fi
+     network, and use the laptop's LAN IP (ipconfig -> IPv4
+     under Wi-Fi), not "localhost", in the phone's Expo Go
+     URL and in EXPO_PUBLIC_API_BASE_URL.
+
+- Backend fails to start / missing key errors
+  => Check that backend/.env was actually copied over and
+     is placed at backend/.env (not backend/.env.txt or a
+     different folder).
+
+Stuck on something else? Copy the exact error message and
+ask for help with it directly.

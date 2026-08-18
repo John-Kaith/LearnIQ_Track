@@ -58,7 +58,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.1.58:8000"
+      "apiBaseUrl": "http://localhost:8000"
     }
   }
 }

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LessonListCard } from '@/components/learn-flow/LessonListCard';
@@ -18,8 +18,12 @@ export default function SubjectScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchSubjectTitle(id).then(setTitle);
-    fetchSubjectLessons(id).then(setLessons);
+    fetchSubjectTitle(id).then(setTitle).catch(() => {});
+    fetchSubjectLessons(id)
+      .then(setLessons)
+      .catch((e) =>
+        Alert.alert('Could not load lessons', e instanceof Error ? e.message : 'Please try again.'),
+      );
   }, [id]);
 
   return (

@@ -14,11 +14,23 @@ export default function LessonDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    fetchLessonDetail(id).then(setLesson);
+    fetchLessonDetail(id)
+      .then(setLesson)
+      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Please try again.'));
   }, [id]);
+
+  if (loadError) {
+    return (
+      <View style={styles.root}>
+        <StackHeader title="Lesson" />
+        <Text style={styles.error}>{loadError}</Text>
+      </View>
+    );
+  }
 
   if (!lesson) {
     return (
@@ -87,5 +99,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 24,
+  },
+  error: {
+    color: '#f87171',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 24,
+    paddingHorizontal: 20,
   },
 });

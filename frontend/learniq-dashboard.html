@@ -53,111 +53,106 @@
     </aside>
 
     <main class="main-panel">
-      <section class="glass-card panel-header">
-        <div class="panel-title">
-          <h1>LearnIQ Dashboard</h1>
-          <p>Your stats update from quiz scores. Open My lesson to continue.</p>
-        </div>
-      </section>
+      <div class="bento-grid">
+        <article class="bento-tile bento-hero lq-surface-premium">
+          <p class="dashboard-hero-eyebrow"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> Welcome back</p>
+          <h1 class="dashboard-hero-greeting lq-text-gradient" id="dashboard-greeting-name">Student</h1>
+          <p class="dashboard-hero-subtitle">Pick up where you left off, or explore something new.</p>
+          <div class="dashboard-hero-actions">
+            <a href="subjects.html" class="btn btn-primary"><i class="fa-solid fa-book-open"></i> Continue Learning</a>
+            <a href="battle-arena.html" class="btn btn-ghost"><i class="fa-solid fa-gamepad"></i> Try Battle Arena</a>
+          </div>
+        </article>
 
-      <section class="stats-grid">
-        <article class="glass-card stat-card">
+        <article class="bento-tile bento-points">
           <div class="metric-icon"><i class="fa-solid fa-star"></i></div>
-          <div>
-            <span class="small-note">Total quiz points</span>
-            <strong class="metric-value" id="dashboard-stat-points">0</strong>
-            <span class="metric-note" id="dashboard-stat-week">Loading…</span>
-          </div>
+          <span class="small-note">Total quiz points</span>
+          <strong class="metric-value" id="dashboard-stat-points">0</strong>
+          <span class="metric-note" id="dashboard-stat-week">Loading…</span>
         </article>
-        <article class="glass-card stat-card">
+
+        <article class="bento-tile bento-rank">
           <div class="metric-icon"><i class="fa-solid fa-trophy"></i></div>
-          <div>
-            <span class="small-note">Leaderboard rank</span>
-            <strong class="metric-value" id="dashboard-stat-rank">—</strong>
-            <span class="metric-note" id="dashboard-stat-rank-note">Among students with quiz scores</span>
-          </div>
+          <span class="small-note">Leaderboard rank</span>
+          <strong class="metric-value" id="dashboard-stat-rank">—</strong>
+          <span class="metric-note" id="dashboard-stat-rank-note">Among scored students</span>
         </article>
-        <article class="glass-card stat-card">
+
+        <article class="bento-tile bento-acc">
           <div class="metric-icon"><i class="fa-solid fa-chart-simple"></i></div>
-          <div>
+          <div class="bento-acc-text">
             <span class="small-note">Quiz accuracy</span>
             <strong class="metric-value" id="dashboard-stat-progress-pct">0%</strong>
-            <div class="progress-bar"><span id="dashboard-progress-span" data-progress="0%"></span></div>
+          </div>
+          <div class="progress-bar bento-acc-bar"><span id="dashboard-progress-span" data-progress="0%"></span></div>
+        </article>
+
+        <article class="bento-tile bento-focus">
+          <h3>Today's focus</h3>
+          <p class="content-subtitle">Stay consistent: review, take a quiz, then try one activity.</p>
+          <ul class="overview-list">
+            <li><strong>Reviewer</strong> — skim key points in 3–5 minutes</li>
+            <li><strong>Quiz</strong> — aim for 80%+ accuracy</li>
+            <li><strong>Activity</strong> — write an essay or drill with flashcards</li>
+          </ul>
+          <div class="overview-actions">
+            <a href="my-lesson.html" class="btn btn-ghost">Jump to reviewer</a>
+            <a href="student-profile.html" class="btn btn-ghost">Update profile</a>
           </div>
         </article>
-      </section>
 
-      <section id="student-learning-block" class="dashboard-grid">
-        <div class="content-stack">
-          <article id="student-overview" class="glass-card content-card">
-            <h3>Welcome to LearnIQ</h3>
-            <p class="content-subtitle">Open published lessons and use reviewer, quiz, and activities in My lesson.</p>
-            <div class="overview-grid">
-              <div class="overview-item">
-                <div class="overview-icon">
-                  <i class="fa-solid fa-book-open"></i>
-                </div>
-                <div class="overview-content">
-                  <h4>Continue learning</h4>
-                  <p>Pick a lesson and work through content at your pace.</p>
-                  <div class="overview-actions">
-                    <a href="subjects.html" class="btn btn-primary">Open My lesson</a>
-                    <a href="leaderboard.html" class="btn btn-secondary">View leaderboard</a>
-                  </div>
-                </div>
-              </div>
+        <article class="bento-tile bento-board">
+          <h3>Leaderboard preview</h3>
+          <p class="content-subtitle">Top students</p>
+          <ul class="leaderboard-mini" id="dashboard-leaderboard-mini">
+            <li class="small-note">Loading…</li>
+          </ul>
+        </article>
 
-              <div class="overview-item">
-                <div class="overview-icon">
-                  <i class="fa-solid fa-list-check"></i>
-                </div>
-                <div class="overview-content">
-                  <h4>Today’s focus</h4>
-                  <p>Stay consistent: review, take a quiz, then try one activity.</p>
-                  <ul class="overview-list">
-                    <li><strong>Reviewer</strong> — skim key points in 3–5 minutes</li>
-                    <li><strong>Quiz</strong> — aim for 80%+ accuracy</li>
-                    <li><strong>Activity</strong> — write an essay or drill with flashcards</li>
-                  </ul>
-                  <div class="overview-actions">
-                    <a href="my-lesson.html" class="btn btn-ghost">Jump to reviewer</a>
-                    <a href="student-profile.html" class="btn btn-ghost">Update profile</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-        </div>
+        <article class="bento-tile bento-activity">
+          <h3>Activity</h3>
+          <div class="bento-activity-row">
+            <span class="small-note"><i class="fa-solid fa-book" aria-hidden="true"></i> Lessons</span>
+            <strong id="dash-lesson-line">0 / 0</strong>
+          </div>
+          <div class="bento-activity-row">
+            <span class="small-note"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Quiz attempts</span>
+            <strong id="dash-quiz-line">0</strong>
+          </div>
+          <div class="bento-activity-row">
+            <span class="small-note"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Points (7d)</span>
+            <strong id="dash-week-line">0</strong>
+          </div>
+        </article>
 
-        <div class="content-stack">
-          <article class="glass-card leaderboard-card">
-            <h3>Leaderboard preview</h3>
-            <p class="content-subtitle">Top students by total quiz points</p>
-            <ul class="leaderboard-mini" id="dashboard-leaderboard-mini">
-              <li class="small-note">Loading…</li>
-            </ul>
-          </article>
+        <a class="bento-tile bento-explore bento-explore--battle" href="battle-arena.html">
+          <div class="explore-icon"><i class="fa-solid fa-gamepad"></i></div>
+          <h3>AI Battle Arena</h3>
+          <p>Spell the answer to attack the AI.</p>
+          <span class="explore-cta">Play now <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+        </a>
 
-          <article class="glass-card content-card">
-            <h3>Activity summary</h3>
-            <p class="content-subtitle">From your quiz attempts and published lessons</p>
-            <div class="progress-stats">
-              <div class="progress-stat">
-                <span class="small-note">Lessons practiced</span>
-                <strong id="dash-lesson-line">0 / 0</strong>
-              </div>
-              <div class="progress-stat">
-                <span class="small-note">Quiz attempts</span>
-                <strong id="dash-quiz-line">0</strong>
-              </div>
-              <div class="progress-stat">
-                <span class="small-note">Points (last 7 days)</span>
-                <strong id="dash-week-line">0</strong>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
+        <a class="bento-tile bento-explore bento-explore--leaderboard" href="leaderboard.html">
+          <div class="explore-icon"><i class="fa-solid fa-trophy"></i></div>
+          <h3>Leaderboard</h3>
+          <p>See your class ranking.</p>
+          <span class="explore-cta">View <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+        </a>
+
+        <a class="bento-tile bento-explore bento-explore--history" href="history.html">
+          <div class="explore-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+          <h3>History</h3>
+          <p>Revisit past attempts.</p>
+          <span class="explore-cta">Look back <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+        </a>
+
+        <a class="bento-tile bento-explore bento-explore--modules" href="module-selection.html">
+          <div class="explore-icon"><i class="fa-solid fa-th-large"></i></div>
+          <h3>Module Selection</h3>
+          <p>Browse everything at once.</p>
+          <span class="explore-cta">Browse <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+        </a>
+      </div>
     </main>
   </div>
 </body>

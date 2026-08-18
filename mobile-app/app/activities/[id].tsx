@@ -20,8 +20,12 @@ export default function ActivitiesScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchLessonDetail(id).then((l) => l && setLessonTitle(l.title));
-    fetchLessonActivities(id).then(setActivities);
+    fetchLessonDetail(id).then((l) => l && setLessonTitle(l.title)).catch(() => {});
+    fetchLessonActivities(id)
+      .then(setActivities)
+      .catch((e) =>
+        Alert.alert('Could not load activities', e instanceof Error ? e.message : 'Please try again.'),
+      );
   }, [id]);
 
   return (

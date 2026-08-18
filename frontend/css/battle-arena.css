@@ -972,4 +972,30 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   .battle-fight-board {
     padding: 0.85rem;
   }
+
+  /* The pixel font (Press Start 2P) reads noticeably smaller than a normal
+     typeface at the same rem size, and gets harder to tap/read on a phone —
+     bump the smallest UI text up a step here rather than shrinking further. */
+  .battle-fight-screen .btn {
+    font-size: 0.72rem;
+    padding: 0.9rem 1rem;
+  }
+
+  .battle-hp-value {
+    font-size: 0.68rem;
+  }
+
+  .battle-question-label,
+  .battle-fighter-panel strong {
+    font-size: 0.68rem;
+  }
+
+  .battle-words-used h4 {
+    font-size: 0.7rem;
+  }
+
+  .battle-loading-title {
+    font-size: clamp(0.95rem, 5vw, 1.4rem);
+    letter-spacing: 0.08em;
+  }
 }

@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JournalDetailSection } from '@/components/journal/JournalDetailSection';
@@ -16,7 +16,11 @@ export default function JournalDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchJournalById(id).then(setEntry);
+    fetchJournalById(id)
+      .then(setEntry)
+      .catch((e) =>
+        Alert.alert('Could not load journal', e instanceof Error ? e.message : 'Please try again.'),
+      );
   }, [id]);
 
   if (!entry || entry.status !== 'submitted') {

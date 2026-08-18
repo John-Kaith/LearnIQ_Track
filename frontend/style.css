@@ -435,6 +435,14 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Site-wide safety net: a long lesson title, email, or student name should
+   never be able to push a card wider than its container and force horizontal
+   scroll on a narrow screen — wrap it instead. No effect on text that already
+   fits (only engages when a string genuinely has no natural break point). */
+h1, h2, h3, h4, h5, h6, p, span, a, li, strong, small, label, button {
+  overflow-wrap: break-word;
+}
+
 body {
   margin: 0;
   font-family: "Inter", sans-serif;
@@ -514,7 +522,11 @@ img {
   place-items: center;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  /* Same token every logo instance uses (see the other .brand-mark rules below) —
+     was previously var(--primary)/var(--secondary), which in the light theme
+     blends a brownish amber (--lq-accent-blue-strong) into the gold, making
+     this specific logo read differently from every other one on the site. */
+  background: var(--lq-gradient-accent);
   box-shadow: 0 10px 30px rgba(96, 165, 250, 0.35);
 }
 
@@ -6392,6 +6404,277 @@ html[data-theme="dark"] .learniq-dashboard-page .overview-icon {
   color: rgba(226, 232, 240, 0.95);
 }
 
+/* ── LearnIQ dashboard: bento-grid mosaic ── */
+.learniq-dashboard-page .bento-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: 148px 148px auto auto;
+  grid-template-areas:
+    "hero  hero  points rank"
+    "hero  hero  acc    acc"
+    "focus focus board  activity"
+    "battle leaderlink history modules";
+  gap: 1rem;
+}
+
+.learniq-dashboard-page .bento-tile {
+  border-radius: var(--lq-radius-lg);
+  background: var(--panel);
+  border: 1px solid var(--lq-border-subtle);
+  box-shadow: var(--lq-glow-inset), var(--lq-shadow-card);
+  padding: 1.25rem 1.35rem;
+  min-width: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Hero */
+.learniq-dashboard-page .bento-hero {
+  grid-area: hero;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.learniq-dashboard-page .dashboard-hero-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lq-accent-violet-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.learniq-dashboard-page .dashboard-hero-greeting {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.learniq-dashboard-page .dashboard-hero-subtitle {
+  margin: 0.45rem 0 0;
+  color: var(--lq-text-secondary);
+  line-height: 1.45;
+}
+
+.learniq-dashboard-page .dashboard-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+/* Stat tiles */
+.learniq-dashboard-page .bento-points,
+.learniq-dashboard-page .bento-rank {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.learniq-dashboard-page .bento-points {
+  grid-area: points;
+}
+
+.learniq-dashboard-page .bento-rank {
+  grid-area: rank;
+}
+
+.learniq-dashboard-page .bento-rank .metric-icon {
+  background: linear-gradient(135deg, var(--lq-accent-indigo), var(--lq-accent-violet));
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.35);
+}
+
+.learniq-dashboard-page .bento-points .metric-icon,
+.learniq-dashboard-page .bento-rank .metric-icon {
+  margin-bottom: 0.3rem;
+}
+
+.learniq-dashboard-page .bento-acc {
+  grid-area: acc;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.learniq-dashboard-page .bento-acc .metric-icon {
+  background: linear-gradient(135deg, var(--lq-accent-blue), var(--lq-accent-blue-strong));
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.35);
+  flex-shrink: 0;
+}
+
+.learniq-dashboard-page .bento-acc-text {
+  flex-shrink: 0;
+}
+
+.learniq-dashboard-page .bento-acc-bar {
+  flex: 1;
+  margin: 0;
+}
+
+/* Focus / leaderboard / activity row */
+.learniq-dashboard-page .bento-focus {
+  grid-area: focus;
+}
+
+.learniq-dashboard-page .bento-focus h3 {
+  margin: 0 0 0.2rem;
+}
+
+.learniq-dashboard-page .bento-board {
+  grid-area: board;
+}
+
+.learniq-dashboard-page .bento-board h3,
+.learniq-dashboard-page .bento-activity h3 {
+  margin: 0 0 0.2rem;
+}
+
+.learniq-dashboard-page .bento-activity {
+  grid-area: activity;
+  display: flex;
+  flex-direction: column;
+}
+
+.learniq-dashboard-page .bento-activity-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--lq-border-subtle);
+}
+
+.learniq-dashboard-page .bento-activity-row:first-of-type {
+  border-top: none;
+}
+
+.learniq-dashboard-page .bento-activity-row strong {
+  font-size: 1.05rem;
+}
+
+/* Explore tiles: same mosaic, bottom row */
+.learniq-dashboard-page .bento-explore {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.learniq-dashboard-page .bento-explore--battle { grid-area: battle; }
+.learniq-dashboard-page .bento-explore--leaderboard { grid-area: leaderlink; }
+.learniq-dashboard-page .bento-explore--history { grid-area: history; }
+.learniq-dashboard-page .bento-explore--modules { grid-area: modules; }
+
+.learniq-dashboard-page .bento-explore .explore-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1rem;
+  background: linear-gradient(135deg, var(--lq-accent-violet-soft), var(--lq-accent-violet));
+  box-shadow: 0 8px 18px rgba(234, 179, 8, 0.3);
+}
+
+html[data-theme="dark"] .learniq-dashboard-page .bento-explore .explore-icon {
+  background: linear-gradient(135deg, var(--lq-accent-blue), var(--lq-accent-blue-strong));
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.3);
+}
+
+.learniq-dashboard-page .bento-explore--leaderboard .explore-icon {
+  background: linear-gradient(135deg, var(--lq-accent-indigo), var(--lq-accent-violet));
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.3);
+}
+
+.learniq-dashboard-page .bento-explore h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.learniq-dashboard-page .bento-explore p {
+  margin: 0;
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--lq-text-secondary);
+}
+
+.learniq-dashboard-page .explore-cta {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: var(--lq-accent-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.learniq-dashboard-page .bento-explore:hover .explore-cta i {
+  transform: translateX(3px);
+}
+
+.learniq-dashboard-page .explore-cta i {
+  transition: transform 0.18s ease;
+}
+
+/* Every tile lifts a little on hover, hero excluded (it's already the focal point) */
+.learniq-dashboard-page .bento-tile:not(.bento-hero):hover {
+  transform: translateY(-3px);
+  border-color: var(--lq-border-accent);
+  box-shadow: var(--lq-glow-inset), var(--lq-shadow-elevated);
+}
+
+/* Leaderboard preview: highlight top 3 with a medal */
+.learniq-dashboard-page .leaderboard-mini li[data-rank="1"],
+.learniq-dashboard-page .leaderboard-mini li[data-rank="2"],
+.learniq-dashboard-page .leaderboard-mini li[data-rank="3"] {
+  border-color: var(--lq-border-accent-soft);
+}
+
+@media (max-width: 1080px) {
+  .learniq-dashboard-page .bento-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    grid-template-areas:
+      "hero   hero"
+      "points rank"
+      "acc    acc"
+      "focus  focus"
+      "board  activity"
+      "battle leaderlink"
+      "history modules";
+  }
+}
+
+@media (max-width: 640px) {
+  .learniq-dashboard-page .bento-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "points"
+      "rank"
+      "acc"
+      "focus"
+      "board"
+      "activity"
+      "battle"
+      "leaderlink"
+      "history"
+      "modules";
+  }
+
+  .learniq-dashboard-page .bento-tile {
+    padding: 1.1rem 1.2rem;
+  }
+}
+
 @media (max-width: 760px) {
   .learniq-dashboard-page .overview-grid {
     grid-template-columns: 1fr;
@@ -9538,10 +9821,9 @@ html[data-theme="dark"] .lesson-card-pill {
   box-shadow: var(--lq-glow-inset), var(--lq-glow-purple-sm);
 }
 
-.brand-mark {
-  background: var(--lq-gradient-accent);
-  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.35);
-}
+/* .brand-mark's color now lives in one place only — see the base rule near the
+   top of this file. This duplicate override used to exist here and drift out
+   of sync with it; removed rather than fixed twice. */
 
 .status-badge.online {
   color: #d1fae5;
