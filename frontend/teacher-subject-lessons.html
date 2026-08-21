@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,12 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026051618" />
+<link rel="stylesheet" href="style.css?v=2026082001" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026052110" defer></script>
+  <script src="script.js?v=2026082001" defer></script>
   <script src="js/pages/class-attendance.js?v=2026052120" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
@@ -47,16 +47,18 @@
     </aside>
 
     <main class="main-panel">
-      <section class="glass-card panel-header teacher-subject-lessons-header">
-        <a href="teacher-subjects.html" class="admin-subjects-back-link teacher-subject-back-link" id="teacher-subject-back-link">
-          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to My Subjects
-        </a>
-        <div class="panel-title">
+      <a href="teacher-subjects.html" class="admin-subjects-back-link teacher-subject-back-link" id="teacher-subject-back-link">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to My Subjects
+      </a>
+
+      <!-- Classroom-style colored banner, matches this subject's card color. -->
+      <section id="teacher-subject-banner" class="subject-class-banner">
+        <div class="subject-class-banner-inner">
           <h1 id="teacher-subject-page-title">Subject lessons</h1>
           <p id="teacher-subject-page-subtitle">Upload and manage lessons for this subject only.</p>
         </div>
-        <div id="teacher-subject-page-join" class="teacher-subject-page-join" hidden></div>
       </section>
+      <div id="teacher-subject-page-join" class="teacher-subject-page-join" hidden></div>
 
       <section class="stats-grid teacher-subject-stats">
         <article class="glass-card stat-card">

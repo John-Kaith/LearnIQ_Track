@@ -4504,6 +4504,104 @@ html:not([data-theme="dark"]) .workspace-tab.is-active .users-tab-count {
   margin-top: 1rem;
 }
 
+/* --- Classroom-style subject banner + Stream/Classwork/People tabs ---
+   Used on my-lesson.html (student) and teacher-subject-lessons.html (teacher)
+   once a specific subject is open. Color comes from the subject's own
+   --subject-banner-color (same value as its card color), always within the
+   yellow/gold family — see the swatch palettes in teacher-subjects.html /
+   admin-subjects.html. */
+.subject-class-banner {
+  --subject-banner-color: #ca8a04;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 1.75rem 1.85rem;
+  margin-bottom: 1rem;
+  background: var(--subject-banner-color);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.subject-class-banner-inner h1 {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.subject-class-banner-inner p {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.95rem;
+}
+
+.subject-class-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.6rem;
+}
+
+/* `.panel-header` (line ~686) and `.subject-class-tabs` above both declare an
+   explicit `display`, which beats the browser's default `[hidden]{display:none}`
+   UA rule (author styles always win over UA styles, regardless of specificity).
+   Without this, toggling the `hidden` attribute via JS silently does nothing
+   on these elements. */
+.panel-header[hidden],
+.subject-class-tabs[hidden],
+.subject-class-banner[hidden] {
+  display: none !important;
+}
+
+.subject-class-tab {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.subject-class-tab:hover {
+  color: var(--text);
+  background: rgba(120, 53, 15, 0.06);
+}
+
+.subject-class-tab.is-active {
+  color: var(--primary-strong);
+  background: rgba(202, 138, 4, 0.14);
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
+html[data-theme="dark"] .subject-class-tab.is-active {
+  color: #fcd34d;
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.subject-tab-panel[hidden] {
+  display: none;
+}
+
+.subject-stream-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.subject-stream-card .subject-stream-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
 /* --- Student History page --- */
 .history-list {
   display: flex;

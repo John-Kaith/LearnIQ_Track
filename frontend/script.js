@@ -1,4 +1,4 @@
-const sampleAiData = {
+﻿const sampleAiData = {
   reviewer: [
     "Plate tectonics explains how Earth’s crust is broken into moving plates that shape continents and oceans.",
     "Volcanoes and earthquakes usually occur near plate boundaries where pressure and movement are strongest.",
@@ -5572,7 +5572,7 @@ function buildSubjectCardHtml(subject, options = {}) {
   const showMenu = opts.showMenu !== false;
   const archivedView = !!opts.archivedView;
   const safeId = String(subject.id).replace(/'/g, "\\'");
-  const color = subject.color || "#60a5fa";
+  const color = subject.color || "#ca8a04";
   const name = subject.name || "Untitled subject";
   const description = subject.description || "Lessons grouped under this subject.";
   const count = Number(subject.published_lesson_count || 0);
@@ -5991,7 +5991,7 @@ function setupStudentArchivedPage() {
 
 function buildTeacherSubjectCardHtml(subject) {
   const safeId = String(subject.id).replace(/'/g, "\\'");
-  const color = subject.color || "#60a5fa";
+  const color = subject.color || "#ca8a04";
   const name = subject.name || "Untitled subject";
   const description = subject.description || "Lessons grouped under this subject.";
   const myCount = Number(subject.my_lesson_count || 0);
@@ -6348,6 +6348,11 @@ async function hydrateTeacherSubjectLessonsPage() {
     }
     if (uploadLabel) uploadLabel.textContent = name;
 
+    const bannerEl = document.getElementById("teacher-subject-banner");
+    if (bannerEl) {
+      bannerEl.style.setProperty("--subject-banner-color", match.color || DEFAULT_SUBJECT_COLOR);
+    }
+
     const code = String(match.join_code || "").trim();
     if (codeStat) codeStat.textContent = code || "—";
 
@@ -6534,7 +6539,7 @@ function buildAdminTeacherCardHtml(teacher, lessonStats) {
 
 function buildAdminSubjectDrillCardHtml(subject, teacherIdNumber, stats) {
   const safeSid = String(subject.id).replace(/'/g, "\\'");
-  const color = subject.color || "#60a5fa";
+  const color = subject.color || "#ca8a04";
   const name = subject.name || "Untitled subject";
   const description = subject.description || "No description set.";
   const lessonCount = Number(stats?.lesson_count || 0);
@@ -7387,7 +7392,7 @@ function setupAdminSubjectModal() {
     const name = (nameInput?.value || "").trim();
     const description = (descInput?.value || "").trim();
     const colorInput = form.querySelector('input[name="admin-subject-color"]:checked');
-    const color = colorInput ? colorInput.value : "#60a5fa";
+    const color = colorInput ? colorInput.value : "#ca8a04";
 
     if (!name) {
       if (errorEl) {
@@ -7489,7 +7494,7 @@ function setupTeacherAddSubjectForm() {
     const name = (nameInput?.value || "").trim();
     const description = (descInput?.value || "").trim();
     const colorInput = form.querySelector('input[name="subject-color"]:checked');
-    const color = colorInput ? colorInput.value : "#60a5fa";
+    const color = colorInput ? colorInput.value : "#ca8a04";
 
     if (!name) {
       if (errorEl) {
@@ -7728,10 +7733,19 @@ function renderSubjectTeacherProfile() {
   applySubjectTeacherAvatar(avatarEl, teacherAvatar, teacherName);
 }
 
+// Default subject color when none is set — stays in the yellow/gold family
+// (see the swatch palettes in teacher-subjects.html / admin-subjects.html).
+const DEFAULT_SUBJECT_COLOR = "#ca8a04";
+
 function updateMyLessonHeaderForSubject() {
   const headerTitle = document.getElementById("student-lesson-panel-title");
   const headerSubtitle = document.getElementById("student-lesson-panel-subtitle");
   const backLink = document.getElementById("student-back-to-subjects-link");
+  const plainHeader = document.getElementById("student-lesson-panel-header");
+  const banner = document.getElementById("subject-class-banner");
+  const bannerTitle = document.getElementById("subject-banner-title");
+  const bannerSubtitle = document.getElementById("subject-banner-subtitle");
+  const tabsNav = document.getElementById("subject-class-tabs");
 
   if (selectedSubjectId) {
     if (backLink) backLink.hidden = false;
@@ -7742,14 +7756,62 @@ function updateMyLessonHeaderForSubject() {
     if (headerSubtitle) {
       headerSubtitle.textContent = "Open a published lesson to review, take a quiz, or do an activity.";
     }
+
+    // Classroom-style banner + Stream/Classwork/People tabs replace the plain header.
+    if (plainHeader) plainHeader.hidden = true;
+    if (banner) {
+      banner.hidden = false;
+      banner.style.setProperty("--subject-banner-color", subjectMeta?.color || DEFAULT_SUBJECT_COLOR);
+    }
+    if (bannerTitle) bannerTitle.textContent = name || "Subject";
+    if (bannerSubtitle) {
+      const teacherName = (subjectMeta?.teacher_name || "").trim();
+      bannerSubtitle.textContent = teacherName ? `Taught by ${teacherName}` : "";
+    }
+    if (tabsNav) tabsNav.hidden = false;
+
+    const streamDesc = document.getElementById("subject-stream-description");
+    if (streamDesc) {
+      streamDesc.textContent = (subjectMeta?.description || "").trim()
+        || "Open Classwork to see published lessons for this subject.";
+    }
+    const streamCount = document.getElementById("subject-stream-lesson-count");
+    if (streamCount) {
+      const count = getActiveStudentLessons().length;
+      streamCount.textContent = `${count} published ${count === 1 ? "lesson" : "lessons"}`;
+    }
   } else {
     if (backLink) backLink.hidden = true;
     if (headerTitle) headerTitle.textContent = "My Lesson";
     if (headerSubtitle) {
       headerSubtitle.textContent = "Open a published lesson to review, take a quiz, or do an activity.";
     }
+    if (plainHeader) plainHeader.hidden = false;
+    if (banner) banner.hidden = true;
+    if (tabsNav) tabsNav.hidden = true;
   }
 }
+
+function initSubjectClassTabs() {
+  const tabButtons = Array.from(document.querySelectorAll(".subject-class-tab[data-subject-tab]"));
+  if (!tabButtons.length) return;
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-subject-tab");
+      tabButtons.forEach((b) => {
+        const isActive = b === btn;
+        b.classList.toggle("is-active", isActive);
+        b.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      ["stream", "classwork", "people"].forEach((name) => {
+        const panel = document.getElementById(`subject-tab-panel-${name}`);
+        if (panel) panel.hidden = name !== target;
+      });
+    });
+  });
+}
+initSubjectClassTabs();
 
 function renderLessonSelection() {
   console.log("DEBUG: renderLessonSelection called");
