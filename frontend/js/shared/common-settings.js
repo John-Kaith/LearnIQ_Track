@@ -161,7 +161,7 @@
           <div class="cs-row">
             <div class="cs-row-text">
               <strong>Email notifications</strong>
-              <span class="small-note">Approvals, announcements, and grade updates.</span>
+              <span class="small-note">Announcements and grade updates.</span>
             </div>
             <label class="cs-switch">
               <input type="checkbox" id="cs-notif-email-toggle" />

@@ -6002,7 +6002,7 @@ function buildTeacherSubjectCardHtml(subject) {
   const uploadBtn =
     String(subject.id) === "__unassigned__"
       ? ""
-      : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}">
+      : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}" title="Upload lesson">
           <i class="fa-solid fa-upload" aria-hidden="true"></i><span class="btn-label">Upload</span>
         </button>`;
   const deleteBtn =
@@ -8835,7 +8835,7 @@ async function renderAiResultPage() {
   let fileId = params.get("file_id") || localStorage.getItem(TEACHER_FILE_STORAGE_KEY);
   if (!fileId) {
     reviewerList.innerHTML =
-      '<p class="small-note">Go to the Teacher Dashboard, select or upload a lesson, then open this page again.</p>';
+      '<p class="small-note">Go to My Subjects, open a subject, then select or upload a lesson to review it here.</p>';
     quizList.innerHTML = "<li>—</li>";
     activitiesList.innerHTML = "<li>—</li>";
     return;

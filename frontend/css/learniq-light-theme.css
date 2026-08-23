@@ -65,7 +65,7 @@ html:not([data-theme="dark"]) .auth-form .password-input-container input {
 
 html:not([data-theme="dark"]) .auth-form input:focus,
 html:not([data-theme="dark"]) .auth-form select:focus {
-  border-color: rgba(99, 102, 241, 0.45);
+  border-color: rgba(202, 138, 4, 0.45);
   box-shadow: var(--lq-focus-ring);
 }
 

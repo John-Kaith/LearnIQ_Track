@@ -183,7 +183,7 @@ html[data-theme="dark"] {
   right: -15%;
   width: 55%;
   height: 80%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.22) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(202, 138, 4, 0.22) 0%, transparent 68%);
   pointer-events: none;
 }
 
@@ -195,7 +195,7 @@ html[data-theme="dark"] {
   left: -10%;
   width: 45%;
   height: 70%;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.16) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(202, 138, 4, 0.16) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -360,7 +360,7 @@ html:not([data-theme="dark"]) .stat-card {
 .lq-btn--secondary,
 .btn-secondary {
   color: #fff;
-  background: rgba(99, 102, 241, 0.14);
+  background: rgba(202, 138, 4, 0.14);
   border: 1px solid var(--lq-border-accent-soft);
 }
 
@@ -394,7 +394,7 @@ input:focus,
 select:focus,
 textarea:focus,
 .form-select:focus {
-  border-color: rgba(99, 102, 241, 0.55);
+  border-color: rgba(202, 138, 4, 0.55);
   box-shadow: var(--lq-focus-ring);
 }
 
@@ -414,9 +414,9 @@ textarea:focus,
 .lq-nav-item.is-active,
 .side-links a:hover,
 .side-links a.active {
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.22);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.08);
+  background: rgba(202, 138, 4, 0.12);
+  border-color: rgba(202, 138, 4, 0.22);
+  box-shadow: 0 0 20px rgba(202, 138, 4, 0.08);
   color: var(--lq-text-primary);
 }
 
@@ -512,7 +512,7 @@ html[data-theme="dark"] .learning-iq-bar-track {
 .lq-progress-fill--strong,
 .learning-iq-bar-fill--strong {
   background: var(--lq-gradient-accent-bar);
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 16px rgba(202, 138, 4, 0.5);
 }
 
 .lq-progress-fill--focus,
@@ -529,10 +529,10 @@ html[data-theme="dark"] .learning-iq-bar-track {
 
 .lq-progress-fill--elite,
 .learning-iq-bar-fill--elite {
-  background: linear-gradient(90deg, #a855f7, #6366f1, #22d3ee, #a855f7);
+  background: linear-gradient(90deg, #b45309, #ca8a04, #fbbf24, #b45309);
   background-size: 200% 100%;
   animation: lq-progress-shimmer 2.8s ease-in-out infinite;
-  box-shadow: 0 0 18px rgba(168, 85, 247, 0.55), 0 0 28px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 0 18px rgba(202, 138, 4, 0.55), 0 0 28px rgba(251, 191, 36, 0.25);
 }
 
 @keyframes lq-progress-shimmer {

@@ -2,11 +2,11 @@
 
 (function () {
   const STRAND_META = {
-    STEM: { icon: "fa-atom", color: "#3b82f6", blurb: "Science, Technology, Engineering & Mathematics" },
-    ABM: { icon: "fa-chart-line", color: "#10b981", blurb: "Accountancy, Business & Management" },
-    HUMSS: { icon: "fa-book-open", color: "#a855f7", blurb: "Humanities & Social Sciences" },
-    "TVL-HE": { icon: "fa-screwdriver-wrench", color: "#f59e0b", blurb: "Technical-Vocational-Livelihood" },
-    __unassigned__: { icon: "fa-circle-question", color: "#94a3b8", blurb: "No strand on profile" },
+    STEM: { icon: "fa-atom", color: "#ca8a04", blurb: "Science, Technology, Engineering & Mathematics" },
+    ABM: { icon: "fa-chart-line", color: "#b45309", blurb: "Accountancy, Business & Management" },
+    HUMSS: { icon: "fa-book-open", color: "#a16207", blurb: "Humanities & Social Sciences" },
+    "TVL-HE": { icon: "fa-screwdriver-wrench", color: "#92400e", blurb: "Technical-Vocational-Livelihood" },
+    __unassigned__: { icon: "fa-circle-question", color: "#78716c", blurb: "No strand on profile" },
   };
 
   const STATE = {
