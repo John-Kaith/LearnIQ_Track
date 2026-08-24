@@ -1,8 +1,11 @@
-// Class attendance — teacher subject page + student my-lesson (photo check-in, live roster)
+// Class attendance — teacher subject page (QR camera scanner) + student
+// my-lesson (shows their own QR code). Presence in front of the teacher's
+// camera at scan time is the proof — no photo/GPS step for students.
 
 (function () {
-  const TEACHER_POLL_MS = 3000;
-  const STUDENT_POLL_MS = 3000;
+  const TEACHER_POLL_MS = 4000;
+  const SCAN_REPEAT_COOLDOWN_MS = 4000; // ignore the same QR again for this long
+  const FLASH_MS = 500;
 
   function $(id) {
     return document.getElementById(id);
@@ -46,77 +49,34 @@
     }
   }
 
-  function locationVerifiedBadgeHtml(verified) {
-    if (verified === true) {
-      return '<span class="badge badge-soft class-attendance-loc-badge"><i class="fa-solid fa-location-dot"></i> Location verified</span>';
-    }
-    if (verified === false) {
-      return '<span class="badge class-attendance-loc-badge class-attendance-loc-badge--warn"><i class="fa-solid fa-triangle-exclamation"></i> Location unverified</span>';
-    }
-    return "";
-  }
-
-  function applyStudentLocationBadge(rec) {
-    const el = $("student-class-location-verified-badge");
-    if (!el) return;
-    const v = rec?.location_verified;
-    if (v === true) {
-      el.className = "badge badge-soft class-attendance-loc-badge";
-      el.innerHTML = '<i class="fa-solid fa-location-dot"></i> Location verified';
-      el.hidden = false;
-    } else if (v === false) {
-      el.className = "badge class-attendance-loc-badge class-attendance-loc-badge--warn";
-      el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Location unverified (still present)';
-      el.hidden = false;
-    } else {
-      el.hidden = true;
-      el.textContent = "";
-    }
-  }
-
-  function getCurrentPositionForTeacher() {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(null);
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-      );
-    });
-  }
-
-  async function reverseGeocodeSimple(lat, lon) {
+  function fmtSubmittedTime(iso) {
+    if (!iso) return "—";
     try {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!res.ok) return "";
-      const data = await res.json();
-      return (data.display_name || "").trim();
+      return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
     } catch {
-      return "";
+      return fmtClock(iso);
     }
   }
 
   function initials(name) {
-    return String(name || "")
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase() || "")
-      .join("") || "??";
+    return (
+      String(name || "")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((p) => p[0]?.toUpperCase() || "")
+        .join("") || "??"
+    );
   }
 
   // ── Teacher (teacher-subject-lessons.html) ─────────────────────────────
 
   let teacherPollTimer = null;
   let teacherSessionId = null;
+  let scannerStream = null;
+  let scannerRafId = null;
+  let lastScan = { code: "", at: 0 };
+  let scanInFlight = false;
 
   function stopTeacherPoll() {
     if (teacherPollTimer) {
@@ -125,13 +85,162 @@
     }
   }
 
+  function setScannerStatus(text, kind) {
+    const el = $("teacher-class-scanner-status");
+    if (!el) return;
+    el.classList.remove("is-success", "is-error");
+    if (kind) el.classList.add(kind === "success" ? "is-success" : "is-error");
+    el.innerHTML = `<i class="fa-solid ${kind === "success" ? "fa-circle-check" : kind === "error" ? "fa-triangle-exclamation" : "fa-camera"}" aria-hidden="true"></i> ${esc(text)}`;
+  }
+
+  function flashScanner() {
+    const el = $("teacher-class-scanner-flash");
+    if (!el) return;
+    el.hidden = false;
+    window.setTimeout(() => {
+      el.hidden = true;
+    }, FLASH_MS);
+  }
+
+  async function startScanner() {
+    const wrap = $("teacher-class-scanner");
+    const video = $("teacher-class-scanner-video");
+    if (!wrap || !video || typeof jsQR !== "function") {
+      if (typeof jsQR !== "function") {
+        setScannerStatus("QR scanner library did not load. Check your internet connection.", "error");
+      }
+      return;
+    }
+    wrap.hidden = false;
+    try {
+      scannerStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      video.srcObject = scannerStream;
+      await video.play();
+      setScannerStatus("Point the camera at a student's QR code.");
+      scanLoop();
+    } catch (e) {
+      setScannerStatus("Could not open the camera. Allow camera access and try again.", "error");
+    }
+  }
+
+  function stopScanner() {
+    if (scannerRafId) {
+      cancelAnimationFrame(scannerRafId);
+      scannerRafId = null;
+    }
+    if (scannerStream) {
+      scannerStream.getTracks().forEach((t) => t.stop());
+      scannerStream = null;
+    }
+    const video = $("teacher-class-scanner-video");
+    if (video) video.srcObject = null;
+    const wrap = $("teacher-class-scanner");
+    if (wrap) wrap.hidden = true;
+  }
+
+  function scanLoop() {
+    const video = $("teacher-class-scanner-video");
+    const canvas = $("teacher-class-scanner-canvas");
+    if (!video || !canvas || !scannerStream) return;
+    scannerRafId = requestAnimationFrame(scanLoop);
+    if (video.readyState !== video.HAVE_ENOUGH_DATA || scanInFlight) return;
+
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    let imageData;
+    try {
+      imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } catch {
+      return;
+    }
+    const result = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "dontInvert",
+    });
+    if (!result || !result.data) return;
+
+    const code = result.data.trim();
+    if (!code) return;
+    const now = Date.now();
+    if (code === lastScan.code && now - lastScan.at < SCAN_REPEAT_COOLDOWN_MS) return;
+    lastScan = { code, at: now };
+    void handleScan(code);
+  }
+
+  async function handleScan(scannedIdNumber) {
+    scanInFlight = true;
+    const sid = subjectIdFromUrl();
+    const tid = teacherId();
+    setScannerStatus(`Checking ${scannedIdNumber}…`);
+    try {
+      const res = await fetch(apiUrl("/teacher/class-attendance/scan"), {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          teacher_id_number: tid,
+          subject_id: sid,
+          scanned_id_number: scannedIdNumber,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not mark attendance.");
+      flashScanner();
+      setScannerStatus(`${data.student_name || scannedIdNumber} marked present.`, "success");
+      if (typeof showToast === "function") {
+        showToast(`${data.student_name || scannedIdNumber} marked present.`, "success");
+      }
+      await refreshTeacherLive();
+    } catch (e) {
+      setScannerStatus(e.message || "That QR code could not be checked in.", "error");
+    } finally {
+      scanInFlight = false;
+      window.setTimeout(() => {
+        if (scannerStream) setScannerStatus("Point the camera at a student's QR code.");
+      }, 2200);
+    }
+  }
+
+  function attendanceRowHtml(row, state) {
+    const stu = row.student || {};
+    const rec = row.record;
+    const name = stu.display_name || stu.id_number || "Student";
+    return `<article class="class-attendance-live-row" role="listitem">
+      <div class="class-attendance-live-student">
+        <span class="avatar avatar-sm">${esc(initials(name))}</span>
+        <div>
+          <strong>${esc(name)}</strong>
+          <span class="small-note">LRN ${esc(stu.id_number || stu.lrn || "—")}</span>
+        </div>
+      </div>
+      <div class="class-attendance-live-meta">
+        ${state === "present" ? `<span class="small-note">${esc(fmtClock(rec?.time_in))}</span>` : ""}
+      </div>
+    </article>`;
+  }
+
+  function renderGroup(groupName, rows) {
+    const listEl = $(`teacher-class-list-${groupName}`);
+    const countEl = $(`teacher-class-group-count-${groupName}`);
+    if (countEl) countEl.textContent = String(rows.length);
+    if (!listEl) return;
+    if (!rows.length) {
+      listEl.innerHTML = `<p class="class-attendance-group-empty">Nobody here yet.</p>`;
+      return;
+    }
+    listEl.innerHTML = rows.map((row) => attendanceRowHtml(row, groupName)).join("");
+  }
+
   function renderTeacherLive(data) {
     const session = data?.session;
     const roster = data?.roster || [];
     const statsWrap = $("teacher-class-attendance-stats");
     const badge = $("teacher-class-attendance-status-badge");
     const counts = $("teacher-class-attendance-counts");
-    const list = $("teacher-class-attendance-live-list");
+    const rosterWrap = $("teacher-class-attendance-roster");
     const startBtn = $("teacher-class-attendance-start-btn");
     const endBtn = $("teacher-class-attendance-end-btn");
     const hint = $("teacher-class-attendance-hint");
@@ -155,80 +264,43 @@
       const pending = data?.pending_count ?? 0;
       const parts = [
         `${data?.present_count ?? 0} present`,
-        pending > 0 ? `${pending} pending` : null,
+        pending > 0 ? `${pending} not yet scanned` : null,
         `${data?.absent_count ?? 0} absent`,
         `${data?.enrolled_count ?? 0} enrolled`,
       ].filter(Boolean);
       counts.textContent = parts.join(" · ");
     }
-    const locNote = $("teacher-class-attendance-location");
-    const geoNote = $("teacher-class-attendance-geofence");
-    if (locNote) {
-      const tLoc = session?.teacher_start_location_name;
-      if (tLoc) {
-        locNote.textContent = `You started from: ${tLoc} (reference only — does not auto-mark students).`;
-        locNote.hidden = false;
-      } else if (open) {
-        locNote.textContent =
-          "Allow location when starting to set the class area for location-verified badges.";
-        locNote.hidden = false;
-      } else {
-        locNote.hidden = true;
-      }
-    }
-    if (geoNote) {
-      const gf = data?.geofence;
-      if (gf?.label) {
-        geoNote.textContent = `Class area: ${gf.label} (within ${gf.radius_m ?? 150} m for “Location verified”).`;
-        geoNote.hidden = false;
-      } else {
-        geoNote.hidden = true;
-      }
-    }
 
     if (hint) {
       hint.textContent = open
-        ? "Photo submit = Present. Location match shows a verified badge only."
+        ? "Scan each student's QR code with the camera below."
         : session
-          ? "Attendance is closed. Students who did not submit are marked absent. You can start again anytime."
-          : "Start attendance so enrolled students can submit with a photo inside this subject.";
+          ? "Attendance is closed. Students who were not scanned are marked absent. You can open it again anytime."
+          : "Open attendance, then scan each student's QR code with your camera.";
     }
 
-    if (!list) return;
+    if (open) startScanner();
+    else stopScanner();
+
+    if (!rosterWrap) return;
     if (!session) {
-      list.hidden = true;
-      list.innerHTML = "";
+      rosterWrap.hidden = true;
       return;
     }
-    list.hidden = false;
-    list.innerHTML = roster
-      .map((row) => {
-        const stu = row.student || {};
-        const rec = row.record;
-        const name = stu.display_name || stu.id_number || "Student";
-        const state = row.attendance_state || (row.checked_in ? "present" : open ? "pending" : "absent");
-        const label =
-          state === "present" ? "Present" : state === "pending" ? "Pending" : "Absent";
-        const photo = rec?.photo_url || rec?.time_in_photo_url || "";
-        const locBadge =
-          state === "present" ? locationVerifiedBadgeHtml(rec?.location_verified) : "";
-        return `<article class="class-attendance-live-row" role="listitem">
-          <div class="class-attendance-live-student">
-            <span class="avatar avatar-sm">${esc(initials(name))}</span>
-            <div>
-              <strong>${esc(name)}</strong>
-              <span class="small-note">LRN ${esc(stu.id_number || stu.lrn || "—")}</span>
-            </div>
-          </div>
-          <div class="class-attendance-live-meta">
-            <span class="badge ${state === "present" ? "badge-soft" : ""}">${esc(label)}</span>
-            ${locBadge}
-            ${state === "present" ? `<span class="small-note">${esc(fmtClock(rec?.time_in))}</span>` : ""}
-            ${photo ? `<img class="class-attendance-live-thumb" src="${esc(photo)}" alt="Check-in photo" loading="lazy" />` : ""}
-          </div>
-        </article>`;
-      })
-      .join("");
+    rosterWrap.hidden = false;
+
+    const present = [];
+    const pending = [];
+    const absent = [];
+    for (const row of roster) {
+      const state = row.attendance_state || (row.checked_in ? "present" : open ? "pending" : "absent");
+      if (state === "present") present.push(row);
+      else if (state === "absent") absent.push(row);
+      else pending.push(row);
+    }
+    renderGroup("present", present);
+    renderGroup("pending", pending);
+    renderGroup("absent", absent);
 
     if (open && !teacherPollTimer) {
       teacherPollTimer = setInterval(() => void refreshTeacherLive(), TEACHER_POLL_MS);
@@ -258,25 +330,14 @@
   async function teacherStart() {
     const sid = subjectIdFromUrl();
     const tid = teacherId();
-    const body = { teacher_id_number: tid, subject_id: sid };
-    if (typeof showToast === "function") {
-      showToast("Getting your location for class area…", "info");
-    }
-    const pos = await getCurrentPositionForTeacher();
-    if (pos) {
-      body.teacher_latitude = pos.latitude;
-      body.teacher_longitude = pos.longitude;
-      const name = await reverseGeocodeSimple(pos.latitude, pos.longitude);
-      if (name) body.teacher_start_location_name = name;
-    }
     const res = await fetch(apiUrl("/teacher/class-attendance/start"), {
       method: "POST",
       headers: authHeaders(true),
-      body: JSON.stringify(body),
+      body: JSON.stringify({ teacher_id_number: tid, subject_id: sid }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Could not start attendance.");
-    if (typeof showToast === "function") showToast("Class attendance started.", "success");
+    if (!res.ok) throw new Error(data.error || "Could not open attendance.");
+    if (typeof showToast === "function") showToast("Class attendance opened.", "success");
     await refreshTeacherLive();
   }
 
@@ -286,7 +347,7 @@
       typeof showConfirmDialog === "function"
         ? await showConfirmDialog({
             title: "End attendance?",
-            message: "Students will no longer be able to check in.",
+            message: "Students who were not scanned will be marked absent.",
             confirmLabel: "End",
           })
         : window.confirm("End attendance?");
@@ -301,6 +362,7 @@
     if (!res.ok) throw new Error(data.error || "Could not end attendance.");
     if (typeof showToast === "function") showToast("Class attendance ended.", "success");
     stopTeacherPoll();
+    stopScanner();
     await refreshTeacherLive();
   }
 
@@ -319,14 +381,15 @@
         else alert(e.message);
       });
     });
+    window.addEventListener("beforeunload", stopScanner);
     void refreshTeacherLive();
   }
 
   // ── Student (my-lesson.html) ───────────────────────────────────────────
 
   let studentPollTimer = null;
-  let studentCapture = null;
   let studentSubjectId = null;
+  let studentQrRendered = false;
 
   function stopStudentPoll() {
     if (studentPollTimer) {
@@ -335,92 +398,27 @@
     }
   }
 
-  function syncStudentCheckInBtn(ready) {
-    const btn = $("student-class-check-in-btn");
-    if (!btn || btn.hidden) return;
-    const active = studentCapture?.isReady?.() ? ready : false;
-    btn.disabled = !active;
-    btn.classList.toggle("is-locked", !ready);
-    btn.classList.toggle("btn-primary", ready);
-    btn.classList.toggle("btn-secondary", !ready);
-  }
-
-  function fmtSubmittedTime(iso) {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-    } catch {
-      return fmtClock(iso);
-    }
-  }
-
-  function fillStudentCaptureFields(rec) {
-    const locEl = $("student-class-field-location");
-    const timeEl = $("student-class-field-time");
-    const fields = $("student-class-capture-fields");
-    if (locEl) locEl.textContent = rec?.readable_location_name || "—";
-    if (timeEl) {
-      timeEl.textContent = fmtSubmittedTime(rec?.time_in || rec?.capture_timestamp);
-    }
-    if (fields) fields.hidden = false;
-  }
-
-  function clearStudentCaptureFields() {
-    const locEl = $("student-class-field-location");
-    const timeEl = $("student-class-field-time");
-    if (locEl) locEl.textContent = "—";
-    if (timeEl) timeEl.textContent = "—";
-  }
-
-  function renderStudentSubmittedView(rec) {
-    const panel = $("student-class-attendance-submitted");
-    const photoEl = $("student-class-submitted-photo");
-    if (!panel) return;
-    panel.hidden = false;
-    fillStudentCaptureFields(rec);
-    const photo = rec?.photo_url || rec?.time_in_photo_url || "";
-    if (photoEl) {
-      if (photo) {
-        photoEl.src = photo;
-        photoEl.hidden = false;
-      } else {
-        photoEl.removeAttribute("src");
-        photoEl.hidden = true;
-      }
-    }
-    applyStudentLocationBadge(rec);
-  }
-
-  function hideStudentSubmittedView() {
-    const panel = $("student-class-attendance-submitted");
-    const photoEl = $("student-class-submitted-photo");
-    if (panel) panel.hidden = true;
-    if (photoEl) {
-      photoEl.removeAttribute("src");
-      photoEl.hidden = true;
-    }
-    const locBadge = $("student-class-location-verified-badge");
-    if (locBadge) locBadge.hidden = true;
-    clearStudentCaptureFields();
-    const fields = $("student-class-capture-fields");
-    if (fields) fields.hidden = true;
+  function renderStudentQr() {
+    if (studentQrRendered) return;
+    const canvas = $("student-class-qr-canvas");
+    const id = studentId();
+    if (!canvas || !id || typeof QRCode === "undefined") return;
+    QRCode.toCanvas(canvas, id, { width: 200, margin: 1 }, (err) => {
+      if (!err) studentQrRendered = true;
+    });
   }
 
   function renderStudentStatus(data) {
     const card = $("student-class-attendance-card");
     const sub = $("student-class-attendance-subtitle");
     const statusEl = $("student-class-attendance-status");
-    const captureStatus = $("student-class-capture-status");
-    const actions = $("student-class-attendance-actions");
-    const takeBtn = $("student-class-take-photo-btn");
-    const fields = $("student-class-capture-fields");
-    const previewPanel = $("student-class-preview-panel");
+    const qrPanel = $("student-class-qr-panel");
+    const submittedPanel = $("student-class-attendance-submitted");
+    const submittedTimeEl = $("student-class-submitted-time");
 
     if (!card) return;
     if (!data?.enrolled) {
       card.hidden = true;
-      if (actions) actions.hidden = true;
-      hideStudentSubmittedView();
       stopStudentPoll();
       return;
     }
@@ -430,60 +428,43 @@
     const done = data.already_checked_in;
     const absent = data.marked_absent;
     const rec = data.record;
-    const showForm = !done && !absent;
-    const canSubmit = open && showForm;
 
     card.classList.toggle("is-absent", Boolean(absent));
     card.classList.toggle("is-submitted", Boolean(done));
 
     if (done) {
-      if (rec) renderStudentSubmittedView(rec);
-      else {
-        const panel = $("student-class-attendance-submitted");
-        if (panel) panel.hidden = false;
+      if (qrPanel) qrPanel.hidden = true;
+      if (submittedPanel) submittedPanel.hidden = false;
+      if (submittedTimeEl) {
+        submittedTimeEl.textContent = `Checked in at ${fmtSubmittedTime(rec?.time_in)}`;
       }
       if (sub) sub.textContent = "Your attendance for this class is on record.";
       if (statusEl) statusEl.textContent = "";
-      if (captureStatus) captureStatus.hidden = true;
-      if (actions) actions.hidden = true;
-      if (previewPanel) previewPanel.hidden = true;
-      studentCapture?.revokePreview?.();
-      studentCapture?.setCaptureActive?.(false, { clearFieldsOnDeactivate: false });
-      if (rec) fillStudentCaptureFields(rec);
     } else {
-      hideStudentSubmittedView();
+      if (submittedPanel) submittedPanel.hidden = true;
       if (sub) {
         sub.textContent = absent
-          ? "Attendance is closed. You were marked absent because you did not submit."
+          ? "Attendance is closed. You were marked absent because you were not scanned."
           : open
-            ? "Class attendance is open. Take a photo, then submit attendance."
-            : "Waiting for your teacher to start attendance.";
+            ? "Class attendance is open. Show your QR code to your teacher."
+            : "Your teacher has not opened attendance yet.";
       }
       if (statusEl) {
         statusEl.textContent = absent
-          ? "You can no longer submit for this session."
+          ? "You can no longer check in for this session."
           : open
-            ? data?.geofence
-              ? "Photo is required. Submit inside the class area for a location verified badge."
-              : "Photo is required. Take a photo, then tap Submit attendance."
-            : showForm
-              ? "Submit attendance will unlock when your teacher starts class attendance for this subject."
-              : "";
+            ? "Hold your screen up to your teacher's camera."
+            : "The QR code below will appear here once attendance opens.";
       }
-      if (captureStatus) captureStatus.hidden = !canSubmit;
-      if (actions) actions.hidden = !showForm;
-      if (fields) fields.hidden = !canSubmit;
-      if (takeBtn) takeBtn.disabled = !canSubmit;
-      studentCapture?.setCaptureActive?.(canSubmit);
-      if (absent) {
-        studentCapture?.revokePreview?.();
-        studentCapture?.resetCapture?.();
+      if (qrPanel) {
+        qrPanel.hidden = !open;
+        if (open) renderStudentQr();
       }
     }
 
     if (data.enrolled && !done) {
       if (!studentPollTimer) {
-        studentPollTimer = setInterval(() => void refreshStudentStatus(), STUDENT_POLL_MS);
+        studentPollTimer = setInterval(() => void refreshStudentStatus(), TEACHER_POLL_MS);
       }
     } else {
       stopStudentPoll();
@@ -508,84 +489,14 @@
         statusEl.textContent =
           "Could not load attendance status. Refresh the page or sign in again.";
       }
-      if (typeof showToast === "function") {
-        showToast(e.message || "Could not load attendance status.", "error");
-      }
     }
-  }
-
-  async function studentCheckIn() {
-    const fd = studentCapture?.buildFormData?.();
-    if (!fd) {
-      if (typeof showToast === "function") showToast("Take a photo first.", "error");
-      return;
-    }
-    const sid = studentSubjectId || subjectIdFromUrl();
-    fd.append("subject_id", sid);
-    const res = await fetch(apiUrl("/student/class-attendance/check-in"), {
-      method: "POST",
-      headers: authHeaders(),
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Check-in failed.");
-    studentCapture?.revokePreview?.();
-    renderStudentStatus({
-      enrolled: true,
-      session_open: true,
-      session_closed: false,
-      already_checked_in: true,
-      marked_absent: false,
-      record: data.record,
-    });
-    const verified = data.record?.location_verified;
-    let msg = "Attendance submitted.";
-    if (verified === true) msg = "Attendance submitted. Location verified.";
-    else if (verified === false) {
-      msg = "Attendance submitted. Location unverified — you are still marked present.";
-    }
-    if (typeof showToast === "function") showToast(msg, verified === false ? "info" : "success");
-    await refreshStudentStatus();
   }
 
   function initStudent() {
     if (!document.body.classList.contains("my-lesson-page")) return;
     studentSubjectId = subjectIdFromUrl();
     if (!studentSubjectId) return;
-
-    if (typeof window.createImmersionCaptureController === "function") {
-      studentCapture = window.createImmersionCaptureController({
-        initialMode: "class_attendance",
-        takePhotoBtn: $("student-class-take-photo-btn"),
-        shutterBtn: $("student-class-camera-shutter"),
-        cancelCameraBtn: $("student-class-camera-cancel"),
-        cameraPanel: $("student-class-camera-panel"),
-        videoEl: $("student-class-camera-video"),
-        canvasEl: $("student-class-camera-canvas"),
-        previewPanel: $("student-class-preview-panel"),
-        previewImg: $("student-class-preview-img"),
-        previewBadgeEl: $("student-class-preview-badge"),
-        fieldLocation: $("student-class-field-location"),
-        fieldTimeLabel: null,
-        fieldTime: $("student-class-field-time"),
-        fieldCoords: null,
-        captureStatusEl: $("student-class-capture-status"),
-        timeInBtn: $("student-class-check-in-btn"),
-        timeOutBtn: null,
-        onReadyChange: (ready) => syncStudentCheckInBtn(ready),
-      });
-      studentCapture?.setCaptureActive?.(false, { clearFieldsOnDeactivate: true });
-    }
-
-    $("student-class-check-in-btn")?.addEventListener("click", () => {
-      studentCheckIn().catch((e) => {
-        if (typeof showToast === "function") showToast(e.message, "error");
-        else alert(e.message);
-      });
-    });
-
     void refreshStudentStatus();
-
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") void refreshStudentStatus();
     });

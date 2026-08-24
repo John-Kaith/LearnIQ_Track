@@ -3455,6 +3455,54 @@ async def student_class_attendance_check_in_endpoint(
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.post("/teacher/class-attendance/scan")
+async def teacher_class_attendance_scan_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    """Teacher scans a student's QR code (their id_number) with the class
+    camera to mark them present — no photo/GPS step for the student."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, body.get("teacher_id_number"))
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    subject_id = str(body.get("subject_id") or "").strip()
+    if not subject_id:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    scanned_id_number = str(body.get("scanned_id_number") or "").strip()
+    if not scanned_id_number:
+        return JSONResponse({"error": "scanned_id_number is required"}, status_code=400)
+
+    prof = db_supabase.get_profile_by_id_number(scanned_id_number)
+    if not prof or str(prof.get("role") or "").lower() != "student":
+        return JSONResponse({"error": "QR code does not match a student account."}, status_code=404)
+    student_uuid = str(prof.get("id") or "")
+    try:
+        record = db_supabase.insert_class_attendance_checkin_via_qr(
+            student_uuid,
+            scanned_id_number,
+            subject_id,
+            time_in_iso=datetime.now(timezone.utc).isoformat(),
+        )
+        return {
+            "record": record,
+            "student_id_number": scanned_id_number,
+            "student_name": db_supabase.profile_display_name(prof) or scanned_id_number,
+        }
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        msg = str(e)
+        status_code = 409 if "already checked in" in msg.lower() else 400
+        return JSONResponse({"error": msg}, status_code=status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get("/teacher/gradecard/students")
 def teacher_gradecard_students_endpoint(
     teacher_id_number: str = Query(...),

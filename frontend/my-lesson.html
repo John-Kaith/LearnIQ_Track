@@ -9,19 +9,20 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082005" />
+<link rel="stylesheet" href="style.css?v=2026082006" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
   <script src="js/shared/reviewer-markdown.js?v=202605153" defer></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/shared/ai-generation-cooldown.js?v=2026051803" defer></script>
   <script src="js/pages/immersion-capture.js?v=2026052122" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082005" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026052122" defer></script>
+  <script src="script.js?v=2026082006" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082101" defer></script>
 </head>
 <body class="my-lesson-page">
   <div class="dashboard-shell container">
@@ -85,47 +86,26 @@
         <div class="content-stack lesson-workspace-main">
           <article id="student-class-attendance-card" class="glass-card content-card class-attendance-student-card" hidden aria-label="Class attendance">
             <div>
-              <h3><i class="fa-solid fa-camera"></i> Class attendance</h3>
-              <p class="content-subtitle" id="student-class-attendance-subtitle">Your teacher has not started attendance yet.</p>
+              <h3><i class="fa-solid fa-qrcode"></i> Class attendance</h3>
+              <p class="content-subtitle" id="student-class-attendance-subtitle">Your teacher has not opened attendance yet.</p>
             </div>
             <p class="small-note" id="student-class-attendance-status" role="status"></p>
+
             <div id="student-class-attendance-submitted" class="class-attendance-submitted-view" hidden>
               <span class="badge badge-soft class-attendance-submitted-badge">
                 <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Attendance submitted
               </span>
-              <span id="student-class-location-verified-badge" class="badge class-attendance-loc-badge" hidden></span>
-              <img id="student-class-submitted-photo" class="class-attendance-submitted-photo" alt="Your submitted attendance photo" hidden loading="lazy" />
+              <span class="small-note" id="student-class-submitted-time">—</span>
             </div>
-            <p class="immersion-capture-status small-note" id="student-class-capture-status" role="status" hidden></p>
-            <div class="button-group immersion-clock-actions" id="student-class-attendance-actions" hidden>
-              <button type="button" class="btn btn-secondary" id="student-class-take-photo-btn" disabled>
-                <i class="fa-solid fa-camera"></i> Take photo
-              </button>
-              <button type="button" class="btn btn-secondary is-locked" id="student-class-check-in-btn" disabled>
-                <i class="fa-solid fa-paper-plane"></i> Submit attendance
-              </button>
-            </div>
-            <div id="student-class-camera-panel" class="immersion-camera-panel" hidden>
-              <video id="student-class-camera-video" playsinline muted></video>
-              <canvas id="student-class-camera-canvas" hidden></canvas>
-              <div class="immersion-camera-actions">
-                <button type="button" class="btn btn-primary btn-sm" id="student-class-camera-shutter">Capture</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="student-class-camera-cancel">Cancel</button>
+
+            <div id="student-class-qr-panel" class="class-attendance-qr-panel" hidden>
+              <div class="class-attendance-qr-canvas-wrap">
+                <canvas id="student-class-qr-canvas"></canvas>
               </div>
-            </div>
-            <div id="student-class-preview-panel" class="immersion-preview-panel" hidden>
-              <img id="student-class-preview-img" alt="Attendance photo preview" />
-              <span class="badge badge-soft" id="student-class-preview-badge">Photo preview</span>
-            </div>
-            <div class="immersion-capture-fields" id="student-class-capture-fields" hidden aria-live="polite">
-              <div class="immersion-meta-row">
-                <span class="immersion-meta-label">location:</span>
-                <span class="immersion-meta-value" id="student-class-field-location">—</span>
-              </div>
-              <div class="immersion-meta-row">
-                <span class="immersion-meta-label">time:</span>
-                <span class="immersion-meta-value" id="student-class-field-time">—</span>
-              </div>
+              <p class="small-note class-attendance-qr-caption">
+                <i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Show this to your teacher's camera to check in.
+              </p>
+              <p class="immersion-meta-value" id="student-class-field-time">—</p>
             </div>
           </article>
 

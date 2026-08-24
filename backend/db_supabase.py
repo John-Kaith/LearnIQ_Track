@@ -3305,15 +3305,13 @@ def _serialize_class_checkin_row(row: dict[str, Any] | None) -> dict[str, Any] |
 
 
 def _class_attendance_record_is_present(rec: dict[str, Any] | None) -> bool:
-    """Present only when the student submitted a photo check-in for this session."""
+    """Present when a check-in record exists for this session (QR scan or,
+    for older rows, a photo submission) and isn't explicitly marked absent."""
     if not rec:
         return False
     if str(rec.get("status") or "").strip().lower() == "absent":
         return False
-    if rec.get("photo_url") or rec.get("time_in_photo_url"):
-        return True
-    b64 = rec.get("captured_photo_base64")
-    return isinstance(b64, str) and bool(b64.strip())
+    return True
 
 
 def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -3794,6 +3792,55 @@ def insert_class_attendance_checkin(
     }
     if location_verified is not None:
         row["location_verified"] = location_verified
+    res = _sb().table("class_attendance_records").insert(row).execute()
+    inserted = (res.data or [None])[0]
+    if not inserted:
+        raise RuntimeError("Could not save class attendance.")
+    return _serialize_class_checkin_row(inserted) or inserted
+
+
+def insert_class_attendance_checkin_via_qr(
+    student_uuid: str,
+    student_id_number: str,
+    subject_id: str,
+    *,
+    time_in_iso: str,
+) -> dict[str, Any]:
+    """QR check-in: teacher scans the student's own QR (their id_number) with
+    the class camera. No photo/GPS — presence in front of the teacher's
+    camera at scan time is the proof, same trust level as a paper sign-in
+    sheet the teacher watches in person."""
+    sid = str(subject_id or "").strip()
+    if not student_enrolled_in_subject(student_uuid, sid):
+        raise PermissionError("This student is not enrolled in this subject.")
+    session = get_class_attendance_session_today(sid)
+    if not session or str(session.get("status") or "").lower() != "open":
+        raise ValueError("Class attendance is not open for this subject right now.")
+    sess_id = str(session["id"])
+    try:
+        existing = (
+            _sb()
+            .table("class_attendance_records")
+            .select("id")
+            .eq("session_id", sess_id)
+            .eq("student_id", student_uuid)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            raise ValueError("This student already checked in for today's class attendance.")
+    except ValueError:
+        raise
+    except Exception as e:
+        print(f"insert_class_attendance_checkin_via_qr existing: {e}")
+
+    row = {
+        "session_id": sess_id,
+        "student_id": student_uuid,
+        "student_id_number": student_id_number.strip(),
+        "time_in": time_in_iso,
+        "status": "present",
+    }
     res = _sb().table("class_attendance_records").insert(row).execute()
     inserted = (res.data or [None])[0]
     if not inserted:

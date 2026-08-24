@@ -9,13 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082005" />
+<link rel="stylesheet" href="style.css?v=2026082006" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082005" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026052120" defer></script>
+  <script src="script.js?v=2026082006" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082101" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
@@ -90,12 +91,12 @@
       <section class="glass-card content-card class-attendance-teacher-panel" id="teacher-class-attendance-panel" aria-label="Class attendance">
         <div class="class-attendance-teacher-head">
           <div>
-            <h2><i class="fa-solid fa-clipboard-check"></i> Class attendance</h2>
-            <p class="small-note" id="teacher-class-attendance-hint">Start attendance so enrolled students can submit with a photo inside this subject (My lesson).</p>
+            <h2><i class="fa-solid fa-qrcode"></i> Class attendance</h2>
+            <p class="small-note" id="teacher-class-attendance-hint">Open attendance, then scan each student's QR code with your camera.</p>
           </div>
           <div class="class-attendance-teacher-actions">
             <button type="button" class="btn btn-primary" id="teacher-class-attendance-start-btn">
-              <i class="fa-solid fa-play"></i> Start attendance
+              <i class="fa-solid fa-play"></i> Open attendance
             </button>
             <button type="button" class="btn btn-secondary" id="teacher-class-attendance-end-btn" hidden disabled>
               <i class="fa-solid fa-stop"></i> End attendance
@@ -106,9 +107,44 @@
           <span class="badge badge-soft" id="teacher-class-attendance-status-badge">—</span>
           <span class="small-note" id="teacher-class-attendance-counts">0 present · 0 absent</span>
         </div>
-        <p class="small-note" id="teacher-class-attendance-location" hidden></p>
-        <p class="small-note" id="teacher-class-attendance-geofence" hidden></p>
-        <div id="teacher-class-attendance-live-list" class="class-attendance-live-list" role="list" hidden></div>
+
+        <!-- QR scanner: camera view the teacher points at each student's QR code -->
+        <div id="teacher-class-scanner" class="class-attendance-scanner" hidden>
+          <div class="class-attendance-scanner-video-wrap">
+            <video id="teacher-class-scanner-video" playsinline muted></video>
+            <canvas id="teacher-class-scanner-canvas" hidden></canvas>
+            <div class="class-attendance-scanner-frame" aria-hidden="true"></div>
+          </div>
+          <div class="class-attendance-scanner-status" id="teacher-class-scanner-status" role="status">
+            <i class="fa-solid fa-camera" aria-hidden="true"></i> Point the camera at a student's QR code.
+          </div>
+          <div class="class-attendance-scanner-flash" id="teacher-class-scanner-flash" hidden></div>
+        </div>
+
+        <!-- Roster, grouped so it's easy to scan visually (Present / Pending / Absent) -->
+        <div id="teacher-class-attendance-roster" class="class-attendance-roster" hidden>
+          <div class="class-attendance-group" data-group="present">
+            <h4 class="class-attendance-group-head">
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Present
+              <span class="class-attendance-group-count" id="teacher-class-group-count-present">0</span>
+            </h4>
+            <div class="class-attendance-live-list" id="teacher-class-list-present" role="list"></div>
+          </div>
+          <div class="class-attendance-group" data-group="pending">
+            <h4 class="class-attendance-group-head">
+              <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Not yet scanned
+              <span class="class-attendance-group-count" id="teacher-class-group-count-pending">0</span>
+            </h4>
+            <div class="class-attendance-live-list" id="teacher-class-list-pending" role="list"></div>
+          </div>
+          <div class="class-attendance-group" data-group="absent">
+            <h4 class="class-attendance-group-head">
+              <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> Absent
+              <span class="class-attendance-group-count" id="teacher-class-group-count-absent">0</span>
+            </h4>
+            <div class="class-attendance-live-list" id="teacher-class-list-absent" role="list"></div>
+          </div>
+        </div>
       </section>
 
       <section class="dashboard-grid teacher-subject-lessons-grid">
