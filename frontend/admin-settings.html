@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,14 +9,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082006" />
+<link rel="stylesheet" href="style.css?v=2026082114" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082006" defer></script>
-  <script src="js/shared/common-settings.js?v=2026051303" defer></script>
+  <script src="script.js?v=2026082103" defer></script>
+  <script src="js/shared/common-settings.js?v=2026082102" defer></script>
   <script src="js/pages/admin-settings.entry.js" defer></script>
+  <script src="js/pages/admin-sections.js?v=2026082501" defer></script>
 </head>
 <body data-sidebar-active="settings">
   <main class="page-shell container">
@@ -57,6 +58,53 @@
         </section>
 
         <div id="common-settings-mount" class="fade-up delay-2"></div>
+
+        <section class="glass-card panel-header fade-up delay-2">
+          <div class="panel-title">
+            <h2 style="margin:0; font-size: 1.05rem;"><i class="fa-solid fa-layer-group"></i> Manage Sections</h2>
+            <p>Fixed list of SHS sections (e.g. "STEM 12-A") used during student registration — students can no longer type their own.</p>
+          </div>
+        </section>
+        <section class="glass-card fade-up delay-2" id="admin-sections-card">
+          <form id="admin-add-section-form" class="admin-sections-add-form">
+            <label>
+              <span class="small-note">Section name</span>
+              <input type="text" id="as-section-name" class="form-input" placeholder="e.g. STEM 12-A" required />
+            </label>
+            <label>
+              <span class="small-note">Year level</span>
+              <select id="as-section-grade" required>
+                <option value="">Select year</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </label>
+            <label>
+              <span class="small-note">Strand</span>
+              <select id="as-section-strand" required>
+                <option value="">Select strand</option>
+                <option value="ABM">ABM</option>
+                <option value="HUMSS">HUMSS</option>
+                <option value="STEM">STEM</option>
+                <option value="TVL-HE">TVL-HE</option>
+              </select>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-plus"></i> Add section
+            </button>
+          </form>
+          <div id="admin-sections-list" class="admin-sections-list">
+            <p class="small-note">Loading sections…</p>
+          </div>
+        </section>
+
+        <section class="glass-card fade-up delay-2" id="admin-students-without-section-card">
+          <div class="panel-title">
+            <h2 style="margin:0; font-size: 1.05rem;"><i class="fa-solid fa-user-group"></i> Students without a section</h2>
+            <p class="small-note" id="admin-no-section-count-note">Loading…</p>
+          </div>
+          <div id="admin-no-section-list" class="admin-sections-list"></div>
+        </section>
 
         <section class="glass-card panel-header fade-up delay-2">
           <div class="panel-title">

@@ -357,13 +357,12 @@
           else alert("No email on file for this account.");
           return;
         }
-        const ok = typeof showConfirmDialog === "function"
-          ? await showConfirmDialog({
+        const ok = window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function"
+          ? await window.LearnIQConfirm.show({
               title: "Send reset link?",
               message: `We'll email a password reset link to ${email}.`,
               confirmText: "Send",
               cancelText: "Cancel",
-              variant: "primary",
             })
           : confirm(`Send password reset link to ${email}?`);
         if (!ok) return;

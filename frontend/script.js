@@ -2108,12 +2108,13 @@ async function setupImmersionDashboard() {
   if (trackEl && user.id_number) trackEl.textContent = `ID ${user.id_number}`;
   void hydrateSidebarProfileFromDatabase();
 
-  const timeInBtn = document.getElementById("time-in-btn");
-  const timeOutBtn = document.getElementById("time-out-btn");
-  const takePhotoBtn = document.getElementById("take-photo-btn");
-  const retakePhotoBtn = document.getElementById("retake-photo-btn");
-  const cameraPanel = document.getElementById("immersion-camera-panel");
-  const previewPanel = document.getElementById("immersion-capture-preview");
+  const qrScanToggleBtn = document.getElementById("qr-scan-toggle-btn");
+  const qrScanToggleLabel = document.getElementById("qr-scan-toggle-label");
+  const qrScannerPanel = document.getElementById("immersion-qr-scanner-panel");
+  const qrScannerVideo = document.getElementById("immersion-qr-scanner-video");
+  const qrScannerCanvas = document.getElementById("immersion-qr-scanner-canvas");
+  const qrScannerStatus = document.getElementById("immersion-qr-scanner-status");
+  const qrScannerCancelBtn = document.getElementById("immersion-qr-scanner-cancel-btn");
   const statusText = document.getElementById("time-status-text");
   const timeInDisplay = document.getElementById("time-in-display");
   const timeOutDisplay = document.getElementById("time-out-display");
@@ -2123,105 +2124,125 @@ async function setupImmersionDashboard() {
   const viewTimeInDetailsBtn = document.getElementById("view-time-in-details-btn");
 
   let durationTimer = null;
-  let captureController = null;
   let canClockIn = false;
   let canClockOut = false;
   let sessionRowForDetails = null;
   let recentAttendanceRows = [];
+  let qrScanStream = null;
+  let qrScanRafId = null;
+  let qrScanBusy = false;
 
-  if (typeof window.createImmersionCaptureController === "function") {
-    captureController = window.createImmersionCaptureController({
-      takePhotoBtn,
-      shutterBtn: document.getElementById("immersion-shutter-btn"),
-      cancelCameraBtn: document.getElementById("immersion-cancel-camera-btn"),
-      cameraPanel,
-      videoEl: document.getElementById("immersion-capture-video"),
-      canvasEl: document.getElementById("immersion-capture-canvas"),
-      previewPanel,
-      previewImg: document.getElementById("immersion-preview-img"),
-      previewBadgeEl: document.getElementById("immersion-preview-badge-text"),
-      fieldLocation: document.getElementById("immersion-field-location"),
-      fieldTimeLabel: document.getElementById("immersion-field-time-label"),
-      fieldTime: document.getElementById("immersion-field-time"),
-      fieldCoords: document.getElementById("immersion-field-coords"),
-      captureStatusEl: document.getElementById("immersion-capture-status"),
-      timeInBtn,
-      timeOutBtn,
-      onReadyChange: (ready, mode) => {
-        if (mode === "time_out") syncImmersionTimeOutButton(ready);
-        else syncImmersionTimeInButton(ready);
-      },
+  function setQrScannerStatus(text, kind) {
+    if (!qrScannerStatus) return;
+    qrScannerStatus.classList.remove("is-success", "is-error");
+    if (kind) qrScannerStatus.classList.add(kind === "success" ? "is-success" : "is-error");
+    const icon = kind === "success" ? "fa-circle-check" : kind === "error" ? "fa-triangle-exclamation" : "fa-camera";
+    qrScannerStatus.innerHTML = `<i class="fa-solid ${icon}" aria-hidden="true"></i> ${escapeHtml(text)}`;
+  }
+
+  async function openQrScanner() {
+    if (!qrScannerPanel || !qrScannerVideo) return;
+    if (typeof jsQR !== "function") {
+      showToast("QR scanner library did not load. Check your internet connection.", "error");
+      return;
+    }
+    qrScannerPanel.hidden = false;
+    if (qrScanToggleBtn) qrScanToggleBtn.hidden = true;
+    setQrScannerStatus("Point the camera at the workplace QR code.");
+    try {
+      qrScanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      qrScannerVideo.srcObject = qrScanStream;
+      await qrScannerVideo.play();
+      qrScanLoop();
+    } catch (e) {
+      setQrScannerStatus("Could not open the camera. Allow camera access and try again.", "error");
+    }
+  }
+
+  function closeQrScanner() {
+    if (qrScanRafId) {
+      cancelAnimationFrame(qrScanRafId);
+      qrScanRafId = null;
+    }
+    if (qrScanStream) {
+      qrScanStream.getTracks().forEach((t) => t.stop());
+      qrScanStream = null;
+    }
+    if (qrScannerVideo) qrScannerVideo.srcObject = null;
+    if (qrScannerPanel) qrScannerPanel.hidden = true;
+    if (qrScanToggleBtn) qrScanToggleBtn.hidden = false;
+    qrScanBusy = false;
+  }
+
+  function qrScanLoop() {
+    if (!qrScannerVideo || !qrScannerCanvas || !qrScanStream) return;
+    qrScanRafId = requestAnimationFrame(qrScanLoop);
+    if (qrScannerVideo.readyState !== qrScannerVideo.HAVE_ENOUGH_DATA || qrScanBusy) return;
+    const ctx = qrScannerCanvas.getContext("2d", { willReadFrequently: true });
+    qrScannerCanvas.width = qrScannerVideo.videoWidth;
+    qrScannerCanvas.height = qrScannerVideo.videoHeight;
+    ctx.drawImage(qrScannerVideo, 0, 0, qrScannerCanvas.width, qrScannerCanvas.height);
+    let imageData;
+    try {
+      imageData = ctx.getImageData(0, 0, qrScannerCanvas.width, qrScannerCanvas.height);
+    } catch {
+      return;
+    }
+    const result = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "dontInvert",
     });
+    if (!result || !result.data) return;
+    const code = result.data.trim();
+    if (!code) return;
+    void handleQrScanned(code);
   }
 
-  function syncImmersionTimeInButton(ready) {
-    if (!timeInBtn) return;
-    const isReady = canClockIn && ready === true;
-    timeInBtn.disabled = !isReady;
-    timeInBtn.classList.toggle("is-locked", !isReady);
-    timeInBtn.classList.toggle("btn-primary", isReady);
-    timeInBtn.classList.toggle("btn-secondary", !isReady);
-    timeInBtn.setAttribute("aria-disabled", isReady ? "false" : "true");
-    timeInBtn.title = isReady ? "" : "Take a photo first to enable Time In";
+  async function handleQrScanned(code) {
+    qrScanBusy = true;
+    setQrScannerStatus("Checking…");
+    const u = getCurrentUserSession();
+    const headers = { "Content-Type": "application/json" };
+    if (u?.access_token) headers.Authorization = `Bearer ${u.access_token}`;
+    try {
+      const res = await fetch(apiUrl("/student/immersion/qr-checkin"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ scanned_code: code }),
+      });
+      const data = await readApiJson(res);
+      const action = data.action === "time_out" ? "Time Out" : "Time In";
+      setQrScannerStatus(`${action} recorded.`, "success");
+      showToast(`${action} recorded.`, "success");
+      window.setTimeout(closeQrScanner, 900);
+      await refreshAttendanceUi();
+    } catch (e) {
+      setQrScannerStatus(e?.message || "That QR code could not be checked in.", "error");
+      showToast(e?.message || "Check-in failed.", "error");
+      qrScanBusy = false;
+    }
   }
 
-  function syncImmersionTimeOutButton(ready) {
-    if (!timeOutBtn) return;
-    const isReady = canClockOut && ready === true;
-    timeOutBtn.disabled = !isReady;
-    timeOutBtn.classList.toggle("is-locked", !isReady);
-    timeOutBtn.classList.toggle("btn-primary", isReady);
-    timeOutBtn.classList.toggle("btn-secondary", !isReady);
-    timeOutBtn.setAttribute("aria-disabled", isReady ? "false" : "true");
-    timeOutBtn.title = isReady ? "" : "Take a photo first to enable Time Out";
-  }
+  qrScanToggleBtn?.addEventListener("click", () => void openQrScanner());
+  qrScannerCancelBtn?.addEventListener("click", closeQrScanner);
+  window.addEventListener("beforeunload", closeQrScanner);
 
   function applyClockedInForTimeOut(sessionRow) {
     canClockIn = false;
     canClockOut = true;
     sessionRowForDetails = sessionRow;
-    captureController?.setMode?.("time_out");
-    captureController?.revokePreview?.();
-    captureController?.resetCapture?.();
-    setCaptureUiVisible(true);
-    if (timeInBtn) timeInBtn.hidden = true;
+    if (qrScanToggleLabel) qrScanToggleLabel.textContent = "Scan to Time Out";
     if (timeInSummary) timeInSummary.hidden = false;
-    syncImmersionTimeInButton(false);
-    syncImmersionTimeOutButton(captureController && captureController.isReady());
   }
 
   function applyIdleClockState() {
     canClockIn = true;
     canClockOut = false;
     sessionRowForDetails = null;
-    captureController?.setMode?.("time_in");
-    setCaptureUiVisible(true);
-    if (timeInBtn) timeInBtn.hidden = false;
+    if (qrScanToggleLabel) qrScanToggleLabel.textContent = "Scan to Time In";
     if (timeInSummary) timeInSummary.hidden = true;
-    syncImmersionTimeOutButton(false);
-    syncImmersionTimeInButton(captureController && captureController.isReady());
-    if (timeOutBtn) {
-      timeOutBtn.disabled = true;
-      timeOutBtn.hidden = false;
-    }
-  }
-
-  retakePhotoBtn?.addEventListener("click", () => {
-    captureController?.revokePreview?.();
-    captureController?.resetCapture?.();
-    if (canClockOut) syncImmersionTimeOutButton(false);
-    else syncImmersionTimeInButton(false);
-  });
-
-  function setCaptureUiVisible(showCaptureFlow) {
-    if (takePhotoBtn) takePhotoBtn.hidden = !showCaptureFlow;
-    if (retakePhotoBtn && !showCaptureFlow) retakePhotoBtn.hidden = true;
-    if (!showCaptureFlow) {
-      if (cameraPanel) cameraPanel.hidden = true;
-      if (previewPanel) previewPanel.hidden = true;
-      captureController?.revokePreview?.();
-      captureController?.resetCapture?.();
-    }
   }
 
   async function refreshAttendanceUi() {
@@ -2256,18 +2277,8 @@ async function setupImmersionDashboard() {
     } else if (todayRow && todayRow.time_in) {
       const done = todayRow.time_out && String(todayRow.time_out).trim() !== "";
       if (done) {
-        canClockIn = true;
-        canClockOut = false;
+        applyIdleClockState();
         sessionRowForDetails = todayRow;
-        captureController?.setMode?.("time_in");
-        captureController?.revokePreview?.();
-        captureController?.resetCapture?.();
-        setCaptureUiVisible(true);
-        if (timeInBtn) timeInBtn.hidden = false;
-        if (timeInSummary) timeInSummary.hidden = true;
-        syncImmersionTimeOutButton(false);
-        syncImmersionTimeInButton(captureController && captureController.isReady());
-        if (timeOutBtn) timeOutBtn.disabled = true;
       } else {
         applyClockedInForTimeOut(todayRow);
       }
@@ -2339,7 +2350,7 @@ async function setupImmersionDashboard() {
             </li>`;
             })
             .join("")
-        : `<li class="time-log-item"><div><span class="small-note">No attendance logs yet. Take a photo, then tap Time In to start.</span></div></li>`;
+        : `<li class="time-log-item"><div><span class="small-note">No attendance logs yet. Scan the workplace QR code to start.</span></div></li>`;
     }
   }
 
@@ -2372,59 +2383,6 @@ async function setupImmersionDashboard() {
     }
   }
 
-  timeInBtn?.addEventListener("click", async () => {
-    const fd = captureController?.buildFormData?.();
-    if (!fd) {
-      showToast("Take a photo first. Time In needs photo, GPS, and timestamp.", "error");
-      return;
-    }
-    const headers = {};
-    const u = getCurrentUserSession();
-    if (u?.access_token) headers.Authorization = `Bearer ${u.access_token}`;
-    try {
-      if (timeInBtn) timeInBtn.disabled = true;
-      const res = await fetch(apiUrl("/time-in"), {
-        method: "POST",
-        headers,
-        body: fd,
-      });
-      await readApiJson(res);
-      captureController?.revokePreview?.();
-      captureController?.resetCapture?.();
-      showToast("Time In recorded.", "success");
-      await refreshAttendanceUi();
-    } catch (e) {
-      showToast(e?.message || "Time In failed.", "error");
-      syncImmersionTimeInButton(captureController && captureController.isReady());
-    }
-  });
-
-  timeOutBtn?.addEventListener("click", async () => {
-    const fd = captureController?.buildFormData?.();
-    if (!fd) {
-      showToast("Take a photo first. Time Out needs photo, GPS, and timestamp.", "error");
-      return;
-    }
-    const headers = {};
-    const u = getCurrentUserSession();
-    if (u?.access_token) headers.Authorization = `Bearer ${u.access_token}`;
-    try {
-      if (timeOutBtn) timeOutBtn.disabled = true;
-      const res = await fetch(apiUrl("/time-out"), {
-        method: "POST",
-        headers,
-        body: fd,
-      });
-      await readApiJson(res);
-      captureController?.revokePreview?.();
-      captureController?.resetCapture?.();
-      showToast("Time Out recorded.", "success");
-      await refreshAttendanceUi();
-    } catch (e) {
-      showToast(e?.message || "Time Out failed.", "error");
-      syncImmersionTimeOutButton(captureController && captureController.isReady());
-    }
-  });
 
   viewTimeInDetailsBtn?.addEventListener("click", () => {
     if (sessionRowForDetails) showImmersionAttendanceDetail(sessionRowForDetails);
@@ -2928,6 +2886,34 @@ function setupAdminTeacherRegistrationPage() {
   });
 }
 
+async function refreshAdminRegSectionOptions() {
+  const gradeLevel = (document.getElementById("asr-grade-level")?.value || "").trim();
+  const strand = (document.getElementById("asr-strand")?.value || "").trim();
+  const sel = document.getElementById("asr-section");
+  if (!sel) return;
+  if (!gradeLevel || !strand) {
+    sel.innerHTML = `<option value="">Select year level and strand first</option>`;
+    return;
+  }
+  sel.innerHTML = `<option value="">Loading…</option>`;
+  try {
+    const res = await fetch(
+      apiUrl(`/sections?grade_level=${encodeURIComponent(gradeLevel)}&strand=${encodeURIComponent(strand)}`)
+    );
+    const data = await res.json().catch(() => ({}));
+    const sections = Array.isArray(data.sections) ? data.sections : [];
+    if (!sections.length) {
+      sel.innerHTML = `<option value="">No sections yet — add one in Admin Settings</option>`;
+      return;
+    }
+    sel.innerHTML =
+      `<option value="">Select section (optional)</option>` +
+      sections.map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join("");
+  } catch {
+    sel.innerHTML = `<option value="">Could not load sections</option>`;
+  }
+}
+
 function setupAdminStudentRegistrationPage() {
   ensureAdminSidebarNav();
   const form = document.getElementById("admin-student-reg-form");
@@ -2945,6 +2931,9 @@ function setupAdminStudentRegistrationPage() {
     return;
   }
 
+  document.getElementById("asr-grade-level")?.addEventListener("change", refreshAdminRegSectionOptions);
+  document.getElementById("asr-strand")?.addEventListener("change", refreshAdminRegSectionOptions);
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!messageEl) return;
@@ -2959,6 +2948,7 @@ function setupAdminStudentRegistrationPage() {
     const nameSuffix = (document.getElementById("asr-name-suffix")?.value || "").trim();
     const gradeLevel = (document.getElementById("asr-grade-level")?.value || "").trim();
     const strand = (document.getElementById("asr-strand")?.value || "").trim();
+    const section = (document.getElementById("asr-section")?.value || "").trim();
 
     if (!idNumber || !email) {
       showAuthMessage("All required fields must be filled in.", messageEl, "error");
@@ -2985,6 +2975,7 @@ function setupAdminStudentRegistrationPage() {
       name_suffix: nameSuffix,
       grade_level: gradeLevel,
       strand,
+      section,
     };
 
     const submitBtn = form.querySelector('button[type="submit"]');

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,14 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082006" />
+<link rel="stylesheet" href="style.css?v=2026082114" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/shared/voice-announcer.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082006" defer></script>
+  <script src="script.js?v=2026082103" defer></script>
   <script src="js/core/utils.js" defer></script>
-  <script src="js/pages/teacher-immersion-attendance.entry.js?v=2026052101" defer></script>
+  <script src="js/pages/teacher-immersion-attendance.entry.js?v=2026082106" defer></script>
+  <script src="js/pages/immersion-workplace-qr.js?v=2026082106" defer></script>
 </head>
 <body class="teacher-learniq-page teacher-immersion-attendance-page" data-sidebar-active="immersion-attendance">
   <div class="dashboard-shell container">
@@ -58,40 +61,59 @@
         </div>
       </section>
 
-      <section class="glass-card content-card gradecard-picker" id="immersion-picker">
-        <div class="gradecard-picker-header">
-          <nav class="gradecard-breadcrumb" id="immersion-breadcrumb" aria-label="Immersion navigation"></nav>
-        </div>
-
-        <div id="immersion-strand-step" class="gradecard-step">
-          <div class="gradecard-step-head">
-            <h2><i class="fa-solid fa-layer-group"></i> Select strand</h2>
-            <p class="small-note" id="immersion-strand-note">Grade 12 students enrolled in your subjects, grouped by SHS strand.</p>
+      <section class="glass-card content-card class-attendance-workplace-qr" id="immersion-workplace-qr-card">
+        <div class="class-attendance-workplace-qr-head">
+          <div>
+            <h2><i class="fa-solid fa-qrcode"></i> Workplace check-in QR</h2>
+            <p class="small-note">Keep this screen visible at your students' immersion site. The code refreshes every 15 seconds, so a saved screenshot won't scan later — only a student physically there can check in. Each scan is announced out loud.</p>
           </div>
-          <div id="immersion-strand-grid" class="gradecard-strand-grid" role="list"></div>
+          <button type="button" class="btn btn-secondary btn-sm" id="immersion-get-share-link-btn">
+            <i class="fa-solid fa-share-nodes"></i> Get shareable link
+          </button>
+        </div>
+        <div class="class-attendance-qr-block">
+          <div class="class-attendance-qr-canvas-wrap" id="immersion-qr-canvas-wrap">
+            <canvas id="immersion-workplace-qr-canvas"></canvas>
+          </div>
+          <div class="class-attendance-qr-countdown">
+            <div class="class-attendance-qr-countdown-track">
+              <div class="class-attendance-qr-countdown-fill" id="immersion-qr-countdown-fill"></div>
+            </div>
+            <p class="small-note" id="immersion-qr-countdown-label">New code in 15s</p>
+          </div>
         </div>
 
-        <div id="immersion-students-step" class="gradecard-step" hidden>
-          <div class="gradecard-step-head gradecard-step-head-row">
-            <div>
-              <h2 id="immersion-students-title"><i class="fa-solid fa-users"></i> Students</h2>
-              <p class="small-note" id="immersion-students-subtitle">Pick a student to view immersion attendance.</p>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="immersion-back-strands-btn">
-              <i class="fa-solid fa-arrow-left"></i> All strands
+        <div id="immersion-share-link-panel" class="immersion-share-link-panel" hidden>
+          <p class="small-note">Send this link to your student's workplace supervisor — no account needed. They just open it and leave it up; it shows this same rotating QR.</p>
+          <div class="immersion-share-link-row">
+            <input type="text" id="immersion-share-link-input" class="form-input" readonly />
+            <button type="button" class="btn btn-secondary btn-sm" id="immersion-share-link-copy-btn">
+              <i class="fa-solid fa-copy"></i> Copy
             </button>
           </div>
-          <label class="form-field gradecard-student-filter">
-            <span class="small-note">Filter in this strand</span>
-            <input
-              id="immersion-student-filter"
-              type="search"
-              class="form-input"
-              placeholder="Search name or ID…"
-              autocomplete="off" />
-          </label>
-          <div id="immersion-student-list" class="gradecard-student-list" role="list"></div>
         </div>
+      </section>
+
+      <section class="glass-card content-card gradecard-picker" id="immersion-picker">
+        <div class="gradecard-step-head gradecard-step-head-row">
+          <div>
+            <h2 id="immersion-students-title"><i class="fa-solid fa-users"></i> Grade 12 students</h2>
+            <p class="small-note" id="immersion-students-subtitle">Grade 12 students enrolled in your subjects, grouped by SHS strand.</p>
+          </div>
+        </div>
+
+        <nav id="immersion-strand-tabs" class="subject-class-tabs" role="tablist" aria-label="Filter students by strand"></nav>
+
+        <label class="form-field gradecard-student-filter">
+          <span class="small-note">Filter in this strand</span>
+          <input
+            id="immersion-student-filter"
+            type="search"
+            class="form-input"
+            placeholder="Search name or ID…"
+            autocomplete="off" />
+        </label>
+        <div id="immersion-student-list" class="gradecard-student-list" role="list"></div>
       </section>
 
       <section class="gradecard-detail-toolbar glass-card content-card" id="immersion-detail-toolbar" hidden>

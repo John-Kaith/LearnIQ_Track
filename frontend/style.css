@@ -4604,6 +4604,20 @@ html[data-theme="dark"] .subject-class-tab.is-active {
   border-color: rgba(96, 165, 250, 0.3);
 }
 
+.subject-class-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .subject-tab-panel[hidden] {
   display: none;
 }
@@ -10264,6 +10278,41 @@ html:not([data-theme="dark"]) .lesson-card {
   }
 }
 
+/* Teacher: live scan feed — newest scan on top, like a live comment feed */
+.class-attendance-scan-feed {
+  margin-top: 1.25rem;
+}
+
+.class-attendance-scan-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.class-attendance-scan-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-md);
+  background: rgba(34, 197, 94, 0.06);
+  animation: class-attendance-feed-item-in 0.35s ease-out;
+}
+
+@keyframes class-attendance-feed-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Teacher: roster grouped by status — easier to scan visually than one flat list */
 .class-attendance-roster {
   margin-top: 1.25rem;
@@ -10325,6 +10374,15 @@ html:not([data-theme="dark"]) .lesson-card {
   text-align: center;
 }
 
+/* Shared parent: sizes to the QR box's real rendered width (whatever that
+   ends up being — canvas libraries sometimes set their own inline size),
+   then the countdown bar below is told to fill 100% of that same width, so
+   the two always line up edge-to-edge instead of via a guessed pixel value. */
+.class-attendance-qr-block {
+  width: fit-content;
+  margin: 0 auto;
+}
+
 .class-attendance-qr-canvas-wrap {
   padding: 0.85rem;
   border-radius: 16px;
@@ -10341,6 +10399,306 @@ html:not([data-theme="dark"]) .lesson-card {
 
 .class-attendance-qr-caption {
   max-width: 260px;
+}
+
+/* Teacher: workplace check-in QR (immersion) */
+.class-attendance-workplace-qr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+#immersion-qr-canvas-wrap {
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.class-attendance-qr-countdown {
+  width: 100%;
+  margin: 0.85rem 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.class-attendance-qr-countdown-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--lq-border-subtle);
+  overflow: hidden;
+}
+
+.class-attendance-qr-countdown-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--lq-gradient-accent);
+  transition: width 0.25s linear;
+}
+
+.class-attendance-qr-countdown p {
+  margin: 0;
+}
+
+/* Public, no-login workplace check-in display page */
+.workplace-display-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.workplace-display-card {
+  position: relative;
+  width: min(440px, 100%);
+  text-align: center;
+  padding-top: 2.25rem;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(180, 83, 9, 0.35), var(--lq-shadow-card);
+  border: 1px solid var(--lq-border-accent-soft);
+}
+
+.workplace-display-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background: var(--lq-gradient-accent);
+}
+
+.workplace-display-name-row {
+  /* Grid instead of a centered flex row: a flex row centers the *group*
+     (name + button), which visually shifts the name itself left of the
+     card's true center once the button's width is added. Grid gives the
+     name its own centered column, with the button in a separate side
+     column that doesn't pull on it. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.workplace-display-name-wrap {
+  grid-column: 2;
+  min-width: 0;
+  justify-self: center;
+}
+
+.workplace-display-name-edit-btn {
+  grid-column: 3;
+  justify-self: start;
+}
+
+.workplace-display-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  padding: 0.35rem 1rem;
+  border: 1.5px solid var(--lq-border-accent-soft);
+  border-radius: 999px;
+  background: rgba(202, 138, 4, 0.06);
+}
+
+.workplace-display-name-input {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-align: center;
+  width: 100%;
+  border: 1.5px solid var(--lq-accent-gold, #ca8a04);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lq-text-primary);
+  padding: 0.35rem 1rem;
+}
+
+.workplace-display-name-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(202, 138, 4, 0.18);
+}
+
+.workplace-display-name-edit-btn {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--lq-border-subtle);
+  background: transparent;
+  color: var(--lq-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.workplace-display-name-edit-btn:hover {
+  background: rgba(202, 138, 4, 0.1);
+  color: var(--lq-text-primary);
+}
+
+.workplace-display-card .content-subtitle {
+  margin-bottom: 1.5rem;
+}
+
+.workplace-display-qr-frame {
+  box-shadow: 0 12px 28px -14px rgba(180, 83, 9, 0.4), var(--lq-shadow-card);
+}
+
+.workplace-display-countdown-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.workplace-display-live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+  animation: workplace-display-pulse 1.8s ease-out infinite;
+}
+
+@keyframes workplace-display-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+.workplace-display-hint {
+  margin-top: 1.1rem;
+}
+
+.workplace-display-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--lq-border-subtle);
+}
+
+.workplace-display-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--lq-text-muted);
+  font-size: 0.8rem;
+}
+
+.workplace-display-footer-brand .brand-mark {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+}
+
+/* Teacher: "Get shareable link" panel on the workplace QR card */
+.immersion-share-link-panel {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--lq-border-subtle);
+}
+
+.immersion-share-link-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.immersion-share-link-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Admin Settings: Manage Sections */
+.admin-sections-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--lq-border-subtle);
+}
+
+.admin-sections-add-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.admin-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-sections-group h4 {
+  margin: 0 0 0.5rem;
+}
+
+.admin-sections-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-md);
+  margin-bottom: 0.4rem;
+}
+
+.admin-assign-row {
+  gap: 0.5rem;
+}
+
+.admin-assign-select {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* At-a-glance immersion status badge in the strand-tab student list */
+.immersion-row-badge {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--lq-text-secondary);
+}
+
+.immersion-row-badge.active {
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
+.immersion-row-badge.completed {
+  background: rgba(202, 138, 4, 0.14);
+  color: #a16207;
+}
+
+html[data-theme="dark"] .immersion-row-badge.completed {
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .immersion-row-badge.completed {
+    background: rgba(59, 130, 246, 0.14);
+    color: #93c5fd;
+  }
 }
 
 /* ── Global safety net: the `hidden` attribute must always win ──

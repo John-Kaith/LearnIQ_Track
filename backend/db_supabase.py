@@ -177,6 +177,7 @@ def insert_profile(
     name_suffix: str | None = None,
     grade_level: str | None = None,
     strand: str | None = None,
+    section: str | None = None,
 ) -> dict[str, Any]:
     if not last_name or not first_name:
         raise ValueError("last_name and first_name are required.")
@@ -196,6 +197,8 @@ def insert_profile(
         row["grade_level"] = grade_level
     if strand is not None:
         row["strand"] = strand
+    if section is not None and str(section).strip():
+        row["section"] = str(section).strip()
 
     # If auth_user_id is provided, use it as the profile ID
     if auth_user_id:
@@ -225,8 +228,10 @@ def get_all_profiles() -> list[dict[str, Any]]:
     return out
 
 
-# Fields the signed-in user can edit on their own profile page.
-PROFILE_EXTRA_FIELDS = ("bio", "phone", "section", "dob", "address", "avatar_data")
+# Fields the signed-in user can edit on their own profile page. "section" is
+# deliberately excluded — it's a fixed, admin-managed value (see sections.sql
+# / admin_set_student_section), not something a student can self-report.
+PROFILE_EXTRA_FIELDS = ("bio", "phone", "dob", "address", "avatar_data")
 
 
 def update_profile_extras(id_number: str, fields: dict[str, Any]) -> dict[str, Any] | None:
@@ -4194,6 +4199,111 @@ def normalize_profile_strand(strand: str | None) -> str | None:
     return _STRAND_ALIASES.get(raw, raw)
 
 
+# ---------- Sections (admin-managed fixed list, scoped to grade + strand) ----------
+# See backend/migrations/sections.sql. Students can no longer free-type their
+# own section (removed from PROFILE_EXTRA_FIELDS above) — only admins assign
+# it, and only from this table's fixed list.
+
+
+def list_sections(
+    grade_level: str | None = None, strand: str | None = None
+) -> list[dict[str, Any]]:
+    try:
+        q = _sb().table("sections").select("*")
+        if grade_level:
+            q = q.eq("grade_level", str(grade_level).strip())
+        if strand:
+            norm = normalize_profile_strand(strand)
+            if norm:
+                q = q.eq("strand", norm)
+        res = q.order("name").execute()
+        return res.data or []
+    except Exception as e:
+        print(f"list_sections: {e}")
+        return []
+
+
+def create_section(name: str, grade_level: str, strand: str) -> dict[str, Any]:
+    nm = str(name or "").strip()
+    gl = normalize_profile_grade_level(grade_level)
+    st = normalize_profile_strand(strand)
+    if not nm:
+        raise ValueError("Section name is required.")
+    if gl not in ("11", "12"):
+        raise ValueError("Grade level must be 11 or 12.")
+    if st not in SHS_STRANDS:
+        raise ValueError("Invalid strand.")
+    try:
+        res = (
+            _sb()
+            .table("sections")
+            .insert({"name": nm, "grade_level": gl, "strand": st})
+            .execute()
+        )
+    except Exception as e:
+        msg = str(e)
+        if "duplicate" in msg.lower() or "unique" in msg.lower():
+            raise ValueError("A section with this name already exists.")
+        raise
+    row = (res.data or [None])[0]
+    if not row:
+        raise RuntimeError("Could not create section.")
+    return row
+
+
+def delete_section(section_id: str) -> bool:
+    sid = str(section_id or "").strip()
+    if not sid:
+        return False
+    res = _sb().table("sections").delete().eq("id", sid).execute()
+    return bool(res.data)
+
+
+def list_students_without_section() -> list[dict[str, Any]]:
+    """Students whose profile has no section yet — for the admin Sections
+    page to show who still needs one assigned."""
+    try:
+        res = (
+            _sb()
+            .table("profiles")
+            .select(
+                "id, last_name, first_name, middle_name, name_suffix, lrn, "
+                "email, role, grade_level, strand, section"
+            )
+            .eq("role", "student")
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_students_without_section: {e}")
+        return []
+    out = [serialize_public_profile(p) for p in rows if not str(p.get("section") or "").strip()]
+    out.sort(key=lambda x: (x.get("display_name") or x.get("id_number") or "").lower())
+    return out
+
+
+def admin_set_student_section(student_id_number: str, section_name: str) -> dict[str, Any] | None:
+    """Admin-only: assign/replace a student's section. An empty section_name
+    clears it. A non-empty value must exactly match a row in `sections`."""
+    sid_number = str(student_id_number or "").strip()
+    name = str(section_name or "").strip()
+    if not sid_number:
+        raise ValueError("student_id_number is required.")
+    if name:
+        exists = _sb().table("sections").select("id").eq("name", name).limit(1).execute()
+        if not exists.data:
+            raise ValueError("That section does not exist. Add it first in Manage Sections.")
+    res = (
+        _sb()
+        .table("profiles")
+        .update({"section": name or None})
+        .eq(PROFILE_LRN_COLUMN, sid_number)
+        .execute()
+    )
+    row = (res.data or [None])[0]
+    return normalize_profile_row(row) if row else None
+
+
 def normalize_profile_grade_level(grade_level: str | None) -> str | None:
     """SHS grade level from profiles.grade_level — returns '11', '12', or None."""
     s = str(grade_level or "").strip().lower()
@@ -4405,6 +4515,71 @@ def teacher_can_view_student_immersion(
     return student_uuid in enrolled
 
 
+def list_recent_immersion_checkins_for_teacher(
+    teacher_id_number: str,
+    *,
+    since: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Time In / Time Out events for this teacher's Grade 12 immersion
+    students, newer than `since` (ISO timestamp). Powers the workplace QR
+    display's live voice announcement — it polls this and speaks each new
+    event as it lands."""
+    tid = str(teacher_id_number or "").strip()
+    if not tid:
+        return []
+    student_uuids = _student_uuids_enrolled_in_teacher_subjects(tid)
+    if not student_uuids:
+        return []
+    profiles = _fetch_student_profiles_by_uuids(student_uuids)
+    grade12 = [p for p in profiles if normalize_profile_grade_level(p.get("grade_level")) == "12"]
+    if not grade12:
+        return []
+    name_by_uuid = {
+        str(p.get("id")): (profile_display_name(p) or p.get("lrn") or "Student") for p in grade12
+    }
+    since_dt = _parse_iso_datetime(since)
+
+    try:
+        res = (
+            _sb()
+            .table("attendance_logs")
+            .select("*")
+            .in_("student_id", list(name_by_uuid.keys()))
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_recent_immersion_checkins_for_teacher: {e}")
+        return []
+
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        sid = str(row.get("student_id") or "")
+        name = name_by_uuid.get(sid)
+        if not name:
+            continue
+        for field, action in (("time_in", "time_in"), ("time_out", "time_out")):
+            raw = row.get(field)
+            dt = _parse_iso_datetime(raw)
+            if not dt or (since_dt and dt <= since_dt):
+                continue
+            events.append(
+                {
+                    "id": f"{row.get('id')}-{action}",
+                    "student_id_number": row.get("student_id_number"),
+                    "student_name": name,
+                    "action": action,
+                    "at": raw,
+                }
+            )
+
+    events.sort(key=lambda e: e["at"] or "")
+    return events[-limit:]
+
+
 def _attendance_calendar_day(row: dict[str, Any]) -> str | None:
     d = row.get("date")
     if d:
@@ -4450,6 +4625,48 @@ def _hours_from_attendance_row(row: dict[str, Any], *, now: datetime | None = No
     if end < tin:
         return 0.0
     return max(0.0, round((end - tin).total_seconds() / 3600.0, 2))
+
+
+def enrich_students_with_immersion_status(students: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """At-a-glance immersion status per student, added in one bulk query
+    instead of one request per student: today_status ('at_work' | 'completed'
+    | 'not_started'), total_hours_rendered, percent_complete. Used by the
+    Immersion Attendance student list so a teacher can see who's currently
+    at work without opening each student individually."""
+    student_uuids = [str(s.get("id")) for s in students if s.get("id")]
+    if not student_uuids:
+        return students
+    try:
+        res = _sb().table("attendance_logs").select("*").in_("student_id", student_uuids).execute()
+        rows = res.data or []
+    except Exception as e:
+        print(f"enrich_students_with_immersion_status: {e}")
+        return students
+
+    by_student: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        by_student[str(r.get("student_id") or "")].append(r)
+
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    for s in students:
+        uid = str(s.get("id") or "")
+        logs = by_student.get(uid, [])
+        total_hours = sum(_hours_from_attendance_row(r) for r in logs)
+        today_row = next((r for r in logs if _attendance_calendar_day(r) == today_str), None)
+        if today_row and not today_row.get("time_out"):
+            status = "at_work"
+        elif today_row:
+            status = "completed"
+        else:
+            status = "not_started"
+        s["today_status"] = status
+        s["total_hours_rendered"] = round(total_hours, 2)
+        s["percent_complete"] = (
+            round(min(100, (total_hours / IMMERSION_REQUIRED_HOURS) * 100))
+            if IMMERSION_REQUIRED_HOURS
+            else 0
+        )
+    return students
 
 
 _ATTENDANCE_B64_KEYS = frozenset({"captured_photo_base64", "time_out_photo_base64"})

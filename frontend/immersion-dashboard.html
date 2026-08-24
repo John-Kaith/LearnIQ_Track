@@ -9,13 +9,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=2026082114" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="js/pages/immersion-capture.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026082103" defer></script>
 </head>
 <body>
   <div class="dashboard-shell container">
@@ -63,66 +63,35 @@
 
       <article class="glass-card content-card immersion-clock-card">
         <div>
-          <h3>Clock</h3>
-          <p class="content-subtitle">Take a photo before Time In and before Time Out. GPS and time are recorded automatically from each photo.</p>
+          <h3><i class="fa-solid fa-qrcode"></i> Clock</h3>
+          <p class="content-subtitle">Scan the QR code posted at your workplace to Time In or Time Out.</p>
         </div>
         <p class="immersion-capture-status small-note" id="immersion-capture-status" role="status">
-          Take a photo to capture your location and time before Time In.
+          Tap below, then point your camera at the workplace QR code.
         </p>
         <div class="button-group immersion-clock-actions">
-          <button type="button" class="btn btn-secondary" id="take-photo-btn">
-            <i class="fa-solid fa-camera"></i> Take Photo
+          <button type="button" class="btn btn-primary" id="qr-scan-toggle-btn">
+            <i class="fa-solid fa-camera"></i> <span id="qr-scan-toggle-label">Scan to Time In</span>
           </button>
-          <button type="button" class="btn btn-secondary immersion-time-in-btn is-locked" id="time-in-btn" disabled title="Take a photo first to enable Time In" aria-disabled="true">
-            <i class="fa-solid fa-right-to-bracket"></i> Time In
-          </button>
-          <button type="button" class="btn btn-secondary immersion-time-out-btn is-locked" id="time-out-btn" disabled title="Take a photo first to enable Time Out" aria-disabled="true">
-            <i class="fa-solid fa-right-from-bracket"></i> Time Out
-          </button>
-        </div>
-
-        <div class="immersion-capture-fields" id="immersion-capture-fields" aria-live="polite">
-          <div class="immersion-meta-row">
-            <span class="immersion-meta-label">location:</span>
-            <span class="immersion-meta-value" id="immersion-field-location">—</span>
-          </div>
-          <div class="immersion-meta-row">
-            <span class="immersion-meta-label" id="immersion-field-time-label">time in:</span>
-            <span class="immersion-meta-value" id="immersion-field-time">—</span>
-          </div>
-          <div class="immersion-meta-row">
-            <span class="immersion-meta-label">coordinates:</span>
-            <span class="immersion-meta-value" id="immersion-field-coords">—</span>
-          </div>
         </div>
 
         <div id="immersion-time-in-summary" class="immersion-time-in-summary" hidden>
-          <p class="small-note">You are clocked in. Take a photo before Time Out.</p>
+          <p class="small-note">You are clocked in. Scan the QR code again to Time Out.</p>
           <button type="button" class="btn btn-ghost btn-sm" id="view-time-in-details-btn">
             <i class="fa-solid fa-circle-info"></i> View Time In details
           </button>
         </div>
 
-        <div id="immersion-camera-panel" class="immersion-camera-panel" hidden>
-          <div class="immersion-camera-viewport">
-            <video id="immersion-capture-video" class="immersion-capture-video" playsinline autoplay muted aria-label="Camera preview"></video>
+        <div id="immersion-qr-scanner-panel" class="class-attendance-scanner" hidden>
+          <div class="class-attendance-scanner-video-wrap">
+            <video id="immersion-qr-scanner-video" playsinline muted></video>
+            <canvas id="immersion-qr-scanner-canvas" hidden></canvas>
+            <div class="class-attendance-scanner-frame" aria-hidden="true"></div>
           </div>
-          <canvas id="immersion-capture-canvas" hidden aria-hidden="true"></canvas>
-          <div class="button-group">
-            <button type="button" class="btn btn-primary" id="immersion-shutter-btn">
-              <i class="fa-solid fa-circle"></i> Capture
-            </button>
-            <button type="button" class="btn btn-ghost" id="immersion-cancel-camera-btn">Cancel</button>
+          <div class="class-attendance-scanner-status" id="immersion-qr-scanner-status" role="status">
+            <i class="fa-solid fa-camera" aria-hidden="true"></i> Point the camera at the workplace QR code.
           </div>
-        </div>
-        <div id="immersion-capture-preview" class="immersion-capture-preview" hidden>
-          <div class="immersion-preview-head">
-            <span class="immersion-preview-badge"><i class="fa-solid fa-check"></i> <span id="immersion-preview-badge-text">Photo Preview</span></span>
-            <button type="button" class="btn btn-ghost btn-sm" id="retake-photo-btn">Retake</button>
-          </div>
-          <div class="immersion-camera-viewport immersion-preview-viewport">
-            <img id="immersion-preview-img" class="immersion-preview-img" alt="Time In verification photo" hidden />
-          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="immersion-qr-scanner-cancel-btn">Cancel</button>
         </div>
       </article>
 

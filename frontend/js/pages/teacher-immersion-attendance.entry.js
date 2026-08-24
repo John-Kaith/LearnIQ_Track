@@ -10,7 +10,7 @@
   };
 
   const STATE = {
-    view: "strands",
+    view: "list", // "list" (tabs + student list) or "detail" (one student's full record)
     strands: [],
     selectedStrand: null,
     selectedStrandLabel: null,
@@ -95,63 +95,26 @@
     return { text: "Not at work", cls: "" };
   }
 
-  function renderBreadcrumb() {
-    const nav = $("immersion-breadcrumb");
-    if (!nav) return;
-    const parts = [
-      `<button type="button" class="gradecard-crumb${STATE.view === "strands" ? " is-current" : ""}" data-go="strands">Strands</button>`,
-    ];
-    if (STATE.selectedStrand) {
-      parts.push('<span class="gradecard-crumb-sep">/</span>');
-      parts.push(
-        `<button type="button" class="gradecard-crumb${STATE.view === "students" ? " is-current" : ""}" data-go="students">${escapeHtml(
-          STATE.selectedStrandLabel || STATE.selectedStrand
-        )}</button>`
-      );
-    }
-    if (STATE.activeStudentIdNumber && STATE.view === "detail") {
-      const name =
-        STATE.overview?.student?.display_name || STATE.activeStudentIdNumber;
-      parts.push('<span class="gradecard-crumb-sep">/</span>');
-      parts.push(`<span class="gradecard-crumb is-current">${escapeHtml(name)}</span>`);
-    }
-    nav.innerHTML = parts.join("");
-    nav.querySelectorAll("[data-go]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const go = btn.getAttribute("data-go");
-        if (go === "strands") showStrandsView();
-        else if (go === "students") showStudentsView();
-      });
-    });
+  // At-a-glance badge for the student list row (Strand tab view) — lets a
+  // teacher see who's currently at work without opening each student.
+  function immersionStatusBadge(s) {
+    const status = s.today_status;
+    const pct = Number(s.percent_complete) || 0;
+    const hours = Number(s.total_hours_rendered) || 0;
+    const label =
+      status === "at_work" ? "At work now" : status === "completed" ? "Here today" : `${pct}% of 600h`;
+    const cls = status === "at_work" ? "active" : status === "completed" ? "completed" : "";
+    const title = `${hours}h of 600h required (${pct}%)`;
+    return `<span class="status-badge immersion-row-badge ${cls}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
   }
 
-  function showStrandsView() {
-    STATE.view = "strands";
-    STATE.selectedStrand = null;
-    STATE.selectedStrandLabel = null;
+  function showListView() {
+    STATE.view = "list";
     STATE.activeStudentIdNumber = null;
     STATE.overview = null;
-    $("immersion-strand-step")?.removeAttribute("hidden");
-    $("immersion-students-step")?.setAttribute("hidden", "");
     $("immersion-picker")?.removeAttribute("hidden");
     $("immersion-detail-toolbar")?.setAttribute("hidden", "");
     $("immersion-detail-sheet")?.setAttribute("hidden", "");
-    const filter = $("immersion-student-filter");
-    if (filter) filter.value = "";
-    renderBreadcrumb();
-    renderStrandGrid();
-  }
-
-  function showStudentsView() {
-    STATE.view = "students";
-    STATE.activeStudentIdNumber = null;
-    STATE.overview = null;
-    $("immersion-strand-step")?.setAttribute("hidden", "");
-    $("immersion-students-step")?.removeAttribute("hidden");
-    $("immersion-picker")?.removeAttribute("hidden");
-    $("immersion-detail-toolbar")?.setAttribute("hidden", "");
-    $("immersion-detail-sheet")?.setAttribute("hidden", "");
-    renderBreadcrumb();
   }
 
   function showDetailView() {
@@ -159,47 +122,39 @@
     $("immersion-picker")?.setAttribute("hidden", "");
     $("immersion-detail-toolbar")?.removeAttribute("hidden");
     $("immersion-detail-sheet")?.removeAttribute("hidden");
-    renderBreadcrumb();
   }
 
-  function renderStrandGrid() {
-    const grid = $("immersion-strand-grid");
-    if (!grid) return;
-    if (!STATE.strands.length) {
-      grid.innerHTML = `<p class="empty-state">No strands found. Enroll Grade 12 students in your subjects first.</p>`;
-      return;
-    }
+  function renderStrandTabs() {
+    const nav = $("immersion-strand-tabs");
+    if (!nav) return;
     const rows = STATE.strands.filter((row) => {
       const code = row.strand || "";
       if (code === "__unassigned__") return strandCountG12(row) > 0;
       return true;
     });
     if (!rows.length) {
-      grid.innerHTML = `<p class="empty-state">No Grade 12 students enrolled in your subjects yet.</p>`;
+      nav.innerHTML = "";
       return;
     }
-    grid.innerHTML = rows
+    nav.innerHTML = rows
       .map((row) => {
         const code = row.strand || "";
-        const meta = STRAND_META[code] || STRAND_META.__unassigned__;
         const label = row.label || code;
         const count = strandCountG12(row);
+        const isActive = code === STATE.selectedStrand;
         return `
           <button
             type="button"
-            class="gradecard-strand-card"
-            role="listitem"
+            class="subject-class-tab${isActive ? " is-active" : ""}"
+            role="tab"
+            aria-selected="${isActive ? "true" : "false"}"
             data-strand="${escapeHtml(code)}"
-            data-label="${escapeHtml(label)}"
-            style="--strand-accent:${meta.color}">
-            <span class="gradecard-strand-icon"><i class="fa-solid ${meta.icon}"></i></span>
-            <strong>${escapeHtml(label)}</strong>
-            <span class="small-note">${escapeHtml(meta.blurb)}</span>
-            <span class="gradecard-strand-count">${count} student${count === 1 ? "" : "s"}</span>
+            data-label="${escapeHtml(label)}">
+            ${escapeHtml(label)}<span class="subject-class-tab-count">${count}</span>
           </button>`;
       })
       .join("");
-    grid.querySelectorAll(".gradecard-strand-card").forEach((btn) => {
+    nav.querySelectorAll(".subject-class-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         selectStrand(btn.getAttribute("data-strand"), btn.getAttribute("data-label"));
       });
@@ -207,13 +162,14 @@
   }
 
   async function loadStrands() {
-    const grid = $("immersion-strand-grid");
+    const nav = $("immersion-strand-tabs");
+    const list = $("immersion-student-list");
     const tid = getTeacherIdNumber();
     if (!tid) {
-      if (grid) grid.innerHTML = `<p class="empty-state">Sign in as a teacher to continue.</p>`;
+      if (list) list.innerHTML = `<p class="empty-state">Sign in as a teacher to continue.</p>`;
       return;
     }
-    if (grid) grid.innerHTML = `<p class="small-note">Loading strands…</p>`;
+    if (list) list.innerHTML = `<p class="small-note">Loading strands…</p>`;
     try {
       const params = new URLSearchParams({ teacher_id_number: tid });
       const res = await fetch(apiUrl(`/teacher/immersion/strands?${params}`), {
@@ -222,11 +178,26 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       STATE.strands = Array.isArray(data.strands) ? data.strands : [];
-      renderStrandGrid();
+      const rows = STATE.strands.filter((row) => {
+        const code = row.strand || "";
+        if (code === "__unassigned__") return strandCountG12(row) > 0;
+        return true;
+      });
+      if (!rows.length) {
+        renderStrandTabs();
+        if (list) {
+          list.innerHTML = `<p class="empty-state">No Grade 12 students enrolled in your subjects yet.</p>`;
+        }
+        return;
+      }
+      // Default to the first strand that actually has students, else just the first tab.
+      const preferred = rows.find((r) => strandCountG12(r) > 0) || rows[0];
+      await selectStrand(preferred.strand, preferred.label || preferred.strand);
     } catch (err) {
       console.error("loadStrands:", err);
-      if (grid) {
-        grid.innerHTML = `<p class="empty-state">Could not load strands: ${escapeHtml(err.message)}</p>`;
+      if (nav) nav.innerHTML = "";
+      if (list) {
+        list.innerHTML = `<p class="empty-state">Could not load strands: ${escapeHtml(err.message)}</p>`;
       }
       if (typeof showToast === "function") showToast(err.message || "Load failed.", "error");
     }
@@ -235,15 +206,10 @@
   async function selectStrand(strand, label) {
     STATE.selectedStrand = strand;
     STATE.selectedStrandLabel = label || strand;
-    const title = $("immersion-students-title");
-    if (title) {
-      title.innerHTML = `<i class="fa-solid fa-users"></i> ${escapeHtml(STATE.selectedStrandLabel)}`;
-    }
-    const sub = $("immersion-students-subtitle");
-    if (sub) {
-      sub.textContent = "Grade 12 students in this strand — select one to view immersion attendance.";
-    }
-    showStudentsView();
+    const filter = $("immersion-student-filter");
+    if (filter) filter.value = "";
+    renderStrandTabs();
+    showListView();
     await loadStudents();
   }
 
@@ -286,6 +252,7 @@
                 <strong>${name}</strong>
                 <span class="small-note">ID ${idn}${meta ? ` · ${escapeHtml(meta)}` : ""} · Grade 12</span>
               </span>
+              ${immersionStatusBadge(s)}
               <i class="fa-solid fa-chevron-right gradecard-student-row-chevron" aria-hidden="true"></i>
             </button>`;
         })
@@ -504,19 +471,17 @@
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       STATE.overview = data;
       renderOverview(data);
-      renderBreadcrumb();
     } catch (err) {
       console.error("openStudentDetail:", err);
       if (typeof showToast === "function") showToast(err.message || "Could not load student.", "error");
-      showStudentsView();
+      showListView();
     } finally {
       if (sheet) sheet.removeAttribute("aria-busy");
     }
   }
 
   function bindEvents() {
-    $("immersion-back-strands-btn")?.addEventListener("click", showStrandsView);
-    $("immersion-back-students-btn")?.addEventListener("click", showStudentsView);
+    $("immersion-back-students-btn")?.addEventListener("click", showListView);
     $("immersion-refresh-btn")?.addEventListener("click", () => {
       if (STATE.activeStudentIdNumber) openStudentDetail(STATE.activeStudentIdNumber);
     });

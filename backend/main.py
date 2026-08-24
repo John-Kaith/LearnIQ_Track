@@ -1,5 +1,7 @@
 import asyncio
 import base64
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -693,6 +695,10 @@ async def register_user(body: dict):
         strand_raw = (body.get("strand") or "").strip().upper().replace(" ", "-")
         strand_aliases = {"HUMMS": "HUMSS", "TVLHE": "TVL-HE"}
         strand = strand_aliases.get(strand_raw, strand_raw)
+        # Optional — only the admin registration form sends this today (a
+        # fixed dropdown, not free text). Self-signup omits it; an admin
+        # assigns it later via Manage Sections in that case.
+        section = (body.get("section") or "").strip()
 
         if not last_name or not first_name:
             return JSONResponse(
@@ -711,6 +717,15 @@ async def register_user(body: dict):
                     {"error": "strand must be one of: ABM, HUMSS, STEM, TVL-HE."},
                     status_code=400,
                 )
+            if section:
+                valid_sections = {
+                    s["name"] for s in db_supabase.list_sections(grade_level, strand)
+                }
+                if section not in valid_sections:
+                    return JSONResponse(
+                        {"error": "That section is not available for this grade level and strand."},
+                        status_code=400,
+                    )
 
         auth_meta = {
             "id_number": id_number,
@@ -745,6 +760,7 @@ async def register_user(body: dict):
             name_suffix=name_suffix,
             grade_level=grade_level if role == "student" else None,
             strand=strand if role == "student" else None,
+            section=section if role == "student" else None,
         )
         
         profile = dict(profile)
@@ -2827,6 +2843,216 @@ async def time_out(
         return JSONResponse({"error": err_text}, status_code=502)
 
 
+IMMERSION_QR_TTL_SECONDS = 20  # a bit longer than the 15s client refresh so an
+# in-flight scan still lands even if the code rotated a moment ago
+
+
+def _qr_signing_key() -> bytes:
+    key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_KEY")
+        or API_KEY
+        or "learniq-fallback-qr-signing-key"
+    ).strip()
+    return key.encode("utf-8")
+
+
+def _sign_immersion_qr_token(teacher_id_number: str, expires_at: int) -> str:
+    msg = f"{teacher_id_number}:{expires_at}".encode("utf-8")
+    sig = hmac.new(_qr_signing_key(), msg, hashlib.sha256).hexdigest()
+    return f"IMMERSION:{teacher_id_number}:{expires_at}:{sig}"
+
+
+def _verify_immersion_qr_token(scanned_code: str) -> tuple[str | None, str | None]:
+    """Returns (teacher_id_number, error_message) — error_message is None on
+    success. Rejects malformed codes, bad signatures, and expired codes (a
+    saved screenshot stops working within IMMERSION_QR_TTL_SECONDS)."""
+    parts = scanned_code.split(":")
+    if len(parts) != 4 or parts[0].strip().upper() != "IMMERSION":
+        return None, "That QR code is not a work immersion check-in code."
+    _, teacher_id_number, expires_raw, sig = parts
+    teacher_id_number = teacher_id_number.strip()
+    if not teacher_id_number:
+        return None, "That QR code is not a work immersion check-in code."
+    try:
+        expires_at = int(expires_raw)
+    except ValueError:
+        return None, "That QR code is not a work immersion check-in code."
+    expected_sig = hmac.new(
+        _qr_signing_key(), f"{teacher_id_number}:{expires_at}".encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_sig, sig.strip()):
+        return None, "That QR code is not a work immersion check-in code."
+    if int(time.time()) > expires_at:
+        return None, "This QR code has expired. Ask your workplace to refresh it, then scan again."
+    return teacher_id_number, None
+
+
+@app.get("/teacher/immersion/qr-token")
+def teacher_immersion_qr_token_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+):
+    """Short-lived signed token for the workplace check-in QR. The frontend
+    re-fetches this every ~15s and re-renders the QR — anti-fraud: a
+    photographed/saved code stops scanning within seconds, proving the
+    student scanned it live at the workplace."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    expires_at = int(time.time()) + IMMERSION_QR_TTL_SECONDS
+    return {
+        "token": _sign_immersion_qr_token(tid, expires_at),
+        "expires_at": expires_at,
+        "ttl_seconds": IMMERSION_QR_TTL_SECONDS,
+    }
+
+
+@app.get("/teacher/immersion/recent-checkins")
+def teacher_immersion_recent_checkins_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    since: str | None = Query(default=None),
+):
+    """Recent Time In / Time Out events for this teacher's own Grade 12
+    immersion students. The workplace QR display polls this so it can
+    announce each scan out loud as it happens."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    try:
+        events = db_supabase.list_recent_immersion_checkins_for_teacher(tid, since=since)
+        return {"events": events, "server_time": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _immersion_display_token(teacher_id_number: str) -> str:
+    """Stable (non-expiring) signed token identifying a teacher, for the
+    no-login workplace display page. A workplace host bookmarks a URL with
+    this token instead of logging in — nothing sensitive is exposed beyond
+    what that teacher's own workplace QR page already shows."""
+    return hmac.new(
+        _qr_signing_key(), f"display:{teacher_id_number}".encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+
+
+def _resolve_teacher_from_display_token(teacher_id_number: str, token: str) -> bool:
+    tid = str(teacher_id_number or "").strip()
+    tok = str(token or "").strip()
+    if not tid or not tok:
+        return False
+    expected = _immersion_display_token(tid)
+    return hmac.compare_digest(expected, tok)
+
+
+@app.get("/teacher/immersion/display-link")
+def teacher_immersion_display_link_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+):
+    """The teacher's own shareable, no-login link for the workplace display
+    page — give this to the host company/supervisor once. It only ever
+    shows the rotating check-in QR and this teacher's own recent scans."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    return {"teacher_id_number": tid, "token": _immersion_display_token(tid)}
+
+
+@app.get("/public/immersion/qr-token")
+def public_immersion_qr_token_endpoint(
+    tid: str = Query(...),
+    token: str = Query(...),
+):
+    """No-login variant of /teacher/immersion/qr-token — for the workplace
+    display page, authenticated by the shareable display token instead of a
+    teacher's own login session."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not _resolve_teacher_from_display_token(tid, token):
+        return JSONResponse({"error": "Invalid or expired link. Ask your teacher for a new one."}, status_code=403)
+    expires_at = int(time.time()) + IMMERSION_QR_TTL_SECONDS
+    return {
+        "token": _sign_immersion_qr_token(tid, expires_at),
+        "expires_at": expires_at,
+        "ttl_seconds": IMMERSION_QR_TTL_SECONDS,
+    }
+
+
+@app.get("/public/immersion/recent-checkins")
+def public_immersion_recent_checkins_endpoint(
+    tid: str = Query(...),
+    token: str = Query(...),
+    since: str | None = Query(default=None),
+):
+    """No-login variant of /teacher/immersion/recent-checkins, for the
+    workplace display page's live voice announcements."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    if not _resolve_teacher_from_display_token(tid, token):
+        return JSONResponse({"error": "Invalid or expired link. Ask your teacher for a new one."}, status_code=403)
+    try:
+        events = db_supabase.list_recent_immersion_checkins_for_teacher(tid, since=since)
+        return {"events": events, "server_time": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/student/immersion/qr-checkin")
+async def student_immersion_qr_checkin_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    """Student scans the workplace QR code to Time In or Time Out —
+    whichever applies given their current state. No photo/GPS: presence at
+    the workplace is proven by scanning a code that only stays valid for
+    ~20 seconds and is physically posted/shown at the site."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    student_id, bad = resolve_student_id_number_or_403({}, authorization)
+    if bad is not None:
+        return bad
+    scanned_code = str(body.get("scanned_code") or "").strip()
+    teacher_id_number, token_error = _verify_immersion_qr_token(scanned_code)
+    if token_error:
+        return JSONResponse({"error": token_error}, status_code=400)
+    if not db_supabase.teacher_can_view_student_immersion(teacher_id_number, student_id):
+        return JSONResponse(
+            {"error": "This workplace code is not linked to your immersion class."},
+            status_code=403,
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        active = db_supabase.get_active_attendance(student_id)
+        if active:
+            record = db_supabase.complete_time_out(str(active["id"]), now_iso)
+            return {"action": "time_out", "record": record}
+        record = db_supabase.insert_time_in(student_id, now_iso)
+        return {"action": "time_in", "record": record}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get("/attendance-history")
 def attendance_history(
     limit: int = Query(60, ge=1, le=200),
@@ -3062,6 +3288,118 @@ def _resolve_teacher_or_admin_id(
     return None, JSONResponse({"error": "Teacher or admin access only."}, status_code=403)
 
 
+def _resolve_admin_id(authorization: str | None) -> tuple[str | None, JSONResponse | None]:
+    """Bearer token must belong to an admin. Returns (admin's own id_number, error)."""
+    token_idn = student_id_number_from_authorization(authorization)
+    if not token_idn:
+        return None, JSONResponse({"error": "Sign in required."}, status_code=401)
+    try:
+        prof = db_supabase.get_profile_by_id_number(token_idn)
+    except Exception:
+        prof = None
+    role = str((prof or {}).get("role") or "").strip().lower()
+    if role != "admin":
+        return None, JSONResponse({"error": "Admin access only."}, status_code=403)
+    return token_idn, None
+
+
+@app.get("/sections")
+def list_sections_endpoint(
+    grade_level: str | None = Query(default=None),
+    strand: str | None = Query(default=None),
+):
+    """Fixed section list — readable by any registration form (admin panel
+    today; not sensitive data, just section names)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sections = db_supabase.list_sections(grade_level=grade_level, strand=strand)
+    return {"sections": sections}
+
+
+@app.post("/admin/sections")
+async def admin_create_section_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        section = db_supabase.create_section(
+            body.get("name"), body.get("grade_level"), body.get("strand")
+        )
+        return {"section": section}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.delete("/admin/sections/{section_id}")
+async def admin_delete_section_endpoint(
+    section_id: str,
+    authorization: str | None = Header(default=None),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        ok = db_supabase.delete_section(section_id)
+        if not ok:
+            return JSONResponse({"error": "Section not found."}, status_code=404)
+        return {"ok": True}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/admin/students-without-section")
+def admin_students_without_section_endpoint(
+    authorization: str | None = Header(default=None),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        students = db_supabase.list_students_without_section()
+        return {"students": students, "count": len(students)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/admin/students/section")
+async def admin_set_student_section_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        profile = db_supabase.admin_set_student_section(
+            body.get("student_id_number"), body.get("section")
+        )
+        if not profile:
+            return JSONResponse({"error": "Student not found."}, status_code=404)
+        return {"profile": db_supabase.serialize_public_profile(profile)}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get("/teacher/immersion/strands")
 def teacher_immersion_strands_endpoint(
     authorization: str | None = Header(default=None),
@@ -3106,6 +3444,7 @@ def teacher_immersion_students_endpoint(
         students = db_supabase.list_gradecard_students_for_teacher(
             tid, st, search=q, grade_level="12"
         )
+        students = db_supabase.enrich_students_with_immersion_status(students)
         return {
             "strand": st,
             "grade_level": "12",
@@ -3492,6 +3831,115 @@ async def teacher_class_attendance_scan_endpoint(
             "record": record,
             "student_id_number": scanned_id_number,
             "student_name": db_supabase.profile_display_name(prof) or scanned_id_number,
+        }
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        msg = str(e)
+        status_code = 409 if "already checked in" in msg.lower() else 400
+        return JSONResponse({"error": msg}, status_code=status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+CLASS_ATTENDANCE_QR_TTL_SECONDS = 15  # matches the on-screen rotation cadence
+
+
+def _sign_class_attendance_qr_token(subject_id: str, expires_at: int) -> str:
+    msg = f"{subject_id}:{expires_at}".encode("utf-8")
+    sig = hmac.new(_qr_signing_key(), msg, hashlib.sha256).hexdigest()
+    return f"CLASSATT:{subject_id}:{expires_at}:{sig}"
+
+
+def _verify_class_attendance_qr_token(scanned_code: str) -> tuple[str | None, str | None]:
+    """Returns (subject_id, error_message) — error_message is None on
+    success. Same anti-fraud model as the Immersion workplace QR: a saved
+    screenshot stops scanning within CLASS_ATTENDANCE_QR_TTL_SECONDS."""
+    parts = scanned_code.split(":")
+    if len(parts) != 4 or parts[0].strip().upper() != "CLASSATT":
+        return None, "That QR code is not a class attendance check-in code."
+    _, subject_id, expires_raw, sig = parts
+    subject_id = subject_id.strip()
+    if not subject_id:
+        return None, "That QR code is not a class attendance check-in code."
+    try:
+        expires_at = int(expires_raw)
+    except ValueError:
+        return None, "That QR code is not a class attendance check-in code."
+    expected_sig = hmac.new(
+        _qr_signing_key(), f"{subject_id}:{expires_at}".encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_sig, sig.strip()):
+        return None, "That QR code is not a class attendance check-in code."
+    if int(time.time()) > expires_at:
+        return None, "This QR code has expired. Ask your teacher to refresh it, then scan again."
+    return subject_id, None
+
+
+@app.get("/teacher/class-attendance/qr-token")
+def teacher_class_attendance_qr_token_endpoint(
+    authorization: str | None = Header(default=None),
+    teacher_id_number: str | None = Query(default=None),
+    subject_id: str = Query(...),
+):
+    """Short-lived signed token for the class attendance QR the teacher
+    displays. The frontend re-fetches this every ~15s and re-renders the QR
+    — a photographed/saved code stops scanning within seconds, proving the
+    student scanned it live in class."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    tid, bad = _resolve_teacher_or_admin_id(authorization, teacher_id_number)
+    if bad is not None:
+        return bad
+    if not tid:
+        return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return JSONResponse({"error": "subject_id is required"}, status_code=400)
+    expires_at = int(time.time()) + CLASS_ATTENDANCE_QR_TTL_SECONDS
+    return {
+        "token": _sign_class_attendance_qr_token(sid, expires_at),
+        "expires_at": expires_at,
+        "ttl_seconds": CLASS_ATTENDANCE_QR_TTL_SECONDS,
+    }
+
+
+@app.post("/student/class-attendance/qr-checkin")
+async def student_class_attendance_qr_checkin_endpoint(
+    authorization: str | None = Header(default=None),
+    body: dict = Body(...),
+):
+    """Student scans the teacher's rotating QR to check themselves in — the
+    reverse of the old teacher-scans-student flow. No photo/GPS: the QR
+    itself expires in ~15s, so only someone physically looking at the
+    teacher's screen right now can scan it."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    student_id, bad = resolve_student_id_number_or_403({}, authorization)
+    if bad is not None:
+        return bad
+    scanned_code = str(body.get("scanned_code") or "").strip()
+    subject_id, token_error = _verify_class_attendance_qr_token(scanned_code)
+    if token_error:
+        return JSONResponse({"error": token_error}, status_code=400)
+
+    prof = db_supabase.get_profile_by_id_number(student_id)
+    if not prof or str(prof.get("role") or "").lower() != "student":
+        return JSONResponse({"error": "Student profile not found."}, status_code=404)
+    student_uuid = str(prof.get("id") or "")
+    try:
+        record = db_supabase.insert_class_attendance_checkin_via_qr(
+            student_uuid,
+            student_id,
+            subject_id,
+            time_in_iso=datetime.now(timezone.utc).isoformat(),
+        )
+        return {
+            "record": record,
+            "student_id_number": student_id,
+            "student_name": db_supabase.profile_display_name(prof) or student_id,
         }
     except PermissionError as e:
         return JSONResponse({"error": str(e)}, status_code=403)

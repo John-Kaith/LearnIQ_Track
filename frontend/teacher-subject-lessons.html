@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,14 +9,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082006" />
+<link rel="stylesheet" href="style.css?v=2026082114" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
+  <script src="js/shared/voice-announcer.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082006" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026082101" defer></script>
+  <script src="script.js?v=2026082103" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082104" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
@@ -92,7 +93,7 @@
         <div class="class-attendance-teacher-head">
           <div>
             <h2><i class="fa-solid fa-qrcode"></i> Class attendance</h2>
-            <p class="small-note" id="teacher-class-attendance-hint">Open attendance, then scan each student's QR code with your camera.</p>
+            <p class="small-note" id="teacher-class-attendance-hint">Open attendance, then show this screen to your class — students scan it with their own camera to check in.</p>
           </div>
           <div class="class-attendance-teacher-actions">
             <button type="button" class="btn btn-primary" id="teacher-class-attendance-start-btn">
@@ -108,17 +109,25 @@
           <span class="small-note" id="teacher-class-attendance-counts">0 present · 0 absent</span>
         </div>
 
-        <!-- QR scanner: camera view the teacher points at each student's QR code -->
-        <div id="teacher-class-scanner" class="class-attendance-scanner" hidden>
-          <div class="class-attendance-scanner-video-wrap">
-            <video id="teacher-class-scanner-video" playsinline muted></video>
-            <canvas id="teacher-class-scanner-canvas" hidden></canvas>
-            <div class="class-attendance-scanner-frame" aria-hidden="true"></div>
+        <!-- Rotating QR the teacher displays; students scan it with their own camera -->
+        <div id="teacher-class-qr-display" class="class-attendance-qr-panel" hidden>
+          <div class="class-attendance-qr-block">
+            <div class="class-attendance-qr-canvas-wrap">
+              <canvas id="teacher-class-qr-canvas"></canvas>
+            </div>
+            <div class="class-attendance-qr-countdown">
+              <div class="class-attendance-qr-countdown-track">
+                <div class="class-attendance-qr-countdown-fill" id="teacher-class-qr-countdown-fill"></div>
+              </div>
+              <p class="small-note" id="teacher-class-qr-countdown-label">New code in 15s</p>
+            </div>
           </div>
-          <div class="class-attendance-scanner-status" id="teacher-class-scanner-status" role="status">
-            <i class="fa-solid fa-camera" aria-hidden="true"></i> Point the camera at a student's QR code.
-          </div>
-          <div class="class-attendance-scanner-flash" id="teacher-class-scanner-flash" hidden></div>
+        </div>
+
+        <!-- Live scan feed: newest scan on top, like a live comment feed -->
+        <div id="teacher-class-scan-feed" class="class-attendance-scan-feed" hidden>
+          <h4 class="class-attendance-group-head"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Live scans</h4>
+          <div id="teacher-class-scan-feed-list" class="class-attendance-scan-feed-list" role="log" aria-live="polite"></div>
         </div>
 
         <!-- Roster, grouped so it's easy to scan visually (Present / Pending / Absent) -->

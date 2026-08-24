@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workplace Check-In | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026082114" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/voice-announcer.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="js/pages/workplace-display.js?v=2026082502" defer></script>
+</head>
+<body class="workplace-display-page">
+  <main class="workplace-display-shell container">
+    <div class="workplace-display-card glass-card content-card">
+      <div class="workplace-display-name-row">
+        <div class="workplace-display-name-wrap">
+          <h1 id="workplace-display-name-text" class="workplace-display-name">Workplace Check-In</h1>
+          <input
+            type="text"
+            id="workplace-display-name-input"
+            class="workplace-display-name-input"
+            placeholder="e.g. Yoma Inc."
+            maxlength="60"
+            hidden />
+        </div>
+        <button type="button" class="workplace-display-name-edit-btn" id="workplace-display-name-edit-btn" aria-label="Rename this workplace" title="Rename">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+      </div>
+      <p class="content-subtitle">Scan this code with your own phone camera to Time In or Time Out.</p>
+
+      <div id="workplace-display-ready">
+        <div class="class-attendance-qr-block">
+          <div class="class-attendance-qr-canvas-wrap workplace-display-qr-frame" id="workplace-display-qr-wrap">
+            <canvas id="workplace-display-qr-canvas"></canvas>
+          </div>
+          <div class="class-attendance-qr-countdown">
+            <div class="class-attendance-qr-countdown-track">
+              <div class="class-attendance-qr-countdown-fill" id="workplace-display-countdown-fill"></div>
+            </div>
+            <p class="small-note workplace-display-countdown-label">
+              <span class="workplace-display-live-dot" aria-hidden="true"></span>
+              <span id="workplace-display-countdown-label">New code in 15s</span>
+            </p>
+          </div>
+        </div>
+
+        <p class="small-note workplace-display-hint">
+          The code refreshes every 15 seconds — a saved screenshot won't scan later. Each scan is announced out loud.
+        </p>
+      </div>
+
+      <div id="workplace-display-error" class="empty-state" hidden>
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <p id="workplace-display-error-text">This link is invalid. Ask your teacher for a new one.</p>
+      </div>
+
+      <div class="workplace-display-footer">
+        <span class="workplace-display-footer-brand">
+          <span class="brand-mark">LQ</span>
+          <small>LearnIQ Track</small>
+        </span>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

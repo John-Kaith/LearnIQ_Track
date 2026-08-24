@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,20 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082006" />
+<link rel="stylesheet" href="style.css?v=2026082114" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
   <script src="js/shared/reviewer-markdown.js?v=202605153" defer></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/shared/voice-announcer.js" defer></script>
   <script src="js/shared/ai-generation-cooldown.js?v=2026051803" defer></script>
   <script src="js/pages/immersion-capture.js?v=2026052122" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082006" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026082101" defer></script>
+  <script src="script.js?v=2026082103" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082104" defer></script>
 </head>
 <body class="my-lesson-page">
   <div class="dashboard-shell container">
@@ -98,14 +99,23 @@
               <span class="small-note" id="student-class-submitted-time">—</span>
             </div>
 
-            <div id="student-class-qr-panel" class="class-attendance-qr-panel" hidden>
-              <div class="class-attendance-qr-canvas-wrap">
-                <canvas id="student-class-qr-canvas"></canvas>
+            <div class="button-group" id="student-class-scan-toggle-wrap" hidden>
+              <button type="button" class="btn btn-primary" id="student-class-scan-toggle-btn">
+                <i class="fa-solid fa-camera"></i> Scan to check in
+              </button>
+            </div>
+
+            <div id="student-class-scanner" class="class-attendance-scanner" hidden>
+              <div class="class-attendance-scanner-video-wrap">
+                <video id="student-class-scanner-video" playsinline muted></video>
+                <canvas id="student-class-scanner-canvas" hidden></canvas>
+                <div class="class-attendance-scanner-frame" aria-hidden="true"></div>
               </div>
-              <p class="small-note class-attendance-qr-caption">
-                <i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Show this to your teacher's camera to check in.
-              </p>
-              <p class="immersion-meta-value" id="student-class-field-time">—</p>
+              <div class="class-attendance-scanner-status" id="student-class-scanner-status" role="status">
+                <i class="fa-solid fa-camera" aria-hidden="true"></i> Point your camera at your teacher's QR code.
+              </div>
+              <div class="class-attendance-scanner-flash" id="student-class-scanner-flash" hidden></div>
+              <button type="button" class="btn btn-ghost btn-sm" id="student-class-scanner-cancel-btn">Cancel</button>
             </div>
           </article>
 
