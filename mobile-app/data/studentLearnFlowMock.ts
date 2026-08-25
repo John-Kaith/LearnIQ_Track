@@ -23,13 +23,15 @@ export type QuizQuestion = {
   id: string;
   question: string;
   choices: QuizChoice[];
+  /** Matches one of `choices[].id` (e.g. 'a'). */
+  correctChoiceId: string;
 };
 
-export type ActivityItem = {
-  id: string;
-  title: string;
-  type: string;
-};
+export type FlashcardPair = { front: string; back: string };
+
+export type ActivityItem =
+  | { id: string; title: string; type: 'Essay'; question: string; sampleAnswer: string }
+  | { id: string; title: string; type: 'Flashcards'; cards: FlashcardPair[] };
 
 const SUBJECT_TITLES: Record<string, string> = {
   '1': 'GENERAL BIOLOGY 1',
@@ -161,20 +163,11 @@ export const quizByLesson: Record<string, QuizQuestion[]> = {
         { id: 'c', label: 'Ribosome' },
         { id: 'd', label: 'Golgi apparatus' },
       ],
+      correctChoiceId: 'b',
     },
   ],
 };
 
-export const activitiesByLesson: Record<string, ActivityItem[]> = {
-  'les-1': [
-    { id: 'act-1', title: 'Cell Diagram Labeling', type: 'Essay' },
-    { id: 'act-2', title: 'Lab Reflection', type: 'Reflection' },
-  ],
-  'les-2': [
-    { id: 'act-3', title: 'DNA Replication Summary', type: 'Essay' },
-    { id: 'act-4', title: 'Transcription Notes', type: 'Reflection' },
-  ],
-  'les-3': [
-    { id: 'act-5', title: 'Punnett Square Practice', type: 'Essay' },
-  ],
-};
+// USE_MOCK is always false in services/lessons.ts (real backend only) — this
+// stays empty rather than out of sync with the real ActivityItem shape.
+export const activitiesByLesson: Record<string, ActivityItem[]> = {};

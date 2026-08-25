@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
@@ -17,6 +17,7 @@ export default function ActivitiesScreen() {
   const insets = useSafeAreaInsets();
   const [lessonTitle, setLessonTitle] = useState('');
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -42,24 +43,112 @@ export default function ActivitiesScreen() {
           <Text style={styles.empty}>No activities for this lesson yet.</Text>
         ) : (
           activities.map((item, index) => (
-            <Pressable
-              key={item.id}
-              onPress={() =>
-                Alert.alert(item.title, `${item.type} — coming soon (mock).`)
-              }
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-              <View style={styles.num}>
-                <Text style={styles.numText}>{index + 1}</Text>
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.type}>{item.type}</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={Colors.textMuted} />
-            </Pressable>
+            <View key={item.id} style={styles.card}>
+              <Pressable
+                onPress={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
+                style={({ pressed }) => [styles.cardHead, pressed && styles.pressed]}>
+                <View style={styles.num}>
+                  <Text style={styles.numText}>{index + 1}</Text>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.title}>{item.title}</Text>
+                  <Text style={styles.type}>{item.type}</Text>
+                </View>
+                <Feather
+                  name={expandedId === item.id ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={Colors.textMuted}
+                />
+              </Pressable>
+
+              {expandedId === item.id ? (
+                item.type === 'Essay' ? (
+                  <EssayActivity item={item} />
+                ) : (
+                  <FlashcardsActivity item={item} />
+                )
+              ) : null}
+            </View>
           ))
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function EssayActivity({ item }: { item: Extract<ActivityItem, { type: 'Essay' }> }) {
+  const [response, setResponse] = useState('');
+  const [showSample, setShowSample] = useState(false);
+
+  return (
+    <View style={styles.body}>
+      <Text style={styles.question}>{item.question}</Text>
+      <TextInput
+        value={response}
+        onChangeText={setResponse}
+        placeholder="Write your answer here..."
+        placeholderTextColor={Colors.textMuted}
+        multiline
+        style={styles.essayInput}
+      />
+      <Pressable
+        onPress={() => setShowSample((s) => !s)}
+        style={({ pressed }) => [styles.sampleBtn, pressed && styles.pressed]}>
+        <Text style={styles.sampleBtnText}>
+          {showSample ? 'Hide Sample Answer' : 'Show Sample Answer'}
+        </Text>
+      </Pressable>
+      {showSample ? <Text style={styles.sampleText}>{item.sampleAnswer}</Text> : null}
+    </View>
+  );
+}
+
+function FlashcardsActivity({ item }: { item: Extract<ActivityItem, { type: 'Flashcards' }> }) {
+  const [cardIndex, setCardIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const card = item.cards[cardIndex];
+  if (!card) return null;
+
+  return (
+    <View style={styles.body}>
+      <Pressable
+        onPress={() => setFlipped((f) => !f)}
+        style={({ pressed }) => [styles.flashcard, pressed && styles.pressed]}>
+        <Text style={styles.flashcardLabel}>{flipped ? 'Answer' : 'Question'}</Text>
+        <Text style={styles.flashcardText}>{flipped ? card.back : card.front}</Text>
+        <Text style={styles.flashcardHint}>Tap to flip</Text>
+      </Pressable>
+      <View style={styles.flashcardNav}>
+        <Pressable
+          disabled={cardIndex === 0}
+          onPress={() => {
+            setCardIndex((i) => Math.max(0, i - 1));
+            setFlipped(false);
+          }}
+          style={({ pressed }) => [
+            styles.navBtn,
+            cardIndex === 0 && styles.navBtnDisabled,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.navBtnText}>Prev</Text>
+        </Pressable>
+        <Text style={styles.flashcardCounter}>
+          {cardIndex + 1} / {item.cards.length}
+        </Text>
+        <Pressable
+          disabled={cardIndex === item.cards.length - 1}
+          onPress={() => {
+            setCardIndex((i) => Math.min(item.cards.length - 1, i + 1));
+            setFlipped(false);
+          }}
+          style={({ pressed }) => [
+            styles.navBtn,
+            cardIndex === item.cards.length - 1 && styles.navBtnDisabled,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.navBtnText}>Next</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -83,17 +172,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: Colors.backgroundSoft,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 14,
     marginBottom: 10,
+    overflow: 'hidden',
+  },
+  cardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
     gap: 12,
   },
-  pressed: { opacity: 0.92 },
+  pressed: { opacity: 0.9 },
   num: {
     width: 32,
     height: 32,
@@ -115,6 +207,102 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   type: {
+    color: Colors.textMuted,
+    fontSize: 12,
+  },
+  body: {
+    padding: 14,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  question: {
+    color: Colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  essayInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    color: Colors.text,
+    fontSize: 14,
+    backgroundColor: Colors.background,
+    marginBottom: 12,
+  },
+  sampleBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(202, 138, 4, 0.4)',
+    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  sampleBtnText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sampleText: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
+  },
+  flashcard: {
+    marginTop: 12,
+    minHeight: 130,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    gap: 8,
+  },
+  flashcardLabel: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  flashcardText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  flashcardHint: {
+    color: Colors.textMuted,
+    fontSize: 11,
+  },
+  flashcardNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  navBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  navBtnDisabled: { opacity: 0.4 },
+  navBtnText: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  flashcardCounter: {
     color: Colors.textMuted,
     fontSize: 12,
   },

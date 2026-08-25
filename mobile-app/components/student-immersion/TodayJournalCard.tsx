@@ -52,11 +52,11 @@ const styles = StyleSheet.create({
   btn: {
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.45)',
+    borderColor: 'rgba(202, 138, 4, 0.45)',
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    backgroundColor: 'rgba(161, 98, 7, 0.12)',
   },
   pressed: { opacity: 0.88 },
   btnText: {

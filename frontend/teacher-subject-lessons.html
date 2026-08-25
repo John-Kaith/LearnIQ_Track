@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082114" />
+<link rel="stylesheet" href="style.css?v=2026082115" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/shared/voice-announcer.js" defer></script>
@@ -17,7 +17,7 @@
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026082103" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026082104" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082105" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
@@ -87,6 +87,22 @@
             <span class="metric-note" id="teacher-stat-join-note">Share with students to join</span>
           </div>
         </article>
+      </section>
+
+      <section class="glass-card content-card teacher-stream-panel" id="teacher-stream-panel" aria-label="Class stream">
+        <div class="content-card-header-row">
+          <h2><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Class stream</h2>
+        </div>
+        <form id="teacher-announcement-form" class="teacher-announcement-form">
+          <textarea id="teacher-announcement-text" class="form-input" rows="3" maxlength="4000" placeholder="Share an announcement with your class…" required></textarea>
+          <div class="button-group" style="justify-content: flex-end; margin-top: 0.6rem;">
+            <button type="submit" class="btn btn-primary" id="teacher-announcement-post-btn">
+              <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Post
+            </button>
+          </div>
+        </form>
+        <div id="teacher-announcements-feed" class="subject-announcements-feed"></div>
+        <p id="teacher-announcements-empty" class="small-note" hidden>No announcements yet. Post one above.</p>
       </section>
 
       <section class="glass-card content-card class-attendance-teacher-panel" id="teacher-class-attendance-panel" aria-label="Class attendance">

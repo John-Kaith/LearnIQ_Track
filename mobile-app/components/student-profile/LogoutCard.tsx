@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subtitle: {
-    color: '#94a3b8',
+    color: '#78716c',
     fontSize: 13,
   },
 });

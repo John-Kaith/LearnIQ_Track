@@ -1,15 +1,26 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { joinSubjectByCode } from '@/services/lessons';
 
-export function JoinSubjectCard() {
+export function JoinSubjectCard({ onJoined }: { onJoined?: () => void }) {
   const [code, setCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
 
-  function handleJoin() {
-    if (!code.trim()) return;
-    Alert.alert('Join class', `Mock join for code: ${code.trim().toUpperCase()}`);
-    setCode('');
+  async function handleJoin() {
+    if (!code.trim() || isJoining) return;
+    setIsJoining(true);
+    try {
+      const { subjectName } = await joinSubjectByCode(code);
+      setCode('');
+      Alert.alert('Joined!', `You're now enrolled in ${subjectName}.`);
+      onJoined?.();
+    } catch (e) {
+      Alert.alert('Could not join', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setIsJoining(false);
+    }
   }
 
   return (
@@ -26,12 +37,18 @@ export function JoinSubjectCard() {
           placeholderTextColor={Colors.textMuted}
           autoCapitalize="characters"
           autoCorrect={false}
+          editable={!isJoining}
           style={styles.input}
         />
         <Pressable
           onPress={handleJoin}
-          style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}>
-          <Text style={styles.btnText}>Join Class</Text>
+          disabled={isJoining}
+          style={({ pressed }) => [styles.btn, pressed && styles.btnPressed, isJoining && styles.btnDisabled]}>
+          {isJoining ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.btnText}>Join Class</Text>
+          )}
         </Pressable>
       </View>
     </View>
@@ -83,19 +100,22 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   btn: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#a16207',
     borderRadius: 12,
     paddingHorizontal: 16,
+    minWidth: 96,
+    alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
-    shadowColor: '#8b5cf6',
+    borderColor: 'rgba(234, 179, 8, 0.45)',
+    shadowColor: '#eab308',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
   btnPressed: { opacity: 0.9 },
+  btnDisabled: { opacity: 0.7 },
   btnText: {
     color: '#fff',
     fontSize: 14,

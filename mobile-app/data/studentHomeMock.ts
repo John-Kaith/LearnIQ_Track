@@ -15,8 +15,8 @@ export const studentHomeMock = {
     progress: 60,
   },
   quickAccess: [
-    { id: 'lessons', label: 'My Lessons', icon: 'book-outline' as const, color: '#a78bfa' },
-    { id: 'leaderboard', label: 'Leaderboard', icon: 'trophy-outline' as const, color: '#60a5fa' },
+    { id: 'lessons', label: 'My Lessons', icon: 'book-outline' as const, color: '#fbbf24' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'trophy-outline' as const, color: '#ca8a04' },
     { id: 'history', label: 'History', icon: 'time-outline' as const, color: '#f87171' },
     { id: 'modules', label: 'Module Selection', icon: 'grid-outline' as const, color: '#34d399' },
   ],

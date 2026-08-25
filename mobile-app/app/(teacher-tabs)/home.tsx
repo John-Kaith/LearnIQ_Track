@@ -1,52 +1,74 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SectionTitle } from '@/components/student-home/SectionTitle';
 import { TeacherHomeHeader } from '@/components/teacher-home/TeacherHomeHeader';
-import { TeacherImmersionPreview } from '@/components/teacher-home/TeacherImmersionPreview';
 import { TeacherQuickActions } from '@/components/teacher-home/TeacherQuickActions';
 import { TeacherQuickStats } from '@/components/teacher-home/TeacherQuickStats';
 import { TeacherSubjectCard } from '@/components/teacher-home/TeacherSubjectCard';
 import { Colors } from '@/constants/colors';
-import { teacherHomeMock } from '@/data/teacherHomeMock';
+import { fetchTeacherDashboardStats, type TeacherDashboardStats } from '@/services/dashboard';
+import { fetchTeacherSubjects, type TeacherSubject } from '@/services/subjects';
+import { useAuthStore } from '@/store/authStore';
 import { getTimeGreeting } from '@/utils/greeting';
 
-const QUICK_STATS = [
-  {
-    label: 'Subjects',
-    value: teacherHomeMock.stats.subjects,
-    icon: 'layers-outline' as const,
-    color: '#60a5fa',
-  },
-  {
-    label: 'Published Lessons',
-    value: teacherHomeMock.stats.publishedLessons,
-    icon: 'book-outline' as const,
-    color: '#a78bfa',
-  },
-  {
-    label: 'Students',
-    value: teacherHomeMock.stats.students,
-    icon: 'people-outline' as const,
-    color: '#34d399',
-  },
-  {
-    label: 'Immersion Alerts',
-    value: teacherHomeMock.stats.immersionAlerts,
-    icon: 'alert-circle-outline' as const,
-    color: '#fb923c',
-  },
+const QUICK_ACTIONS = [
+  { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline' as const, color: '#ca8a04' },
+  { id: 'journals', label: 'Review Journals', icon: 'journal-outline' as const, color: '#fbbf24' },
+  { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline' as const, color: '#34d399' },
 ];
 
 export default function TeacherHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { subjects, immersion, quickActions } = teacherHomeMock;
+  const user = useAuthStore((s) => s.user);
 
-  function mockAction(label: string) {
-    Alert.alert(label, 'Coming soon on mobile (mock).');
+  const [subjects, setSubjects] = useState<TeacherSubject[]>([]);
+  const [stats, setStats] = useState<TeacherDashboardStats | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTeacherSubjects()
+        .then(setSubjects)
+        .catch(() => setSubjects([]));
+      fetchTeacherDashboardStats()
+        .then(setStats)
+        .catch(() => setStats(null));
+    }, []),
+  );
+
+  function comingSoon(label: string) {
+    Alert.alert(label, 'This isn’t built on mobile yet — use the web app for now.');
   }
+
+  const quickStats = [
+    {
+      label: 'Subjects',
+      value: stats?.subjectsCount ?? subjects.length,
+      icon: 'layers-outline' as const,
+      color: '#ca8a04',
+    },
+    {
+      label: 'Published Lessons',
+      value: stats?.lessonsPublished ?? 0,
+      icon: 'book-outline' as const,
+      color: '#fbbf24',
+    },
+    {
+      label: 'Enrolled Students',
+      value: stats?.enrolledStudents ?? 0,
+      icon: 'people-outline' as const,
+      color: '#34d399',
+    },
+    {
+      label: 'Quiz Attempts',
+      value: stats?.quizAttemptsTotal ?? 0,
+      icon: 'stats-chart-outline' as const,
+      color: '#fb923c',
+    },
+  ];
 
   return (
     <View style={styles.root}>
@@ -58,34 +80,25 @@ export default function TeacherHomeScreen() {
         ]}>
         <TeacherHomeHeader
           greeting={getTimeGreeting()}
-          name={teacherHomeMock.teacherName}
-          subtitle={teacherHomeMock.subtitle}
+          name={user?.first_name ? `${user.first_name}!` : (user?.display_name ?? 'Teacher')}
+          subtitle="Manage your classes and monitor students."
         />
 
-        <TeacherQuickStats items={QUICK_STATS} />
+        <TeacherQuickStats items={quickStats} />
 
         <SectionTitle title="My Subjects" />
-        {subjects.map((subject) => (
-          <TeacherSubjectCard
-            key={subject.id}
-            subject={subject}
-            onOpen={() => mockAction(`Open ${subject.name}`)}
-            onPublish={() => mockAction(`Publish lesson — ${subject.name}`)}
-          />
-        ))}
-
-        <SectionTitle title="Immersion Monitoring" />
-        <TeacherImmersionPreview
-          activeStudents={immersion.activeStudents}
-          pendingJournals={immersion.pendingJournals}
-          onOpenMonitoring={() => router.push('/(teacher-tabs)/immersion')}
-        />
+        {subjects.length === 0 ? null : (
+          subjects.map((subject) => (
+            <TeacherSubjectCard
+              key={subject.id}
+              subject={subject}
+              onOpen={() => router.push({ pathname: '/teacher-subject/[id]', params: { id: subject.id } })}
+            />
+          ))
+        )}
 
         <SectionTitle title="Quick Actions" />
-        <TeacherQuickActions
-          items={quickActions}
-          onPress={(_id, label) => mockAction(label)}
-        />
+        <TeacherQuickActions items={QUICK_ACTIONS} onPress={(_id, label) => comingSoon(label)} />
       </ScrollView>
     </View>
   );

@@ -1,4 +1,4 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -9,9 +9,9 @@ import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/store/authStore';
 
 const navigationTheme = {
-  ...DarkTheme,
+  ...DefaultTheme,
   colors: {
-    ...DarkTheme.colors,
+    ...DefaultTheme.colors,
     background: Colors.background,
     card: Colors.backgroundSoft,
     text: Colors.text,
@@ -41,6 +41,7 @@ export default function RootLayout() {
           <Stack.Screen name="(teacher-tabs)" />
           <Stack.Screen name="pending" />
           <Stack.Screen name="subject/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="teacher-subject/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="lesson/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="reviewer/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="quiz/[id]" options={{ animation: 'slide_from_right' }} />
@@ -49,7 +50,7 @@ export default function RootLayout() {
           <Stack.Screen name="journal/history" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="journal/[id]" options={{ animation: 'slide_from_right' }} />
         </Stack>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </ThemeProvider>
     </SafeAreaProvider>
   );

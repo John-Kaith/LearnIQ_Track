@@ -46,7 +46,7 @@ export default function StudentLearnScreen() {
           Access your enrolled subjects and published lessons.
         </Text>
 
-        <JoinSubjectCard />
+        <JoinSubjectCard onJoined={loadSubjects} />
 
         <MySubjectsHeader onRefresh={loadSubjects} />
 

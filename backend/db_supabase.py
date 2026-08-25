@@ -161,6 +161,8 @@ def serialize_public_profile(prof: dict[str, Any] | None) -> dict[str, Any]:
         "dob": (str(p.get("dob")) if p.get("dob") else ""),
         "address": p.get("address") or "",
         "avatar_data": p.get("avatar_data") or "",
+        "adviser_id_number": p.get("adviser_id_number") or "",
+        "created_at": p.get("created_at"),
     }
 
 
@@ -820,6 +822,10 @@ def unpublish_all_lessons() -> None:
 
 def publish_lesson(lesson_id: str) -> None:
     _sb().table("lessons").update({"is_published": True}).eq("id", lesson_id).execute()
+
+
+def unpublish_lesson(lesson_id: str) -> None:
+    _sb().table("lessons").update({"is_published": False}).eq("id", lesson_id).execute()
 
 
 def list_published_lessons_with_content() -> list[dict[str, Any]]:
@@ -3289,12 +3295,104 @@ def _subject_owned_by_teacher(subject_id: str, teacher_id_number: str) -> bool:
     ).strip()
 
 
+def create_subject_announcement(subject_id: str, teacher_id_number: str, body: str) -> dict[str, Any]:
+    """Class Stream: teacher posts a text-only announcement to a subject."""
+    sid = str(subject_id or "").strip()
+    idn = str(teacher_id_number or "").strip()
+    text = str(body or "").strip()
+    if not sid or not idn or not text:
+        raise ValueError("subject_id, teacher_id_number, and body are required.")
+    row = {"subject_id": sid, "teacher_id_number": idn, "body": text}
+    res = _sb().table("subject_announcements").insert(row).execute()
+    inserted = (res.data or [None])[0]
+    if not inserted:
+        raise RuntimeError("Could not save announcement.")
+    return inserted
+
+
+def list_subject_announcements(subject_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return []
+    try:
+        res = (
+            _sb()
+            .table("subject_announcements")
+            .select("*")
+            .eq("subject_id", sid)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_subject_announcements: {e}")
+        return []
+
+    # Attach the posting teacher's display name/avatar for the feed UI.
+    teacher_cache: dict[str, dict[str, Any]] = {}
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        idn = str(r.get("teacher_id_number") or "")
+        if idn and idn not in teacher_cache:
+            teacher_cache[idn] = get_profile_by_id_number(idn) or {}
+        teacher = teacher_cache.get(idn) or {}
+        out.append(
+            {
+                "id": r.get("id"),
+                "subject_id": r.get("subject_id"),
+                "body": r.get("body") or "",
+                "created_at": r.get("created_at"),
+                "teacher_id_number": idn,
+                "teacher_name": profile_display_name(teacher) if teacher else idn,
+                "teacher_avatar_data": (teacher.get("avatar_data") or "") if teacher else "",
+            }
+        )
+    return out
+
+
 def student_enrolled_in_subject(student_uuid: str, subject_id: str) -> bool:
     if not student_uuid or not subject_id:
         return False
     cur = get_current_grading_period() or {}
     access = _student_enrollment_access_map(student_uuid, cur.get("id"))
     return str(subject_id).strip() in access
+
+
+def list_students_enrolled_in_subject(subject_id: str) -> list[dict[str, Any]]:
+    """Active-enrollment classmates for a subject's People tab."""
+    sid = str(subject_id or "").strip()
+    if not sid:
+        return []
+    try:
+        res = (
+            _sb()
+            .table("enrollments")
+            .select(
+                "student_id, enrollment_status, "
+                "profiles!enrollments_student_id_fkey(id, last_name, first_name, middle_name, name_suffix, lrn, avatar_data)"
+            )
+            .eq("subject_id", sid)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"list_students_enrolled_in_subject: {e}")
+        return []
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for r in rows:
+        if enrollment_status_from_row(r) != ENROLLMENT_STATUS_ACTIVE:
+            continue
+        prof = r.get("profiles") or {}
+        pid = str(prof.get("id") or r.get("student_id") or "")
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(serialize_public_profile(prof))
+    out.sort(key=lambda p: (p.get("last_name") or "", p.get("first_name") or ""))
+    return out
 
 
 def _serialize_class_checkin_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -3734,6 +3832,7 @@ def get_student_class_attendance_status(
     checked_in = _class_attendance_record_is_present(record)
     if record and not checked_in:
         record = None
+    checked_out = bool(record and record.get("time_out"))
     return {
         "enrolled": True,
         "session_open": open_sess,
@@ -3741,6 +3840,7 @@ def get_student_class_attendance_status(
         "session": session,
         "geofence": _geofence_for_api(sid, session),
         "already_checked_in": checked_in,
+        "checked_out": checked_out,
         "marked_absent": closed_sess and not checked_in,
         "record": record,
     }
@@ -3851,6 +3951,68 @@ def insert_class_attendance_checkin_via_qr(
     if not inserted:
         raise RuntimeError("Could not save class attendance.")
     return _serialize_class_checkin_row(inserted) or inserted
+
+
+def class_attendance_qr_toggle(
+    student_uuid: str,
+    student_id_number: str,
+    subject_id: str,
+    *,
+    now_iso: str,
+) -> tuple[str, dict[str, Any]]:
+    """Student scans the teacher's rotating class-attendance QR: first scan
+    = time in, second scan = time out. Mirrors the immersion time-in/out
+    toggle so a student can't just scan once and leave without it showing.
+    Returns (action, record) where action is 'time_in' or 'time_out'."""
+    sid = str(subject_id or "").strip()
+    if not student_enrolled_in_subject(student_uuid, sid):
+        raise PermissionError("This student is not enrolled in this subject.")
+    session = get_class_attendance_session_today(sid)
+    if not session or str(session.get("status") or "").lower() != "open":
+        raise ValueError("Class attendance is not open for this subject right now.")
+    sess_id = str(session["id"])
+    try:
+        existing = (
+            _sb()
+            .table("class_attendance_records")
+            .select("*")
+            .eq("session_id", sess_id)
+            .eq("student_id", student_uuid)
+            .limit(1)
+            .execute()
+        )
+        existing_row = existing.data[0] if existing.data else None
+    except Exception as e:
+        print(f"class_attendance_qr_toggle existing: {e}")
+        existing_row = None
+
+    if existing_row:
+        if existing_row.get("time_out"):
+            raise ValueError("You've already checked out for today's class attendance.")
+        res = (
+            _sb()
+            .table("class_attendance_records")
+            .update({"time_out": now_iso})
+            .eq("id", existing_row["id"])
+            .execute()
+        )
+        updated = (res.data or [None])[0]
+        if not updated:
+            raise RuntimeError("Could not save time out.")
+        return "time_out", (_serialize_class_checkin_row(updated) or updated)
+
+    row = {
+        "session_id": sess_id,
+        "student_id": student_uuid,
+        "student_id_number": student_id_number.strip(),
+        "time_in": now_iso,
+        "status": "present",
+    }
+    res = _sb().table("class_attendance_records").insert(row).execute()
+    inserted = (res.data or [None])[0]
+    if not inserted:
+        raise RuntimeError("Could not save class attendance.")
+    return "time_in", (_serialize_class_checkin_row(inserted) or inserted)
 
 
 def _attendance_status_bucket(status_raw: Any) -> str:

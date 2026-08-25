@@ -1,8 +1,8 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 
-const ACTIVE = '#4F8CFF';
-const INACTIVE = '#7B8BA8';
+const ACTIVE = '#ca8a04';
+const INACTIVE = '#78716c';
 const SIZE = 24;
 
 type TabName = 'home' | 'learn' | 'immersion' | 'profile';

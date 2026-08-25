@@ -7,7 +7,9 @@ type ContinueLearningCardProps = {
   grade: string;
   subject: string;
   lesson: string;
-  progress: number;
+  /** Omit when there's no real per-lesson progress to report — the progress bar hides itself. */
+  progress?: number;
+  onPress?: () => void;
 };
 
 export function ContinueLearningCard({
@@ -15,6 +17,7 @@ export function ContinueLearningCard({
   subject,
   lesson,
   progress,
+  onPress,
 }: ContinueLearningCardProps) {
   return (
     <View style={styles.card}>
@@ -25,14 +28,18 @@ export function ContinueLearningCard({
         </Text>
         <Text style={styles.lesson}>{lesson}</Text>
 
-        <View style={styles.progressRow}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+        {progress != null ? (
+          <View style={styles.progressRow}>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{progress}%</Text>
           </View>
-          <Text style={styles.progressText}>{progress}%</Text>
-        </View>
+        ) : null}
 
-        <Pressable style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+        <Pressable
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+          onPress={onPress}>
           <Ionicons name="play" size={16} color="#fff" style={styles.playIcon} />
           <Text style={styles.ctaText}>Continue Lesson</Text>
         </Pressable>
@@ -43,10 +50,10 @@ export function ContinueLearningCard({
           <Ionicons name="sparkles" size={14} color="rgba(255,255,255,0.5)" />
         </View>
         <View style={[styles.book, styles.bookBack]}>
-          <Ionicons name="book" size={28} color="#8b5cf6" />
+          <Ionicons name="book" size={28} color="#eab308" />
         </View>
         <View style={[styles.book, styles.bookMid]}>
-          <Ionicons name="book" size={32} color="#60a5fa" />
+          <Ionicons name="book" size={32} color="#ca8a04" />
         </View>
         <View style={styles.cap}>
           <Ionicons name="school" size={26} color={Colors.text} />
@@ -62,7 +69,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.backgroundSoft,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.22)',
+    borderColor: 'rgba(202, 138, 4, 0.22)',
     padding: 18,
     marginBottom: 22,
     overflow: 'hidden',
@@ -97,7 +104,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    backgroundColor: 'rgba(120, 53, 15, 0.15)',
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -116,12 +123,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#a16207',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderColor: 'rgba(234, 179, 8, 0.4)',
   },
   ctaPressed: { opacity: 0.9 },
   playIcon: { marginRight: 6 },
@@ -145,7 +152,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     padding: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: 'rgba(161, 98, 7, 0.15)',
   },
   bookBack: {
     bottom: 28,
@@ -162,6 +169,6 @@ const styles = StyleSheet.create({
     right: 16,
     padding: 6,
     borderRadius: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: 'rgba(234, 179, 8, 0.2)',
   },
 });

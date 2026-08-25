@@ -21,7 +21,9 @@ import requests
 BASE_URL = "http://127.0.0.1:8000"
 
 TEACHER = {
-    "last_name": "Rivano",
+    # Deliberately generic — last name is literally the role, so this can
+    # never be mistaken for a real person's name.
+    "last_name": "Teacher",
     "first_name": "Demo",
     "id_number": "DEMO-T01",
     "email": "demo.teacher@learniq.test",
@@ -30,7 +32,7 @@ TEACHER = {
 }
 
 STUDENT = {
-    "last_name": "Cruz",
+    "last_name": "Student",
     "first_name": "Demo",
     "id_number": "DEMO-S01",
     "email": "demo.student@learniq.test",

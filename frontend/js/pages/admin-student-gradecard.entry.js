@@ -115,7 +115,9 @@
     renderEmptyState("Loading gradecard…");
 
     try {
-      const res = await fetch(apiUrl(`/gradecard?${params.toString()}`));
+      const res = await fetch(apiUrl(`/gradecard?${params.toString()}`), {
+        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = data?.error || `HTTP ${res.status}`;

@@ -21,7 +21,7 @@ export function SubjectCard({
           <Text style={styles.lessons}>{lessonLabel}</Text>
         </View>
         <View style={styles.badge}>
-          <Feather name="bookmark" size={12} color="#a78bfa" />
+          <Feather name="bookmark" size={12} color="#fbbf24" />
           <Text style={styles.badgeText}>Subject</Text>
         </View>
       </View>
@@ -78,15 +78,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(234, 179, 8, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderColor: 'rgba(234, 179, 8, 0.35)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
   badgeText: {
-    color: '#c4b5fd',
+    color: '#fbbf24',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -111,15 +111,15 @@ const styles = StyleSheet.create({
   },
   openBtn: {
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
+    backgroundColor: 'rgba(161, 98, 7, 0.12)',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   openBtnPressed: { opacity: 0.88 },
   openBtnText: {
-    color: '#c4b5fd',
+    color: '#fbbf24',
     fontSize: 13,
     fontWeight: '700',
   },

@@ -115,27 +115,41 @@ function toQuizQuestions(raw: RawLesson['quiz']): QuizQuestion[] {
   const letters = ['a', 'b', 'c', 'd'];
   return raw
     .filter((q) => q.question && Array.isArray(q.choices) && q.choices.length === 4)
-    .map((q, index) => ({
-      id: `q${index + 1}`,
-      question: q.question,
-      choices: q.choices.map((label, ci) => ({ id: letters[ci], label })),
-    }));
+    .map((q, index) => {
+      // Backend normalizes `answer` to a single letter A-D (backend/main.py
+      // _parse_and_normalize_quiz_json) matching choices[] by index.
+      const letter = String(q.answer || '').trim().charAt(0).toLowerCase();
+      const correctChoiceId = letters.includes(letter) ? letter : 'a';
+      return {
+        id: `q${index + 1}`,
+        question: q.question,
+        choices: q.choices.map((label, ci) => ({ id: letters[ci], label })),
+        correctChoiceId,
+      };
+    });
 }
 
 function toActivityItems(raw: RawLesson['activities']): ActivityItem[] {
   const items: ActivityItem[] = [];
   raw.forEach((activity, index) => {
-    if (activity.activity_type === 'flashcards') {
-      const count = activity.cards?.length ?? 0;
+    if (activity.activity_type === 'flashcards' && activity.cards?.length) {
+      const count = activity.cards.length;
       items.push({
         id: `act-${index}-flashcards`,
         title: `Flashcards (${count} card${count === 1 ? '' : 's'})`,
         type: 'Flashcards',
+        cards: activity.cards.map((c) => ({ front: c.front, back: c.back })),
       });
     } else if (activity.activity_type === 'essay' && activity.question) {
       const title =
         activity.question.length > 70 ? `${activity.question.slice(0, 67)}...` : activity.question;
-      items.push({ id: `act-${index}-essay`, title, type: 'Essay' });
+      items.push({
+        id: `act-${index}-essay`,
+        title,
+        type: 'Essay',
+        question: activity.question,
+        sampleAnswer: activity.answer || 'No sample answer provided.',
+      });
     }
   });
   return items;
@@ -161,6 +175,50 @@ export async function fetchStudentSubjects(): Promise<StudentSubject[]> {
     lessonCount: s.published_lesson_count ?? 0,
   }));
   return subjectsCache;
+}
+
+/**
+ * `POST /subjects/join` (backend/main.py) — enrolls the signed-in student
+ * via a teacher's class code. Clears the cached subject list so the next
+ * fetchStudentSubjects() call picks up the newly-joined subject.
+ */
+export async function joinSubjectByCode(joinCode: string): Promise<{ subjectName: string }> {
+  const studentIdNumber = requireStudentIdNumber();
+  const code = joinCode.trim().toUpperCase();
+  if (!code) throw new Error('Enter a class code.');
+  const res = await apiRequest<{ subject?: { name?: string } }>('/subjects/join', {
+    method: 'POST',
+    body: { join_code: code, student_id_number: studentIdNumber },
+  });
+  subjectsCache = null;
+  return { subjectName: res.subject?.name || 'the subject' };
+}
+
+export type LatestLesson = {
+  subjectId: string;
+  subjectTitle: string;
+  lessonId: string;
+  lessonTitle: string;
+};
+
+/**
+ * Most-recently-published lesson across all of the student's subjects —
+ * used for the Home screen's "Continue Learning" card. There is no
+ * backend field for "last opened by this student", so the newest
+ * published lesson is the closest honest proxy.
+ */
+export async function fetchLatestLessonForHome(): Promise<LatestLesson | null> {
+  const rows = await fetchRawLessons();
+  if (!rows.length) return null;
+  const newest = [...rows].sort(
+    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+  )[0];
+  return {
+    subjectId: newest.subject_id ?? '',
+    subjectTitle: newest.subject_name || 'Subject',
+    lessonId: newest.file_id,
+    lessonTitle: filenameToTitle(newest.filename),
+  };
 }
 
 export async function fetchSubjectTitle(subjectId: string): Promise<string> {
@@ -212,6 +270,38 @@ export async function fetchLessonQuiz(lessonId: string): Promise<QuizQuestion[]>
   }
   const row = await fetchRawLessonById(lessonId);
   return row ? toQuizQuestions(row.quiz) : DEFAULT_QUIZ;
+}
+
+/**
+ * `POST /quiz-attempt` (backend/main.py) — the client computes the score
+ * (comparing each question's `correctChoiceId` against what the student
+ * picked) and just reports the tally; there's no server-side per-question
+ * grading endpoint.
+ */
+export async function submitQuizAttempt(
+  lessonId: string,
+  questions: QuizQuestion[],
+  selectedByQuestionId: Record<string, string>,
+): Promise<{ score: number; totalQuestions: number }> {
+  const studentIdNumber = requireStudentIdNumber();
+  let score = 0;
+  const answers = questions.map((q) => {
+    const picked = selectedByQuestionId[q.id] ?? null;
+    const correct = picked === q.correctChoiceId;
+    if (correct) score += 1;
+    return { question_id: q.id, picked, correct };
+  });
+  await apiRequest('/quiz-attempt', {
+    method: 'POST',
+    body: {
+      lesson_id: lessonId,
+      score,
+      total_questions: questions.length,
+      answers,
+      student_id_number: studentIdNumber,
+    },
+  });
+  return { score, totalQuestions: questions.length };
 }
 
 export async function fetchLessonActivities(lessonId: string): Promise<ActivityItem[]> {

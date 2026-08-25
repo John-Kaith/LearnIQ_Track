@@ -2,16 +2,18 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import type { TeacherSubjectItem } from '@/data/teacherHomeMock';
+import type { TeacherSubject } from '@/services/subjects';
 
 type Props = {
-  subject: TeacherSubjectItem;
+  subject: TeacherSubject;
   onOpen: () => void;
-  onPublish: () => void;
 };
 
-export function TeacherSubjectCard({ subject, onOpen, onPublish }: Props) {
-  const studentLabel = subject.studentCount === 1 ? '1 student' : `${subject.studentCount} students`;
+export function TeacherSubjectCard({ subject, onOpen }: Props) {
+  const lessonLabel =
+    subject.publishedLessonCount === 1
+      ? '1 published lesson'
+      : `${subject.publishedLessonCount} published lessons`;
 
   return (
     <Pressable
@@ -20,18 +22,10 @@ export function TeacherSubjectCard({ subject, onOpen, onPublish }: Props) {
       <View style={styles.topRow}>
         <View style={styles.titleCol}>
           <Text style={styles.title}>{subject.name}</Text>
-          <Text style={styles.meta}>{studentLabel}</Text>
+          <Text style={styles.meta}>{lessonLabel}</Text>
         </View>
         <Feather name="chevron-right" size={20} color={Colors.textMuted} />
       </View>
-
-      <Pressable
-        onPress={onPublish}
-        hitSlop={8}
-        style={({ pressed }) => [styles.publishBtn, pressed && styles.publishBtnPressed]}>
-        <Feather name="upload-cloud" size={13} color="#93c5fd" />
-        <Text style={styles.publishText}>Publish Lesson</Text>
-      </Pressable>
     </Pressable>
   );
 }
@@ -51,7 +45,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 12,
   },
   titleCol: { flex: 1, minWidth: 0 },
   title: {
@@ -64,23 +57,5 @@ const styles = StyleSheet.create({
   meta: {
     color: Colors.textMuted,
     fontSize: 13,
-  },
-  publishBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.4)',
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  publishBtnPressed: { opacity: 0.88 },
-  publishText: {
-    color: '#93c5fd',
-    fontSize: 12,
-    fontWeight: '700',
   },
 });

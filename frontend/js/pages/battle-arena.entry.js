@@ -290,7 +290,9 @@
 
     try {
       var url = apiUrl("/student/lessons?student_id_number=" + encodeURIComponent(sid));
-      var res = await fetch(url);
+      var res = await fetch(url, {
+        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
+      });
       var data = {};
       try {
         data = await res.json();
@@ -439,7 +441,10 @@
     }
     var res = await fetch(apiUrl("/generate-battle-questions"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
+      },
       body: JSON.stringify({ file_id: fileId }),
     });
     var data = {};

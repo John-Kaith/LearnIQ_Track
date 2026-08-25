@@ -8,7 +8,8 @@ type ProfileCardProps = {
   fullName: string;
   roleAcademic: string;
   idNumber: string;
-  approvalStatus: 'approved' | 'pending' | 'rejected';
+  /** Omit when there's no real approval-status concept to report (e.g. students). */
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
   section: string;
   strand: string;
   adviser: string;
@@ -31,7 +32,9 @@ export function ProfileCard({
       ? { label: 'Approved', color: '#22c55e' }
       : approvalStatus === 'pending'
         ? { label: 'Pending', color: '#f59e0b' }
-        : { label: 'Rejected', color: '#ef4444' };
+        : approvalStatus === 'rejected'
+          ? { label: 'Rejected', color: '#ef4444' }
+          : null;
 
   return (
     <View style={styles.card}>
@@ -59,10 +62,12 @@ export function ProfileCard({
             <Feather name="credit-card" size={13} color={Colors.textMuted} />
             <Text style={styles.meta}>ID: {idNumber}</Text>
           </View>
-          <View style={[styles.badge, { borderColor: `${badge.color}44` }]}>
-            <Feather name="check-circle" size={12} color={badge.color} />
-            <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-          </View>
+          {badge ? (
+            <View style={[styles.badge, { borderColor: `${badge.color}44` }]}>
+              <Feather name="check-circle" size={12} color={badge.color} />
+              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            </View>
+          ) : null}
         </View>
 
         <Pressable
@@ -129,7 +134,7 @@ const styles = StyleSheet.create({
   avatarGlow: {
     padding: 2,
     borderRadius: 40,
-    backgroundColor: 'rgba(96, 165, 250, 0.3)',
+    backgroundColor: 'rgba(202, 138, 4, 0.3)',
   },
   avatar: {
     width: 72,
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     backgroundColor: Colors.background,
     borderWidth: 2,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -153,7 +158,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#7c3aed',
+    backgroundColor: '#eab308',
     borderWidth: 2,
     borderColor: Colors.backgroundSoft,
     alignItems: 'center',
@@ -201,8 +206,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.4)',
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderColor: 'rgba(202, 138, 4, 0.4)',
+    backgroundColor: 'rgba(161, 98, 7, 0.12)',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 8,
@@ -232,7 +237,7 @@ const styles = StyleSheet.create({
   },
   infoCellDivider: {
     borderRightWidth: 1,
-    borderRightColor: 'rgba(148, 163, 184, 0.14)',
+    borderRightColor: 'rgba(120, 53, 15, 0.14)',
   },
   infoLabel: {
     color: Colors.textMuted,

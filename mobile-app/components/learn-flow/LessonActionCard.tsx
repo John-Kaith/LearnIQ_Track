@@ -13,13 +13,13 @@ const CONFIG: Record<
     icon: 'book-open',
     title: 'Reviewer',
     subtitle: 'Study guide and key concepts',
-    color: '#60a5fa',
+    color: '#ca8a04',
   },
   quiz: {
     icon: 'edit-3',
     title: 'Quiz',
     subtitle: 'Test your understanding',
-    color: '#a78bfa',
+    color: '#fbbf24',
   },
   activities: {
     icon: 'folder',

@@ -1,18 +1,22 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
-import { fetchLessonDetail, fetchLessonQuiz, type QuizQuestion } from '@/services/lessons';
+import { fetchLessonDetail, fetchLessonQuiz, submitQuizAttempt, type QuizQuestion } from '@/services/lessons';
 
 export default function QuizScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [lessonTitle, setLessonTitle] = useState('');
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [result, setResult] = useState<{ score: number; totalQuestions: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -24,7 +28,47 @@ export default function QuizScreen() {
       );
   }, [id]);
 
-  const question = questions[0];
+  const question = questions[index];
+  const isLast = index === questions.length - 1;
+  const pickedForCurrent = question ? selected[question.id] : undefined;
+
+  async function handleNext() {
+    if (!question || !pickedForCurrent) return;
+    if (!isLast) {
+      setIndex((i) => i + 1);
+      return;
+    }
+    if (!id) return;
+    setIsSubmitting(true);
+    try {
+      const outcome = await submitQuizAttempt(id, questions, selected);
+      setResult(outcome);
+    } catch (e) {
+      Alert.alert('Could not submit quiz', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (result) {
+    const pct = Math.round((result.score / Math.max(1, result.totalQuestions)) * 100);
+    return (
+      <View style={styles.root}>
+        <StackHeader title="Quiz" />
+        <View style={styles.resultWrap}>
+          <Text style={styles.resultScore}>
+            {result.score} / {result.totalQuestions}
+          </Text>
+          <Text style={styles.resultPct}>{pct}% correct</Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.nextBtn, pressed && styles.pressed]}>
+            <Text style={styles.nextText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -38,15 +82,17 @@ export default function QuizScreen() {
 
         {question ? (
           <View style={styles.card}>
-            <Text style={styles.qLabel}>Question 1</Text>
+            <Text style={styles.qLabel}>
+              Question {index + 1} of {questions.length}
+            </Text>
             <Text style={styles.question}>{question.question}</Text>
 
             {question.choices.map((choice) => {
-              const active = selected === choice.id;
+              const active = pickedForCurrent === choice.id;
               return (
                 <Pressable
                   key={choice.id}
-                  onPress={() => setSelected(choice.id)}
+                  onPress={() => setSelected((s) => ({ ...s, [question.id]: choice.id }))}
                   style={[styles.choice, active && styles.choiceActive]}>
                   <Text style={[styles.choiceText, active && styles.choiceTextActive]}>
                     {choice.label}
@@ -59,13 +105,22 @@ export default function QuizScreen() {
           <Text style={styles.empty}>No quiz available for this lesson yet.</Text>
         )}
 
-        <Pressable
-          onPress={() =>
-            Alert.alert('Quiz', 'Next question — coming soon (mock).')
-          }
-          style={({ pressed }) => [styles.nextBtn, pressed && styles.pressed]}>
-          <Text style={styles.nextText}>Next</Text>
-        </Pressable>
+        {question ? (
+          <Pressable
+            onPress={handleNext}
+            disabled={!pickedForCurrent || isSubmitting}
+            style={({ pressed }) => [
+              styles.nextBtn,
+              pressed && styles.pressed,
+              (!pickedForCurrent || isSubmitting) && styles.nextBtnDisabled,
+            ]}>
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.nextText}>{isLast ? 'Submit Quiz' : 'Next'}</Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -115,8 +170,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   choiceActive: {
-    borderColor: 'rgba(96, 165, 250, 0.5)',
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderColor: 'rgba(202, 138, 4, 0.5)',
+    backgroundColor: 'rgba(161, 98, 7, 0.12)',
   },
   choiceText: {
     color: Colors.text,
@@ -132,17 +187,35 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   nextBtn: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#a16207',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderColor: 'rgba(234, 179, 8, 0.4)',
   },
+  nextBtnDisabled: { opacity: 0.5 },
   pressed: { opacity: 0.9 },
   nextText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  resultWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  resultScore: {
+    color: Colors.text,
+    fontSize: 40,
+    fontWeight: '800',
+  },
+  resultPct: {
+    color: Colors.textMuted,
+    fontSize: 16,
+    marginBottom: 24,
   },
 });

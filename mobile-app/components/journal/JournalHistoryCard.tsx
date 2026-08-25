@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34, 197, 94, 0.35)',
   },
   badgeMissing: {
-    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+    backgroundColor: 'rgba(120, 53, 15, 0.08)',
     borderColor: Colors.border,
   },
   badgeText: {

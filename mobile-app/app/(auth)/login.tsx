@@ -148,11 +148,11 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#a16207',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
     marginBottom: 12,
   },
   markText: {
@@ -207,12 +207,12 @@ const styles = StyleSheet.create({
   },
   loginBtn: {
     marginTop: 8,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#a16207',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.45)',
+    borderColor: 'rgba(202, 138, 4, 0.45)',
   },
   loginBtnPressed: {
     opacity: 0.9,

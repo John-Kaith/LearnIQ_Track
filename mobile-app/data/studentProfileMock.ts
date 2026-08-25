@@ -14,14 +14,14 @@ export const profileSettingsItems = [
   {
     id: 'account',
     icon: 'user' as const,
-    iconColor: '#60a5fa',
+    iconColor: '#ca8a04',
     title: 'Account Details',
     subtitle: 'View and update your personal information',
   },
   {
     id: 'appearance',
     icon: 'droplet' as const,
-    iconColor: '#a78bfa',
+    iconColor: '#fbbf24',
     title: 'Appearance',
     subtitle: 'Customize how LearnIQ looks for you',
   },
@@ -42,7 +42,7 @@ export const profileSettingsItems = [
   {
     id: 'about',
     icon: 'info' as const,
-    iconColor: '#60a5fa',
+    iconColor: '#ca8a04',
     title: 'About LearnIQ',
     subtitle: 'App information, support and privacy policy',
   },

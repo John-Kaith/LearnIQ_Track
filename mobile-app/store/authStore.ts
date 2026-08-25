@@ -1,7 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { apiRequest, setAccessTokenGetter } from '@/services/apiClient';
+import { deleteItem, getItem, setItem } from '@/utils/secureStorage';
 
 const SESSION_KEY = 'learniq_session_user';
 
@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hydrate: async () => {
     try {
-      const raw = await SecureStore.getItemAsync(SESSION_KEY);
+      const raw = await getItem(SESSION_KEY);
       if (raw) {
         set({ user: JSON.parse(raw) as AuthUser });
       }
@@ -64,7 +64,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         skipAuth: true,
       });
       const user = res.user;
-      await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(user));
+      await setItem(SESSION_KEY, JSON.stringify(user));
       set({ user, isLoggingIn: false });
       return user;
     } catch (e) {
@@ -75,7 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync(SESSION_KEY);
+    await deleteItem(SESSION_KEY);
     set({ user: null });
   },
 }));

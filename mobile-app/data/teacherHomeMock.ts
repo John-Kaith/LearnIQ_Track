@@ -29,8 +29,8 @@ export const teacherHomeMock = {
     pendingJournals: 2,
   },
   quickActions: [
-    { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline', color: '#60a5fa' },
-    { id: 'journals', label: 'Review Journals', icon: 'journal-outline', color: '#a78bfa' },
+    { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline', color: '#ca8a04' },
+    { id: 'journals', label: 'Review Journals', icon: 'journal-outline', color: '#fbbf24' },
     { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline', color: '#34d399' },
   ] satisfies TeacherQuickAction[],
 };

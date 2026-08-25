@@ -1219,8 +1219,23 @@ function renderAdminSidebar(activePageId) {
   }).join("");
 }
 
+/** Every admin-*.html page runs this on load — the one place to enforce
+ * "not an admin? get out" consistently, instead of each page needing its
+ * own copy of the check (most didn't have one). */
+function guardAdminAppPage() {
+  if (!isAdminAppPage()) return true;
+  const user = getCurrentUserSession();
+  const role = user && user.role ? String(user.role).trim().toLowerCase() : "";
+  if (!user?.access_token || role !== "admin") {
+    window.location.replace("login.html");
+    return false;
+  }
+  return true;
+}
+
 function initAdminSidebar() {
   if (!isAdminAppPage()) return;
+  if (!guardAdminAppPage()) return;
   renderAdminSidebar(getAdminSidebarActivePageId());
   hydrateAdminSidebarFromSession();
   if (!window.__adminSidebarHashBound) {
@@ -1233,11 +1248,13 @@ function initAdminSidebar() {
 
 function ensureAdminSidebarNav() {
   if (!isAdminAppPage()) return;
+  if (!guardAdminAppPage()) return;
   renderAdminSidebar(getAdminSidebarActivePageId());
 }
 
 if (typeof window !== "undefined") {
   window.ensureAdminSidebarNav = ensureAdminSidebarNav;
+  window.guardAdminAppPage = guardAdminAppPage;
   window.renderAdminSidebar = renderAdminSidebar;
   window.isAdminAppPage = isAdminAppPage;
 }
@@ -2540,6 +2557,15 @@ function getAdminDashboardStatsFromUsers(users) {
   return { totalStudents, totalTeachers };
 }
 
+/** Bearer header for the current session — despite the name, used for any
+ * endpoint that needs to identify the caller (admin-only checks via
+ * _resolve_admin_id, or "is this student/teacher looking at their own data"
+ * checks via _can_view_student_data / _can_view_teacher_data). */
+function adminAuthHeaders() {
+  const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  return u && u.access_token ? { Authorization: `Bearer ${u.access_token}` } : {};
+}
+
 async function renderMetrics() {
   const empty = {
     totalStudents: 0,
@@ -2548,7 +2574,7 @@ async function renderMetrics() {
     activeUsersToday: 0,
   };
   try {
-    const statsRes = await fetch(apiUrl("/admin/stats"));
+    const statsRes = await fetch(apiUrl("/admin/stats"), { headers: adminAuthHeaders() });
     if (statsRes.ok) {
       const d = await statsRes.json().catch(() => ({}));
       if (d && d.error) throw new Error(typeof d.error === "string" ? d.error : "Admin stats error");
@@ -2561,7 +2587,10 @@ async function renderMetrics() {
       return;
     }
 
-    const [usersRes, lessonsRes] = await Promise.all([fetch(apiUrl("/users")), fetch(apiUrl("/lessons"))]);
+    const [usersRes, lessonsRes] = await Promise.all([
+      fetch(apiUrl("/users"), { headers: adminAuthHeaders() }),
+      fetch(apiUrl("/lessons")),
+    ]);
     let uploadedFilesCount = 0;
     if (lessonsRes.ok) {
       const lessonData = await lessonsRes.json();
@@ -2622,7 +2651,7 @@ async function refreshAdminRecentActivity() {
   if (!list) return;
   list.innerHTML = '<li><span class="small-note">Loading…</span></li>';
   try {
-    const res = await fetch(apiUrl("/admin/recent-activity"));
+    const res = await fetch(apiUrl("/admin/recent-activity"), { headers: adminAuthHeaders() });
     if (!res.ok) throw new Error("activity");
     const data = await res.json().catch(() => ({}));
     if (data.error) {
@@ -2863,7 +2892,10 @@ function setupAdminTeacherRegistrationPage() {
     try {
       const response = await fetch(apiUrl("/register"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.access_token}`,
+        },
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
@@ -3469,7 +3501,7 @@ async function renderAdminTable(filter = "") {
   if (!tableBody) return;
 
   try {
-    const response = await fetch(apiUrl("/users"));
+    const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = `<tr><td colspan="5">Failed to load users from server.</td></tr>`;
       return;
@@ -3649,7 +3681,7 @@ async function loadPendingApprovals() {
   const q = (searchEl?.value || "").trim().toLowerCase();
 
   try {
-    const response = await fetch(apiUrl("/users"));
+    const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = '<tr><td colspan="4">Failed to load students.</td></tr>';
       return;
@@ -3703,7 +3735,7 @@ async function loadTeacherApprovals() {
   const q = (searchEl?.value || "").trim().toLowerCase();
 
   try {
-    const response = await fetch(apiUrl("/users"));
+    const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = '<tr><td colspan="4">Failed to load teachers.</td></tr>';
       return;
@@ -3819,7 +3851,7 @@ async function openAdminProfilePreviewModal(idNumber, titleText) {
   document.addEventListener("keydown", adminProfilePreviewModalOnKey);
 
   try {
-    const res = await fetch(apiUrl(`/admin/profile/${encodeURIComponent(id)}`));
+    const res = await fetch(apiUrl(`/admin/profile/${encodeURIComponent(id)}`), { headers: adminAuthHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = typeof data.error === "string" ? data.error : res.statusText || "Request failed";
@@ -4051,7 +4083,7 @@ async function loadAllUsers() {
   if (!tableBody) return;
 
   try {
-    const response = await fetch(apiUrl("/users"));
+    const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = '<tr><td colspan="6">Failed to load users.</td></tr>';
       return;
@@ -4219,7 +4251,7 @@ async function loadAttendanceLogs() {
 
   const emptyRow = '<tr><td colspan="4">No attendance records yet.</td></tr>';
   try {
-    const response = await fetch(apiUrl("/admin/attendance-logs"));
+    const response = await fetch(apiUrl("/admin/attendance-logs"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = '<tr><td colspan="4">Could not load attendance logs.</td></tr>';
       return;
@@ -4264,7 +4296,7 @@ async function loadJournals() {
   `;
 
   try {
-    const response = await fetch(apiUrl("/admin/journals-feed"));
+    const response = await fetch(apiUrl("/admin/journals-feed"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       grid.innerHTML = emptyHtml;
       return;
@@ -4309,7 +4341,7 @@ async function loadReports() {
   };
 
   try {
-    const res = await fetch(apiUrl("/admin/stats"));
+    const res = await fetch(apiUrl("/admin/stats"), { headers: adminAuthHeaders() });
     if (res.ok) {
       const d = await res.json().catch(() => ({}));
       if (!d.error) {
@@ -4327,7 +4359,7 @@ async function loadReports() {
   }
 
   try {
-    const response = await fetch(apiUrl("/users"));
+    const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (response.ok) {
       const users = await response.json();
       setText("report-total-users", users.length);
@@ -4394,7 +4426,9 @@ async function fetchTeacherLessonsList() {
       return [];
     }
 
-    const res = await fetch(apiUrl(`/teacher/lessons?teacher_id_number=${currentUser.id_number}`));
+    const res = await fetch(apiUrl(`/teacher/lessons?teacher_id_number=${currentUser.id_number}`), {
+      headers: adminAuthHeaders(),
+    });
     if (!res.ok) return [];
     const data = await res.json();
     return data.lessons || [];
@@ -4764,7 +4798,7 @@ async function publishLesson(lessonId) {
   try {
     const res = await fetch(apiUrl("/publish-lesson"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
       body: JSON.stringify({ file_id: id }),
     });
     await readApiJson(res);
@@ -4802,7 +4836,7 @@ async function unpublishLesson(lessonId) {
   try {
     const res = await fetch(apiUrl("/unpublish-lesson"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
       body: JSON.stringify({ file_id: id }),
     });
     await readApiJson(res);
@@ -4963,6 +4997,7 @@ async function uploadFile(file, subjectId = null) {
 
   const response = await fetch(apiUrl("/upload-file"), {
     method: "POST",
+    headers: adminAuthHeaders(),
     body: formData
   });
 
@@ -5023,7 +5058,7 @@ async function generateReviewer(fetchOpts = {}) {
 
   const response = await fetch(apiUrl("/generate-reviewer"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
     body: JSON.stringify({
       file_id: currentFileId,
       skip_cooldown: Boolean(fetchOpts.skipCooldown),
@@ -5042,7 +5077,7 @@ async function generateQuestion(fetchOpts = {}) {
 
   const response = await fetch(apiUrl("/generate-question"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
     body: JSON.stringify({
       file_id: currentFileId,
       skip_cooldown: Boolean(fetchOpts.skipCooldown),
@@ -5062,7 +5097,7 @@ async function generateActivities(fetchOpts = {}) {
 
   const response = await fetch(apiUrl("/generate-activities"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
     body: JSON.stringify({
       file_id: currentFileId,
       skip_cooldown: Boolean(fetchOpts.skipCooldown),
@@ -5402,7 +5437,7 @@ function setupTeacherDashboard() {
     try {
       const res = await fetch(apiUrl("/publish-lesson"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
         body: JSON.stringify({ file_id: currentFileId })
       });
       await readApiJson(res);
@@ -5499,7 +5534,7 @@ async function joinSubjectWithCode(joinCode) {
   }
   const res = await fetch(apiUrl("/subjects/join"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
     body: JSON.stringify({ join_code: code, student_id_number: studentId }),
   });
   const data = await res.json().catch(() => ({}));
@@ -5518,7 +5553,7 @@ async function regenerateSubjectJoinCode(subjectId) {
   }
   const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/regenerate-code`), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
     body: JSON.stringify({ teacher_id_number: teacherId }),
   });
   const data = await res.json().catch(() => ({}));
@@ -5570,6 +5605,13 @@ function buildSubjectCardHtml(subject, options = {}) {
   const lessonsLabel = count === 1 ? "1 lesson" : `${count} lessons`;
   const targetUrl = `my-lesson.html?subject_id=${encodeURIComponent(subject.id)}`;
   const status = String(subject.enrollment_status || "active").toLowerCase();
+  const teacherName = (subject.teacher_name || subject.teacher_id_number || "").trim();
+  const teacherAvatar = (subject.teacher_avatar_data || "").trim();
+  const teacherInitials = getUserInitials(teacherName || "Teacher");
+  const avatarStyle = teacherAvatar
+    ? ` style="background-image:url('${teacherAvatar.replace(/'/g, "%27")}');background-size:cover;background-position:center;"`
+    : "";
+  const isUnenrolled = archivedView && status === "unenrolled";
   const statusPill =
     status === "archived"
       ? '<span class="lesson-card-pill subject-status-pill"><i class="fa-solid fa-box-archive"></i> Archived</span>'
@@ -5592,26 +5634,34 @@ function buildSubjectCardHtml(subject, options = {}) {
         </div>
       </div>`
     : "";
-  const openBtn =
-    archivedView && status === "unenrolled"
-      ? `<span class="btn btn-secondary btn-small" aria-disabled="true">Unenrolled</span>`
-      : `<a class="btn btn-primary btn-small" href="${targetUrl}">Open Subject</a>`;
+  const bannerTag = isUnenrolled ? "div" : "a";
+  const bannerHref = isUnenrolled ? "" : ` href="${targetUrl}"`;
+
   return `
-    <article class="lesson-card subject-card-themed subject-card-with-menu" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
-      <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
-      <div class="lesson-info">
-        <h4>${escapeHtml(name)}</h4>
-        <div class="lesson-card-meta-row">
-          <span class="lesson-card-pill"><i class="fa-solid fa-layer-group"></i> ${lessonsLabel}</span>
-          <span class="lesson-card-pill"><i class="fa-solid fa-bookmark"></i> Subject</span>
-          ${statusPill}
+    <article class="subject-classroom-card" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+      <${bannerTag} class="subject-classroom-card-banner"${bannerHref} aria-label="Open ${escapeHtml(name)}">
+        <div class="subject-classroom-card-banner-text">
+          <h4>${escapeHtml(name)}</h4>
+          <span>${escapeHtml(teacherName || "Subject")}</span>
         </div>
-        <p class="lesson-card-tagline">${escapeHtml(description)}</p>
-        <p class="lesson-card-features small-note">Reviewer • Quiz • Activities</p>
+        <div class="subject-classroom-card-avatar"${avatarStyle} aria-hidden="true">${teacherAvatar ? "" : escapeHtml(teacherInitials)}</div>
+      </${bannerTag}>
+      <div class="subject-classroom-card-body">
+        <p class="subject-classroom-card-tagline">${escapeHtml(description)}</p>
+        ${statusPill ? `<div class="subject-classroom-card-status-row">${statusPill}</div>` : ""}
       </div>
-      ${menuHtml}
-      <div class="lesson-actions">
-        ${openBtn}
+      <div class="subject-classroom-card-footer">
+        <span class="subject-classroom-card-footer-stat" title="${lessonsLabel}">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i> ${lessonsLabel}
+        </span>
+        <div class="subject-classroom-card-footer-actions">
+          ${
+            isUnenrolled
+              ? `<span class="btn btn-secondary btn-small" aria-disabled="true">Unenrolled</span>`
+              : `<a class="btn btn-primary btn-small" href="${targetUrl}">Open</a>`
+          }
+          ${menuHtml}
+        </div>
       </div>
     </article>
   `;
@@ -5652,7 +5702,7 @@ async function patchStudentSubjectEnrollment(subjectId, action) {
     apiUrl(`/student/subjects/${encodeURIComponent(subjectId)}/enrollment`),
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
       body: JSON.stringify({ student_id_number: studentId, action }),
     }
   );
@@ -5704,7 +5754,10 @@ async function renderSubjectsPage() {
     const lessonsUrl = apiUrl(
       `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
     );
-    const [subjectsRes, lessonsRes] = await Promise.all([fetch(subjectsUrl), fetch(lessonsUrl)]);
+    const [subjectsRes, lessonsRes] = await Promise.all([
+      fetch(subjectsUrl, { headers: adminAuthHeaders() }),
+      fetch(lessonsUrl, { headers: adminAuthHeaders() }),
+    ]);
 
     let subjects = [];
     if (subjectsRes.ok) {
@@ -5925,7 +5978,10 @@ async function renderStudentArchivedPage() {
     const lessonsUrl = apiUrl(
       `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
     );
-    const [archivedRes, lessonsRes] = await Promise.all([fetch(archivedUrl), fetch(lessonsUrl)]);
+    const [archivedRes, lessonsRes] = await Promise.all([
+      fetch(archivedUrl, { headers: adminAuthHeaders() }),
+      fetch(lessonsUrl, { headers: adminAuthHeaders() }),
+    ]);
 
     let subjects = [];
     if (archivedRes.ok) {
@@ -6044,7 +6100,7 @@ async function renderTeacherSubjectsPage() {
     const ownerParam = encodeURIComponent(currentUser.id_number);
     const [subjectsRes, lessonsRes] = await Promise.all([
       fetch(apiUrl(`/subjects?owner_teacher_id_number=${ownerParam}`)),
-      fetch(apiUrl(`/teacher/lessons?teacher_id_number=${ownerParam}`)),
+      fetch(apiUrl(`/teacher/lessons?teacher_id_number=${ownerParam}`), { headers: adminAuthHeaders() }),
     ]);
 
     let subjects = [];
@@ -6427,6 +6483,87 @@ async function loadTeacherSubjectLessonsPage() {
   await loadTeacherDashboardLessons();
 }
 
+/** Teacher's own Class stream: post + feed for the subject in the URL. */
+async function loadTeacherAnnouncements() {
+  const subjectId = getTeacherDashboardSubjectFilter();
+  const feedEl = document.getElementById("teacher-announcements-feed");
+  const emptyEl = document.getElementById("teacher-announcements-empty");
+  if (!subjectId || !feedEl) return;
+
+  const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  if (!user?.access_token) return;
+
+  try {
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
+      headers: { Authorization: `Bearer ${user.access_token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not load announcements.");
+    const announcements = Array.isArray(data.announcements) ? data.announcements : [];
+    if (!announcements.length) {
+      feedEl.innerHTML = "";
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+    feedEl.innerHTML = renderAnnouncementFeedHtml(announcements);
+  } catch (e) {
+    feedEl.innerHTML = "";
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      emptyEl.textContent = e.message || "Could not load announcements.";
+    }
+  }
+}
+
+function bindTeacherAnnouncementForm() {
+  const form = document.getElementById("teacher-announcement-form");
+  const textEl = document.getElementById("teacher-announcement-text");
+  const postBtn = document.getElementById("teacher-announcement-post-btn");
+  if (!form || form.dataset.bound === "1") return;
+  form.dataset.bound = "1";
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const subjectId = getTeacherDashboardSubjectFilter();
+    const text = (textEl?.value || "").trim();
+    if (!subjectId || !text) return;
+
+    const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    if (!user?.access_token) {
+      showToast("Sign in required.", "error");
+      return;
+    }
+
+    if (postBtn) postBtn.disabled = true;
+    try {
+      const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.access_token}`,
+        },
+        body: JSON.stringify({ body: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not post announcement.");
+
+      const feedEl = document.getElementById("teacher-announcements-feed");
+      const emptyEl = document.getElementById("teacher-announcements-empty");
+      const announcements = Array.isArray(data.announcements) ? data.announcements : [];
+      if (feedEl) feedEl.innerHTML = renderAnnouncementFeedHtml(announcements);
+      if (emptyEl) emptyEl.hidden = announcements.length > 0;
+
+      if (textEl) textEl.value = "";
+      showToast("Announcement posted.", "success");
+    } catch (e) {
+      showToast(e.message || "Could not post announcement.", "error");
+    } finally {
+      if (postBtn) postBtn.disabled = false;
+    }
+  });
+}
+
 function setupTeacherSubjectLessonsPage() {
   const subjectId = getTeacherDashboardSubjectFilter();
   if (!subjectId || subjectId === "__unassigned__") {
@@ -6441,7 +6578,9 @@ function setupTeacherSubjectLessonsPage() {
   void hydrateTeacherSubjectLessonsPage();
   setupTeacherSubjectLessonsTabs();
   bindTeacherSubjectLessonUploadForm();
+  bindTeacherAnnouncementForm();
   void loadTeacherSubjectLessonsPage();
+  void loadTeacherAnnouncements();
 }
 
 function setupTeacherSubjectsPage() {
@@ -6847,7 +6986,7 @@ function buildAdminLessonCardHtml(lesson) {
 }
 
 async function fetchAdminTeachers() {
-  const res = await fetch(apiUrl("/users"));
+  const res = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
   if (!res.ok) throw new Error(`/users status ${res.status}`);
   const rows = await res.json();
   const list = Array.isArray(rows) ? rows : (rows.users || []);
@@ -7002,7 +7141,8 @@ async function renderAdminTeacherSubjectsView(teacherIdNumber) {
   let lessons = [];
   try {
     const res = await fetch(
-      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`)
+      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`),
+      { headers: adminAuthHeaders() }
     );
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -7136,7 +7276,8 @@ async function renderAdminTeacherLessonsView(teacherIdNumber, subjectId) {
   let allLessons = [];
   try {
     const res = await fetch(
-      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`)
+      apiUrl(`/teacher/lessons?teacher_id_number=${encodeURIComponent(teacherIdNumber)}`),
+      { headers: adminAuthHeaders() }
     );
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -7724,6 +7865,144 @@ function renderSubjectTeacherProfile() {
   applySubjectTeacherAvatar(avatarEl, teacherAvatar, teacherName);
 }
 
+let lastLoadedSubjectPeopleId = null;
+
+/** People tab classmates list (Teachers section reuses renderSubjectTeacherProfile). */
+async function loadSubjectPeople(subjectId) {
+  const listEl = document.getElementById("subject-classmates-list");
+  const countEl = document.getElementById("subject-classmates-count");
+  const emptyEl = document.getElementById("subject-classmates-empty");
+  if (!listEl) return;
+
+  if (!subjectId || String(subjectId) === "__unassigned__") {
+    listEl.innerHTML = "";
+    if (countEl) countEl.textContent = "";
+    if (emptyEl) emptyEl.hidden = true;
+    lastLoadedSubjectPeopleId = null;
+    return;
+  }
+  if (lastLoadedSubjectPeopleId === String(subjectId)) return;
+  lastLoadedSubjectPeopleId = String(subjectId);
+
+  const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  if (!user?.access_token) return;
+
+  try {
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/people`), {
+      headers: { Authorization: `Bearer ${user.access_token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not load classmates.");
+
+    const students = Array.isArray(data.students) ? data.students : [];
+    if (countEl) {
+      countEl.textContent = students.length ? `${students.length} ${students.length === 1 ? "student" : "students"}` : "";
+    }
+    if (!students.length) {
+      listEl.innerHTML = "";
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+    listEl.innerHTML = students
+      .map((s) => {
+        const name = getProfileDisplayName(s) || "Student";
+        const initials = getUserInitials(name);
+        return `
+      <div class="subject-people-row">
+        <div class="subject-people-row-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+        <span class="subject-people-row-name">${escapeHtml(name)}</span>
+      </div>`;
+      })
+      .join("");
+  } catch (e) {
+    lastLoadedSubjectPeopleId = null;
+    listEl.innerHTML = "";
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      emptyEl.textContent = e.message || "Could not load classmates.";
+    }
+    if (countEl) countEl.textContent = "";
+  }
+}
+
+/** Shared feed-item markup for Class Stream announcements (student read view + teacher's own feed). */
+function formatAnnouncementDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return d.toISOString().slice(0, 16);
+  }
+}
+
+function renderAnnouncementFeedHtml(announcements) {
+  return announcements
+    .map((a) => {
+      const name = (a.teacher_name || "Teacher").trim();
+      const initials = getUserInitials(name);
+      const when = formatAnnouncementDate(a.created_at);
+      return `
+      <article class="subject-announcement-item">
+        <div class="subject-announcement-head">
+          <div class="subject-announcement-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+          <div class="subject-announcement-meta">
+            <strong>${escapeHtml(name)}</strong>
+            <span>${escapeHtml(when)}</span>
+          </div>
+        </div>
+        <div class="subject-announcement-body">${escapeHtml(a.body || "")}</div>
+      </article>`;
+    })
+    .join("");
+}
+
+let lastLoadedSubjectAnnouncementsId = null;
+
+/** Stream tab feed (student read-only view). */
+async function loadSubjectAnnouncements(subjectId) {
+  const feedEl = document.getElementById("subject-announcements-feed");
+  const emptyEl = document.getElementById("subject-announcements-empty");
+  if (!feedEl) return;
+
+  if (!subjectId || String(subjectId) === "__unassigned__") {
+    feedEl.innerHTML = "";
+    if (emptyEl) emptyEl.hidden = true;
+    lastLoadedSubjectAnnouncementsId = null;
+    return;
+  }
+  if (lastLoadedSubjectAnnouncementsId === String(subjectId)) return;
+  lastLoadedSubjectAnnouncementsId = String(subjectId);
+
+  const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  if (!user?.access_token) return;
+
+  try {
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
+      headers: { Authorization: `Bearer ${user.access_token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not load announcements.");
+    const announcements = Array.isArray(data.announcements) ? data.announcements : [];
+    if (!announcements.length) {
+      feedEl.innerHTML = "";
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+    feedEl.innerHTML = renderAnnouncementFeedHtml(announcements);
+  } catch (e) {
+    lastLoadedSubjectAnnouncementsId = null;
+    feedEl.innerHTML = "";
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      emptyEl.textContent = e.message || "Could not load announcements.";
+    }
+  }
+}
+
 // Default subject color when none is set — stays in the yellow/gold family
 // (see the swatch palettes in teacher-subjects.html / admin-subjects.html).
 const DEFAULT_SUBJECT_COLOR = "#ca8a04";
@@ -7821,6 +8100,8 @@ function renderLessonSelection() {
 
   updateMyLessonHeaderForSubject();
   renderSubjectTeacherProfile();
+  loadSubjectPeople(selectedSubjectId);
+  loadSubjectAnnouncements(selectedSubjectId);
 
   const lessons = getActiveStudentLessons();
   selectionEl.hidden = false;
@@ -8211,7 +8492,7 @@ function showEmpty(message) {
           const idNumber = String(session?.id_number || "").trim() || null;
           fetch(apiUrl("/quiz-attempt"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
             body: JSON.stringify({
               lesson_id: lessonIdForBackend,
               score: correct,
@@ -8264,7 +8545,8 @@ function showEmpty(message) {
     }
     try {
       const res = await fetch(
-        apiUrl(`/student/subjects?student_id_number=${encodeURIComponent(studentId)}`)
+        apiUrl(`/student/subjects?student_id_number=${encodeURIComponent(studentId)}`),
+        { headers: adminAuthHeaders() }
       );
       if (!res.ok) {
         studentSubjects = [];
@@ -8315,7 +8597,7 @@ function showEmpty(message) {
       const apiUrlValue = apiUrl(
         `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
       );
-      const res = await fetch(apiUrlValue);
+      const res = await fetch(apiUrlValue, { headers: adminAuthHeaders() });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -8549,7 +8831,7 @@ function showEmpty(message) {
     try {
       const res = await fetch(endpointUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
         body: JSON.stringify(requestPayload),
         signal
       });
@@ -8681,21 +8963,21 @@ function showEmpty(message) {
           case "reviewer":
             response = await fetch(apiUrl("/generate-reviewer"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
               body: JSON.stringify(requestBody)
             });
             break;
           case "quiz":
             response = await fetch(apiUrl("/generate-question"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
               body: JSON.stringify(requestBody)
             });
             break;
           case "activity":
             response = await fetch(apiUrl("/generate-activities"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
               body: JSON.stringify(requestBody)
             });
             break;
@@ -9000,7 +9282,8 @@ async function fetchStudentHistoryFromServer() {
   studentHistoryServerCache.loading = true;
   try {
     const res = await fetch(
-      apiUrl(`/student/learning-history?student_id_number=${encodeURIComponent(idn)}`)
+      apiUrl(`/student/learning-history?student_id_number=${encodeURIComponent(idn)}`),
+      { headers: adminAuthHeaders() }
     );
     if (!res.ok) {
       console.warn("fetchStudentHistoryFromServer:", res.status);
@@ -9039,7 +9322,7 @@ async function persistStudentHistoryToServer(type, payload) {
   try {
     const res = await fetch(apiUrl("/student/learning-history"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
       body: JSON.stringify({
         student_id_number: idn,
         event_type: type,

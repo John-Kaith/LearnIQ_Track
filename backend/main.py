@@ -124,21 +124,72 @@ def student_id_number_from_authorization(authorization: str | None) -> str | Non
 
 
 def resolve_student_id_number_or_403(body: dict, authorization: str | None):
-    """Returns (id_number, None) or (None, JSONResponse)."""
+    """Returns (id_number, None) or (None, JSONResponse). A valid session
+    token is always required now — a request used to be able to skip
+    signing in entirely and just declare a student_id_number in the body,
+    which meant anyone could act as any student without ever logging in.
+    (Confirmed every current caller already sends a token; see
+    backend_auth_audit_phases memory / Phase 3 for the audit.)"""
     token_sid = student_id_number_from_authorization(authorization)
+    if not token_sid:
+        return None, JSONResponse({"error": "Sign in required."}, status_code=401)
     body_sid = (body.get("student_id_number") or body.get("student_id") or "").strip()
-    if token_sid and body_sid and body_sid != token_sid:
+    if body_sid and body_sid != token_sid:
         return None, JSONResponse(
             {"error": "student_id_number does not match signed-in user."},
             status_code=403,
         )
-    sid = token_sid or body_sid
-    if not sid:
-        return None, JSONResponse(
-            {"error": "Sign in required, or pass student_id_number in the request body."},
-            status_code=401,
-        )
-    return sid, None
+    return token_sid, None
+
+
+def _can_view_student_data(
+    authorization: str | None, target_student_id_number: str
+) -> tuple[bool, str | None, JSONResponse | None]:
+    """True if the caller may view/act on this student's data: the student
+    themselves, an admin, or a teacher who has this student enrolled in one
+    of their subjects. Returns (allowed, caller_idn, error_response)."""
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return False, None, JSONResponse({"error": "Sign in required."}, status_code=401)
+    target = str(target_student_id_number or "").strip()
+    if caller_idn == target:
+        return True, caller_idn, None
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if role == "admin":
+        return True, caller_idn, None
+    if role == "teacher":
+        target_prof = db_supabase.get_profile_by_id_number(target)
+        target_uuid = str((target_prof or {}).get("id") or "")
+        if target_uuid and target_uuid in db_supabase._student_uuids_enrolled_in_teacher_subjects(caller_idn):
+            return True, caller_idn, None
+    return False, caller_idn, JSONResponse(
+        {"error": "You don't have access to this student's data."}, status_code=403
+    )
+
+
+def _require_signed_in(authorization: str | None) -> JSONResponse | None:
+    """Any signed-in student/teacher/admin — just blocks anonymous callers
+    from spending the AI generation budget. Returns an error response, or
+    None if the caller is signed in."""
+    if not student_id_number_from_authorization(authorization):
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    return None
+
+
+def _can_view_teacher_data(authorization: str | None, target_teacher_id_number: str) -> tuple[bool, JSONResponse | None]:
+    """True if the caller may view this teacher's own data: that teacher, or an admin."""
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return False, JSONResponse({"error": "Sign in required."}, status_code=401)
+    target = str(target_teacher_id_number or "").strip()
+    if caller_idn == target:
+        return True, None
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if role == "admin":
+        return True, None
+    return False, JSONResponse({"error": "You don't have access to this teacher's data."}, status_code=403)
 
 
 def gemini_text_from_result(result: dict) -> str:
@@ -652,7 +703,7 @@ def _normalize_name_suffix(raw: str) -> str | None:
 
 
 @app.post("/register")
-async def register_user(body: dict):
+async def register_user(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
@@ -681,6 +732,20 @@ async def register_user(body: dict):
 
         if role not in ("student", "teacher"):
             role = "student"
+
+        # Teacher accounts can only be created by an admin — no public
+        # teacher self-signup. The caller must present a valid admin
+        # Bearer token (admin-teacher-registration.html sends its own
+        # session token); a client-supplied flag would be spoofable, so
+        # this is enforced server-side via the token itself.
+        if role == "teacher":
+            creator_idn = student_id_number_from_authorization(authorization)
+            creator_prof = db_supabase.get_profile_by_id_number(creator_idn) if creator_idn else None
+            if not creator_prof or str(creator_prof.get("role") or "").strip().lower() != "admin":
+                return JSONResponse(
+                    {"error": "Teacher accounts can only be created by an admin."},
+                    status_code=403,
+                )
 
         last_name = (body.get("last_name") or "").strip()
         first_name = (body.get("first_name") or "").strip()
@@ -816,10 +881,13 @@ async def register_user(body: dict):
 
 
 @app.get("/users")
-def get_users():
+def get_users(authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         rows = db_supabase.get_all_profiles()
         out = []
@@ -833,11 +901,14 @@ def get_users():
 
 
 @app.get("/admin/stats")
-def get_admin_dashboard_stats():
+def get_admin_dashboard_stats(authorization: str | None = Header(default=None)):
     """Aggregated metrics for the admin dashboard (Supabase)."""
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         return db_supabase.get_admin_dashboard_stats()
     except Exception as e:
@@ -845,10 +916,16 @@ def get_admin_dashboard_stats():
 
 
 @app.get("/admin/attendance-logs")
-def admin_list_attendance_logs(limit: int = Query(default=200, ge=1, le=500)):
+def admin_list_attendance_logs(
+    limit: int = Query(default=200, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+):
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         return {"logs": db_supabase.list_all_attendance_logs(limit)}
     except Exception as e:
@@ -856,11 +933,17 @@ def admin_list_attendance_logs(limit: int = Query(default=200, ge=1, le=500)):
 
 
 @app.get("/admin/journals-feed")
-def admin_list_journals_feed(limit: int = Query(default=200, ge=1, le=500)):
+def admin_list_journals_feed(
+    limit: int = Query(default=200, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+):
     """All journal submissions (admin)."""
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         return {"journals": db_supabase.list_all_journals_admin(limit)}
     except Exception as e:
@@ -868,11 +951,14 @@ def admin_list_journals_feed(limit: int = Query(default=200, ge=1, le=500)):
 
 
 @app.get("/admin/profile/{id_number}")
-def admin_get_profile_by_id_number(id_number: str):
+def admin_get_profile_by_id_number(id_number: str, authorization: str | None = Header(default=None)):
     """Single profile row from Supabase (admin UI / modals). Password omitted."""
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         prof = db_supabase.get_profile_by_id_number(id_number)
         if not prof:
@@ -885,11 +971,17 @@ def admin_get_profile_by_id_number(id_number: str):
 
 
 @app.get("/admin/recent-activity")
-def admin_recent_activity(limit: int = Query(default=12, ge=1, le=50)):
+def admin_recent_activity(
+    limit: int = Query(default=12, ge=1, le=50),
+    authorization: str | None = Header(default=None),
+):
     """Recent registrations, uploads, and quiz attempts for the admin dashboard."""
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         return {"items": db_supabase.get_admin_recent_activity(limit)}
     except Exception as e:
@@ -900,10 +992,16 @@ def admin_recent_activity(limit: int = Query(default=12, ge=1, le=50)):
 
 
 @app.get("/teacher/lessons")
-def list_teacher_lessons(teacher_id_number: str = Query(...)):
-    err = require_supabase()    
+def list_teacher_lessons(
+    teacher_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
+):
+    err = require_supabase()
     if err is not None:
         return err
+    allowed, bad = _can_view_teacher_data(authorization, teacher_id_number)
+    if not allowed:
+        return bad
     try:
         rows = db_supabase.list_teacher_lessons(teacher_id_number)
         return {"lessons": [db_supabase.lesson_to_api_list_item(r) for r in rows]}
@@ -1033,7 +1131,7 @@ def list_all_lessons_admin():
 
 
 @app.post("/publish-lesson")
-async def publish_lesson(body: dict):
+async def publish_lesson(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
@@ -1041,8 +1139,12 @@ async def publish_lesson(body: dict):
     if not lesson_id:
         return JSONResponse({"error": "lesson_id (or file_id) is required."}, status_code=400)
     try:
-        if not db_supabase.get_lesson_row(str(lesson_id)):
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
             return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        allowed, bad = _can_view_teacher_data(authorization, str(lesson.get("teacher_id_number") or ""))
+        if not allowed:
+            return bad
         db_supabase.publish_lesson(str(lesson_id))
         return {"published_file_id": lesson_id, "message": "Students can now open this lesson on their dashboard."}
     except Exception as e:
@@ -1050,7 +1152,7 @@ async def publish_lesson(body: dict):
 
 
 @app.post("/unpublish-lesson")
-async def unpublish_lesson(body: dict):
+async def unpublish_lesson(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
@@ -1058,9 +1160,15 @@ async def unpublish_lesson(body: dict):
     if not lesson_id:
         return JSONResponse({"error": "lesson_id (or file_id) is required."}, status_code=400)
     try:
-        if not db_supabase.get_lesson_row(str(lesson_id)):
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
             return JSONResponse({"error": "Lesson not found."}, status_code=404)
-        db_supabase.unpublish_all_lessons()
+        allowed, bad = _can_view_teacher_data(authorization, str(lesson.get("teacher_id_number") or ""))
+        if not allowed:
+            return bad
+        # Bug fix: this used to call unpublish_all_lessons(), silently
+        # unpublishing every lesson school-wide instead of just this one.
+        db_supabase.unpublish_lesson(str(lesson_id))
         return {"unpublished_file_id": lesson_id, "message": "Lesson is no longer visible to students."}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -1070,6 +1178,7 @@ async def unpublish_lesson(body: dict):
 def get_student_lessons(
     subject_id: str | None = None,
     student_id_number: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     err = require_supabase()
     if err is not None:
@@ -1080,6 +1189,9 @@ def get_student_lessons(
             {"error": "student_id_number is required to list lessons."},
             status_code=400,
         )
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     student_uuid = db_supabase.profile_uuid_for_id_number(sid)
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
@@ -1105,6 +1217,7 @@ def get_student_lessons(
 def list_student_enrolled_subjects_endpoint(
     student_id_number: str = Query(...),
     period_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     """Subjects the student is enrolled in (current grading period by default)."""
     err = require_supabase()
@@ -1113,6 +1226,9 @@ def list_student_enrolled_subjects_endpoint(
     sid = str(student_id_number or "").strip()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     student_uuid = db_supabase.profile_uuid_for_id_number(sid)
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
@@ -1127,6 +1243,7 @@ def list_student_enrolled_subjects_endpoint(
 def list_student_archived_subjects_endpoint(
     student_id_number: str = Query(...),
     period_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     """Subjects the student archived or unenrolled (hidden unenrolled from My subjects)."""
     err = require_supabase()
@@ -1135,6 +1252,9 @@ def list_student_archived_subjects_endpoint(
     sid = str(student_id_number or "").strip()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     student_uuid = db_supabase.profile_uuid_for_id_number(sid)
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
@@ -1149,13 +1269,16 @@ def list_student_archived_subjects_endpoint(
 async def patch_student_subject_enrollment_endpoint(
     subject_id: str,
     body: dict = Body(...),
+    authorization: str | None = Header(default=None),
 ):
     """Archive or unenroll a student from a subject (updates Supabase enrollments)."""
     err = require_supabase()
     if err is not None:
         return err
     payload = body if isinstance(body, dict) else {}
-    student_id_number = str(payload.get("student_id_number") or "").strip()
+    student_id_number, bad = resolve_student_id_number_or_403(payload, authorization)
+    if bad is not None:
+        return bad
     action = str(payload.get("action") or "").strip().lower()
     if not student_id_number:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
@@ -1244,17 +1367,32 @@ def list_subjects_endpoint(
 
 
 @app.post("/subjects")
-async def create_subject_endpoint(body: dict):
-    """Create a new subject row (used by Teacher 'Add Subject' modal)."""
+async def create_subject_endpoint(body: dict, authorization: str | None = Header(default=None)):
+    """Create a new subject row (used by Teacher 'Add Subject' modal, and
+    Admin's global Add Subject modal)."""
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if role not in ("teacher", "admin"):
+        return JSONResponse({"error": "Only teachers or admins can create subjects."}, status_code=403)
+
     name = (body.get("name") or "").strip()
     if not name:
         return JSONResponse({"error": "Subject name is required."}, status_code=400)
     description = body.get("description")
     color = body.get("color")
-    created_by = (body.get("created_by_teacher_id_number") or body.get("teacher_id_number") or "").strip() or None
+    # A teacher can only create a subject owned by themselves — the caller's
+    # own token identity, not whatever the request body claims. Admin may
+    # leave it unowned (school-wide) or set any teacher explicitly.
+    if role == "teacher":
+        created_by = caller_idn
+    else:
+        created_by = (body.get("created_by_teacher_id_number") or body.get("teacher_id_number") or "").strip() or None
     deped_category = body.get("deped_category")
     try:
         row = db_supabase.create_subject(
@@ -1280,14 +1418,16 @@ async def create_subject_endpoint(body: dict):
 
 
 @app.post("/subjects/join")
-async def join_subject_with_code_endpoint(body: dict = Body(...)):
+async def join_subject_with_code_endpoint(body: dict = Body(...), authorization: str | None = Header(default=None)):
     """Student joins a subject using a join code."""
     err = require_supabase()
     if err is not None:
         return err
     payload = body if isinstance(body, dict) else {}
     join_code = str(payload.get("join_code") or payload.get("code") or "").strip()
-    student_id_number = str(payload.get("student_id_number") or "").strip()
+    student_id_number, bad = resolve_student_id_number_or_403(payload, authorization)
+    if bad is not None:
+        return bad
     if not join_code:
         return JSONResponse({"error": "join_code is required"}, status_code=400)
     if not student_id_number:
@@ -1314,8 +1454,112 @@ async def join_subject_with_code_endpoint(body: dict = Body(...)):
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.get("/subjects/{subject_id}/people")
+def subject_people_endpoint(subject_id: str, authorization: str | None = Header(default=None)):
+    """People tab: the subject's teacher + classmates roster. Only the
+    owning teacher, an enrolled student, or an admin may view it."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    if not caller_prof:
+        return JSONResponse({"error": "Profile not found."}, status_code=404)
+
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+
+    if not _subject_people_access(subject, caller_prof, caller_idn):
+        return JSONResponse({"error": "You don't have access to this class."}, status_code=403)
+
+    try:
+        students = db_supabase.list_students_enrolled_in_subject(subject_id)
+        teacher_idn = str(subject.get("created_by_teacher_id_number") or "").strip()
+        teacher_prof = db_supabase.get_profile_by_id_number(teacher_idn) if teacher_idn else None
+        teacher = db_supabase.serialize_public_profile(teacher_prof) if teacher_prof else None
+        return {"teacher": teacher, "students": students, "count": len(students)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _subject_people_access(subject: dict, caller_prof: dict | None, caller_idn: str) -> bool:
+    """Shared access check: owning teacher, an enrolled student, or admin."""
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if role == "admin":
+        return True
+    if role == "teacher":
+        return str(subject.get("created_by_teacher_id_number") or "").strip() == caller_idn
+    if role == "student":
+        student_uuid = str((caller_prof or {}).get("id") or "")
+        return db_supabase.student_enrolled_in_subject(student_uuid, subject.get("id"))
+    return False
+
+
+@app.get("/subjects/{subject_id}/announcements")
+def list_subject_announcements_endpoint(subject_id: str, authorization: str | None = Header(default=None)):
+    """Class Stream feed — same access as the People tab (owning teacher,
+    enrolled student, or admin)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    if not caller_prof:
+        return JSONResponse({"error": "Profile not found."}, status_code=404)
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+    if not _subject_people_access(subject, caller_prof, caller_idn):
+        return JSONResponse({"error": "You don't have access to this class."}, status_code=403)
+    try:
+        return {"announcements": db_supabase.list_subject_announcements(subject_id)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/subjects/{subject_id}/announcements")
+async def create_subject_announcement_endpoint(
+    subject_id: str,
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Only the subject's owning teacher may post to the Class Stream."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+    if role != "teacher" or str(subject.get("created_by_teacher_id_number") or "").strip() != caller_idn:
+        return JSONResponse({"error": "Only this subject's teacher can post announcements."}, status_code=403)
+    text = str((body or {}).get("body") or "").strip()
+    if not text:
+        return JSONResponse({"error": "Announcement text is required."}, status_code=400)
+    try:
+        db_supabase.create_subject_announcement(subject_id, caller_idn, text)
+        return {"announcements": db_supabase.list_subject_announcements(subject_id)}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.post("/subjects/{subject_id}/regenerate-code")
-async def regenerate_subject_join_code_endpoint(subject_id: str, body: dict = Body(...)):
+async def regenerate_subject_join_code_endpoint(
+    subject_id: str,
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
     """Teacher regenerates join code; existing enrollments are kept."""
     err = require_supabase()
     if err is not None:
@@ -1328,6 +1572,9 @@ async def regenerate_subject_join_code_endpoint(subject_id: str, body: dict = Bo
     ).strip()
     if not teacher_id_number:
         return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    allowed, bad = _can_view_teacher_data(authorization, teacher_id_number)
+    if not allowed:
+        return bad
     try:
         row = db_supabase.regenerate_subject_join_code(subject_id, teacher_id_number)
         return _subject_response(row)
@@ -1340,13 +1587,16 @@ async def regenerate_subject_join_code_endpoint(subject_id: str, body: dict = Bo
 
 
 @app.put("/subjects/{subject_id}")
-async def update_subject_endpoint(subject_id: str, body: dict):
-    """Update a subject row (name/description/color). Admin-only in spirit."""
+async def update_subject_endpoint(subject_id: str, body: dict, authorization: str | None = Header(default=None)):
+    """Update a subject row (name/description/color). Admin-only."""
     err = require_supabase()
     if err is not None:
         return err
     if not subject_id:
         return JSONResponse({"error": "subject_id is required."}, status_code=400)
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         row = db_supabase.update_subject(
             subject_id=subject_id,
@@ -1801,15 +2051,19 @@ def view_student_lesson_file(
 
 
 @app.delete("/lessons/{lesson_id}")
-async def delete_lesson_endpoint(lesson_id: str):
+async def delete_lesson_endpoint(lesson_id: str, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
     if not lesson_id:
         return JSONResponse({"error": "lesson_id is required."}, status_code=400)
     try:
-        if not db_supabase.get_lesson_row(str(lesson_id)):
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
             return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        allowed, bad = _can_view_teacher_data(authorization, str(lesson.get("teacher_id_number") or ""))
+        if not allowed:
+            return bad
         db_supabase.delete_lesson(str(lesson_id))
         return {"deleted_lesson_id": lesson_id}
     except Exception as e:
@@ -1817,14 +2071,21 @@ async def delete_lesson_endpoint(lesson_id: str):
 
 
 @app.delete("/subjects/{subject_id}")
-async def delete_subject_endpoint(subject_id: str):
+async def delete_subject_endpoint(subject_id: str, authorization: str | None = Header(default=None)):
     """Delete a subject. Any lesson referencing it will have its subject_id set
-    to NULL first (so legacy lessons appear under 'Unassigned')."""
+    to NULL first (so legacy lessons appear under 'Unassigned'). The owning
+    teacher or an admin may delete it."""
     err = require_supabase()
     if err is not None:
         return err
     if not subject_id:
         return JSONResponse({"error": "subject_id is required."}, status_code=400)
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+    allowed, bad = _can_view_teacher_data(authorization, str(subject.get("created_by_teacher_id_number") or ""))
+    if not allowed:
+        return bad
     try:
         db_supabase.delete_subject(subject_id)
         return {"deleted_subject_id": subject_id}
@@ -1833,7 +2094,7 @@ async def delete_subject_endpoint(subject_id: str):
 
 
 @app.post("/lesson/subject")
-async def set_lesson_subject(body: dict):
+async def set_lesson_subject(body: dict, authorization: str | None = Header(default=None)):
     """Teacher edit: assign or change the subject of an existing lesson."""
     err = require_supabase()
     if err is not None:
@@ -1845,8 +2106,12 @@ async def set_lesson_subject(body: dict):
     if subject_id is not None:
         subject_id = str(subject_id) or None
     try:
-        if not db_supabase.get_lesson_row(str(lesson_id)):
+        lesson = db_supabase.get_lesson_row(str(lesson_id))
+        if not lesson:
             return JSONResponse({"error": "Lesson not found."}, status_code=404)
+        allowed, bad = _can_view_teacher_data(authorization, str(lesson.get("teacher_id_number") or ""))
+        if not allowed:
+            return bad
         db_supabase.update_lesson_subject(str(lesson_id), subject_id)
         return {"lesson_id": lesson_id, "subject_id": subject_id}
     except Exception as e:
@@ -1953,18 +2218,27 @@ def get_student_learning_iq_endpoint(authorization: str | None = Header(default=
 
 
 @app.post("/upload-lesson")
-async def upload_lesson_json(body: dict):
+async def upload_lesson_json(body: dict, authorization: str | None = Header(default=None)):
     """Create a lesson row from JSON (same data as your Flask sample, without a file upload)."""
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if role not in ("teacher", "admin"):
+        return JSONResponse({"error": "Only teachers or admins can upload lessons."}, status_code=403)
     try:
         filename = (body.get("filename") or "").strip()
         if not filename:
             return JSONResponse({"error": "filename is required."}, status_code=400)
         text = body.get("extracted_text") or body.get("text") or ""
         ft = (body.get("file_type") or Path(filename).suffix.lstrip(".") or "unknown").strip()
-        tid = body.get("teacher_id_number") or body.get("teacher_id")
+        # Teachers can only upload under their own name — the token identity,
+        # not whatever teacher_id_number the request body claims.
+        tid = caller_idn if role == "teacher" else (body.get("teacher_id_number") or body.get("teacher_id"))
         if tid is not None:
             tid = str(tid)
         subject_id = body.get("subject_id")
@@ -1988,6 +2262,7 @@ async def upload_file(
     file: UploadFile = File(...),
     teacher_id_number: str = Form(...),
     subject_id: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
 ):
     print("UPLOAD CALLED")
     print("Filename:", file.filename)
@@ -1997,6 +2272,10 @@ async def upload_file(
     err = require_supabase()
     if err is not None:
         return err
+
+    allowed, _ = _can_view_teacher_data(authorization, teacher_id_number)
+    if not allowed:
+        return JSONResponse({"error": "You can only upload lessons under your own teacher account."}, status_code=403)
 
     # Recreate dirs if someone deleted `uploads/` while the API is running (mount + any legacy paths).
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2071,9 +2350,12 @@ async def upload_file(
 
 
 @app.post("/generate-reviewer")
-async def generate_reviewer(body: dict):
+async def generate_reviewer(body: dict, authorization: str | None = Header(default=None)):
     print("AI GENERATION REQUEST RECEIVED: /generate-reviewer")
     print("REQUEST PAYLOAD:", body)
+    auth_err = _require_signed_in(authorization)
+    if auth_err is not None:
+        return auth_err
     key_err = require_gemini_key()
     if key_err is not None:
         print("AI GENERATION ERROR (gemini key):", key_err.body if hasattr(key_err, "body") else key_err)
@@ -2133,9 +2415,12 @@ async def generate_reviewer(body: dict):
 
 
 @app.post("/generate-question")
-async def generate_question(body: dict):
+async def generate_question(body: dict, authorization: str | None = Header(default=None)):
     print("AI GENERATION REQUEST RECEIVED: /generate-question")
     print("REQUEST PAYLOAD:", body)
+    auth_err = _require_signed_in(authorization)
+    if auth_err is not None:
+        return auth_err
     key_err = require_gemini_key()
     if key_err is not None:
         print("AI GENERATION ERROR (gemini key):", key_err.body if hasattr(key_err, "body") else key_err)
@@ -2249,8 +2534,11 @@ def normalize_battle_questions(questions: object) -> list[dict[str, str]]:
 
 
 @app.post("/generate-battle-questions")
-async def generate_battle_questions(body: dict):
+async def generate_battle_questions(body: dict, authorization: str | None = Header(default=None)):
     print("AI GENERATION REQUEST RECEIVED: /generate-battle-questions")
+    auth_err = _require_signed_in(authorization)
+    if auth_err is not None:
+        return auth_err
     key_err = require_gemini_key()
     if key_err is not None:
         return key_err
@@ -2326,9 +2614,12 @@ async def generate_battle_questions(body: dict):
 
 
 @app.post("/generate-activities")
-async def generate_activities(body: dict):
+async def generate_activities(body: dict, authorization: str | None = Header(default=None)):
     print(f"[DEBUG] /generate-activities called with body: {body}")
-    
+    auth_err = _require_signed_in(authorization)
+    if auth_err is not None:
+        return auth_err
+
     key_err = require_gemini_key()
     if key_err is not None:
         print(f"[DEBUG] Gemini key error: {key_err}")
@@ -2463,11 +2754,14 @@ async def generate_activities(body: dict):
 
 
 @app.post("/save-ai-content")
-async def save_ai_content(body: dict):
+async def save_ai_content(body: dict, authorization: str | None = Header(default=None)):
     """Save reviewer, quiz, and/or activities for a lesson (manual or external tools)."""
     err = require_supabase()
     if err is not None:
         return err
+    auth_err = _require_signed_in(authorization)
+    if auth_err is not None:
+        return auth_err
     lesson_id = body.get("lesson_id") or body.get("file_id")
     if not lesson_id:
         return JSONResponse({"error": "lesson_id or file_id is required."}, status_code=400)
@@ -2525,6 +2819,7 @@ def get_content(file_id: str):
 @app.get("/student/learning-history")
 def student_learning_history_endpoint(
     student_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
 ):
     """Quiz / reviewer / activity history from database (History page)."""
     err = require_supabase()
@@ -2533,6 +2828,9 @@ def student_learning_history_endpoint(
     sid = str(student_id_number or "").strip()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     try:
         data = db_supabase.get_student_learning_history(sid)
         return {
@@ -2553,13 +2851,18 @@ def student_learning_history_endpoint(
 
 
 @app.post("/student/learning-history")
-async def student_learning_history_post_endpoint(body: dict = Body(...)):
+async def student_learning_history_post_endpoint(
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
     """Record reviewer or activity history event."""
     err = require_supabase()
     if err is not None:
         return err
     payload = body if isinstance(body, dict) else {}
-    sid = str(payload.get("student_id_number") or "").strip()
+    sid, bad = resolve_student_id_number_or_403(payload, authorization)
+    if bad is not None:
+        return bad
     event_type = str(payload.get("event_type") or payload.get("type") or "").strip().lower()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
@@ -2586,7 +2889,7 @@ async def student_learning_history_post_endpoint(body: dict = Body(...)):
 
 
 @app.post("/quiz-attempt")
-async def quiz_attempt(body: dict):
+async def quiz_attempt(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
@@ -2594,12 +2897,15 @@ async def quiz_attempt(body: dict):
         lesson_id = body.get("lesson_id") or body.get("file_id")
         if not lesson_id:
             return JSONResponse({"error": "lesson_id (or file_id) is required."}, status_code=400)
+        student_id_number, bad = resolve_student_id_number_or_403(body, authorization)
+        if bad is not None:
+            return bad
         row = db_supabase.insert_quiz_attempt(
             str(lesson_id),
             score=int(body.get("score", 0)),
             total_questions=int(body.get("total_questions", 0)),
             answers=body.get("answers"),
-            student_id_number=body.get("student_id_number"),
+            student_id_number=student_id_number,
         )
         return row
     except Exception as e:
@@ -3118,10 +3424,13 @@ async def submit_journal(
 
 
 @app.get("/attendance/{student_id}")
-def get_attendance(student_id: str):
+def get_attendance(student_id: str, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    allowed, _, bad = _can_view_student_data(authorization, student_id)
+    if not allowed:
+        return bad
     try:
         return db_supabase.list_attendance_by_student(student_id)
     except Exception as e:
@@ -3129,10 +3438,17 @@ def get_attendance(student_id: str):
 
 
 @app.get("/journals/{student_id}")
-def get_journals(student_id: str):
+def get_journals(student_id: str, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    if caller_idn != student_id:
+        caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+        if str((caller_prof or {}).get("role") or "").strip().lower() != "admin":
+            return JSONResponse({"error": "You don't have access to this student's journals."}, status_code=403)
     try:
         return db_supabase.list_journals_for_student(student_id)
     except Exception as e:
@@ -3140,12 +3456,14 @@ def get_journals(student_id: str):
 
 
 @app.post("/attendance")
-async def attendance(body: dict):
+async def attendance(body: dict, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
     try:
-        sid = (body.get("student_id_number") or "").strip()
+        sid, bad = resolve_student_id_number_or_403(body, authorization)
+        if bad is not None:
+            return bad
         ev = (body.get("event_type") or "").strip().lower()
         if not sid or ev not in ("time_in", "time_out"):
             return JSONResponse(
@@ -3158,10 +3476,13 @@ async def attendance(body: dict):
 
 
 @app.get("/attendance")
-def attendance_list(student_id_number: str):
+def attendance_list(student_id_number: str, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    allowed, _, bad = _can_view_student_data(authorization, student_id_number)
+    if not allowed:
+        return bad
     try:
         return db_supabase.list_attendance_for_student(student_id_number)
     except Exception as e:
@@ -3242,6 +3563,7 @@ def current_grading_period_endpoint():
 @app.get("/teacher/gradecard/strands")
 def teacher_gradecard_strands_endpoint(
     teacher_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
 ):
     """Strand tiles with student counts (teacher's enrolled students only)."""
     err = require_supabase()
@@ -3250,6 +3572,9 @@ def teacher_gradecard_strands_endpoint(
     tid = str(teacher_id_number or "").strip()
     if not tid:
         return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    allowed, bad = _can_view_teacher_data(authorization, tid)
+    if not allowed:
+        return bad
     try:
         strands = db_supabase.list_gradecard_strands_for_teacher(tid)
         return {"strands": strands, "count": len(strands)}
@@ -3910,8 +4235,9 @@ async def student_class_attendance_qr_checkin_endpoint(
     authorization: str | None = Header(default=None),
     body: dict = Body(...),
 ):
-    """Student scans the teacher's rotating QR to check themselves in — the
-    reverse of the old teacher-scans-student flow. No photo/GPS: the QR
+    """Student scans the teacher's rotating QR to check themselves in or
+    out — first scan = time in, second scan (before the session ends) =
+    time out, mirroring Immersion's time-in/time-out. No photo/GPS: the QR
     itself expires in ~15s, so only someone physically looking at the
     teacher's screen right now can scan it."""
     err = require_supabase()
@@ -3930,13 +4256,14 @@ async def student_class_attendance_qr_checkin_endpoint(
         return JSONResponse({"error": "Student profile not found."}, status_code=404)
     student_uuid = str(prof.get("id") or "")
     try:
-        record = db_supabase.insert_class_attendance_checkin_via_qr(
+        action, record = db_supabase.class_attendance_qr_toggle(
             student_uuid,
             student_id,
             subject_id,
-            time_in_iso=datetime.now(timezone.utc).isoformat(),
+            now_iso=datetime.now(timezone.utc).isoformat(),
         )
         return {
+            "action": action,
             "record": record,
             "student_id_number": student_id,
             "student_name": db_supabase.profile_display_name(prof) or student_id,
@@ -3945,7 +4272,7 @@ async def student_class_attendance_qr_checkin_endpoint(
         return JSONResponse({"error": str(e)}, status_code=403)
     except ValueError as e:
         msg = str(e)
-        status_code = 409 if "already checked in" in msg.lower() else 400
+        status_code = 409 if "already checked out" in msg.lower() else 400
         return JSONResponse({"error": msg}, status_code=status_code)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -3957,6 +4284,7 @@ def teacher_gradecard_students_endpoint(
     strand: str = Query(...),
     q: str | None = Query(default=None),
     grade_level: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     """Students in a strand enrolled in the teacher's subjects."""
     err = require_supabase()
@@ -3965,6 +4293,9 @@ def teacher_gradecard_students_endpoint(
     tid = str(teacher_id_number or "").strip()
     if not tid:
         return JSONResponse({"error": "teacher_id_number is required"}, status_code=400)
+    allowed, bad = _can_view_teacher_data(authorization, tid)
+    if not allowed:
+        return bad
     st = str(strand or "").strip()
     if not st:
         return JSONResponse({"error": "strand is required"}, status_code=400)
@@ -3991,6 +4322,7 @@ def teacher_gradecard_students_endpoint(
 def get_gradecard_endpoint(
     student_id_number: str = Query(...),
     period_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     err = require_supabase()
     if err is not None:
@@ -3998,6 +4330,9 @@ def get_gradecard_endpoint(
     sid = str(student_id_number or "").strip()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     try:
         data = db_supabase.build_full_gradecard(sid, period_id)
         return data
@@ -4011,11 +4346,19 @@ def get_gradecard_endpoint(
 
 
 @app.post("/student-grades")
-async def save_student_grade_endpoint(body: dict = Body(...)):
+async def save_student_grade_endpoint(body: dict = Body(...), authorization: str | None = Header(default=None)):
     """Teacher saves / updates a per-subject grade row."""
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    caller_role = str((caller_prof or {}).get("role") or "").strip().lower()
+    if caller_role not in ("teacher", "admin"):
+        return JSONResponse({"error": "Only teachers or admins can save grades."}, status_code=403)
+
     payload = body if isinstance(body, dict) else {}
 
     student_id_number = str(payload.get("student_id_number") or "").strip()
@@ -4039,8 +4382,10 @@ async def save_student_grade_endpoint(body: dict = Body(...)):
         return JSONResponse({"error": "Student not found"}, status_code=404)
 
     profile = db_supabase.get_profile_by_id_number(student_id_number) or {}
+    # A teacher can only sign a grade as themselves — the token identity, not
+    # whatever teacher_id_number the request body claims.
     partial: dict = {
-        "teacher_id_number": payload.get("teacher_id_number"),
+        "teacher_id_number": caller_idn if caller_role == "teacher" else payload.get("teacher_id_number"),
         "written_work_score": payload.get("written_work_score"),
         "performance_task_score": payload.get("performance_task_score"),
         "quarterly_assessment_score": payload.get("quarterly_assessment_score"),
@@ -4069,11 +4414,17 @@ async def save_student_grade_endpoint(body: dict = Body(...)):
 
 
 @app.post("/gradecards")
-async def save_gradecard_endpoint(body: dict = Body(...)):
+async def save_gradecard_endpoint(body: dict = Body(...), authorization: str | None = Header(default=None)):
     """Adviser/Admin saves the top-level gradecard summary."""
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    if str((caller_prof or {}).get("role") or "").strip().lower() not in ("teacher", "admin"):
+        return JSONResponse({"error": "Only teachers or admins can save gradecards."}, status_code=403)
     payload = body if isinstance(body, dict) else {}
 
     student_id_number = str(payload.get("student_id_number") or "").strip()
@@ -4115,6 +4466,7 @@ async def save_gradecard_endpoint(body: dict = Body(...)):
 def list_enrollments_endpoint(
     student_id_number: str = Query(...),
     period_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
     err = require_supabase()
     if err is not None:
@@ -4122,6 +4474,9 @@ def list_enrollments_endpoint(
     sid = str(student_id_number or "").strip()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
     student_uuid = db_supabase.profile_uuid_for_id_number(sid)
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
@@ -4136,10 +4491,16 @@ def list_enrollments_endpoint(
 
 
 @app.post("/enrollments")
-async def upsert_enrollment_endpoint(body: dict = Body(...)):
+async def upsert_enrollment_endpoint(body: dict = Body(...), authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    if str((caller_prof or {}).get("role") or "").strip().lower() not in ("teacher", "admin"):
+        return JSONResponse({"error": "Only teachers or admins can manage enrollments."}, status_code=403)
     payload = body if isinstance(body, dict) else {}
 
     student_id_number = str(payload.get("student_id_number") or "").strip()

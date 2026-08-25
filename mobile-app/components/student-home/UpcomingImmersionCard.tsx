@@ -13,8 +13,8 @@ export function UpcomingImmersionCard({ timeIn, timeOut }: UpcomingImmersionCard
     <View style={styles.card}>
       <View style={styles.times}>
         <View style={styles.timeRow}>
-          <View style={[styles.iconBox, { backgroundColor: 'rgba(139, 92, 246, 0.2)' }]}>
-            <Ionicons name="log-in-outline" size={18} color="#a78bfa" />
+          <View style={[styles.iconBox, { backgroundColor: 'rgba(234, 179, 8, 0.2)' }]}>
+            <Ionicons name="log-in-outline" size={18} color="#fbbf24" />
           </View>
           <View>
             <Text style={styles.timeLabel}>Time In</Text>
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: 'rgba(148, 163, 184, 0.06)',
+    backgroundColor: 'rgba(120, 53, 15, 0.06)',
     gap: 6,
     minWidth: 88,
   },

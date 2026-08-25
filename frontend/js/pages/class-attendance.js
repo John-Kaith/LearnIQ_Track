@@ -77,7 +77,7 @@
   let qrCountdownDeadline = 0;
   let qrCountdownTotalMs = QR_REFRESH_MS;
   let qrTokenFetchInFlight = false;
-  let announcedPresentIds = null; // null = not yet seeded for the current session
+  let announcedStateById = null; // Map<id_number, checkedOut:boolean> | null = not yet seeded
   let announcedForSessionId = undefined; // deliberately not null, so the first real session (id=null) still seeds
 
   function stopTeacherPoll() {
@@ -141,17 +141,21 @@
     }
   }
 
-  function pushScanFeedItem(row) {
+  function pushScanFeedItem(row, action) {
     const list = $("teacher-class-scan-feed-list");
     if (!list) return;
     const stu = row.student || {};
     const name = stu.display_name || stu.id_number || "Student";
     const item = document.createElement("div");
     item.className = "class-attendance-scan-feed-item";
+    const label =
+      action === "out"
+        ? `Checked out at ${esc(fmtClock(row.record?.time_out))}`
+        : `Checked in at ${esc(fmtClock(row.record?.time_in))}`;
     item.innerHTML = `<span class="avatar avatar-sm">${esc(initials(name))}</span>
       <div>
         <strong>${esc(name)}</strong>
-        <span class="small-note">Checked in at ${esc(fmtClock(row.record?.time_in))}</span>
+        <span class="small-note">${label}</span>
       </div>`;
     list.insertBefore(item, list.firstChild); // newest scan on top
     while (list.children.length > 30) list.removeChild(list.lastChild);
@@ -161,32 +165,48 @@
     if (teacherSessionId !== announcedForSessionId) {
       // New (or newly-ended) session — reset so old ids/feed don't bleed in.
       announcedForSessionId = teacherSessionId;
-      announcedPresentIds = null;
+      announcedStateById = null;
       const list = $("teacher-class-scan-feed-list");
       if (list) list.innerHTML = "";
     }
 
-    const currentIds = new Set(present.map((row) => row.student?.id_number).filter(Boolean));
-    if (announcedPresentIds === null) {
+    const currentState = new Map();
+    for (const row of present) {
+      const id = row.student?.id_number;
+      if (id) currentState.set(id, Boolean(row.record?.time_out));
+    }
+
+    if (announcedStateById === null) {
       // First render for this session — seed the baseline without announcing
       // (avoids re-announcing everyone already present on a page refresh).
-      announcedPresentIds = currentIds;
+      announcedStateById = currentState;
       return;
     }
     for (const row of present) {
       const id = row.student?.id_number;
-      if (!id || announcedPresentIds.has(id)) continue;
-      pushScanFeedItem(row);
+      if (!id) continue;
+      const checkedOutNow = Boolean(row.record?.time_out);
       const name = row.student?.display_name || id;
-      if (typeof announceVoice === "function") announceVoice(`${name} has been marked present.`);
+      if (!announcedStateById.has(id)) {
+        pushScanFeedItem(row, "in");
+        if (typeof announceVoice === "function") announceVoice(`${name} has been marked present.`);
+      } else if (checkedOutNow && !announcedStateById.get(id)) {
+        pushScanFeedItem(row, "out");
+        if (typeof announceVoice === "function") announceVoice(`${name} has checked out.`);
+      }
     }
-    announcedPresentIds = currentIds;
+    announcedStateById = currentState;
   }
 
   function attendanceRowHtml(row, state) {
     const stu = row.student || {};
     const rec = row.record;
     const name = stu.display_name || stu.id_number || "Student";
+    let meta = "";
+    if (state === "present") {
+      const timeIn = fmtClock(rec?.time_in);
+      meta = rec?.time_out ? `${esc(timeIn)} – ${esc(fmtClock(rec.time_out))}` : `${esc(timeIn)} (in progress)`;
+    }
     return `<article class="class-attendance-live-row" role="listitem">
       <div class="class-attendance-live-student">
         <span class="avatar avatar-sm">${esc(initials(name))}</span>
@@ -196,7 +216,7 @@
         </div>
       </div>
       <div class="class-attendance-live-meta">
-        ${state === "present" ? `<span class="small-note">${esc(fmtClock(rec?.time_in))}</span>` : ""}
+        ${meta ? `<span class="small-note">${meta}</span>` : ""}
       </div>
     </article>`;
   }
@@ -487,10 +507,14 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not check in.");
+      const isTimeOut = data.action === "time_out";
+      const message = isTimeOut ? "Checked out!" : "Checked in!";
+      const toastMessage = isTimeOut ? "You've checked out." : "You're marked present.";
+      const voiceMessage = isTimeOut ? "You have checked out." : "You have been marked present.";
       flashStudentScanner();
-      setStudentScannerStatus("Checked in!", "success");
-      if (typeof showToast === "function") showToast("You're marked present.", "success");
-      if (typeof announceVoice === "function") announceVoice("You have been marked present.");
+      setStudentScannerStatus(message, "success");
+      if (typeof showToast === "function") showToast(toastMessage, "success");
+      if (typeof announceVoice === "function") announceVoice(voiceMessage);
       window.setTimeout(() => {
         closeStudentScanner();
         void refreshStudentStatus();
@@ -510,8 +534,11 @@
     const sub = $("student-class-attendance-subtitle");
     const statusEl = $("student-class-attendance-status");
     const toggleWrap = $("student-class-scan-toggle-wrap");
+    const toggleLabel = $("student-class-scan-toggle-label");
     const submittedPanel = $("student-class-attendance-submitted");
     const submittedTimeEl = $("student-class-submitted-time");
+    const checkinNote = $("student-class-checkin-note");
+    const checkinTimeEl = $("student-class-checkin-time");
 
     if (!card) return;
     if (!data?.enrolled) {
@@ -523,7 +550,10 @@
 
     card.hidden = false;
     const open = data.session_open;
-    const done = data.already_checked_in;
+    const checkedIn = data.already_checked_in;
+    const checkedOut = data.checked_out;
+    const done = checkedIn && checkedOut; // fully complete — in AND out
+    const pendingCheckout = checkedIn && !checkedOut; // in, still needs to check out
     const absent = data.marked_absent;
     const rec = data.record;
 
@@ -532,11 +562,16 @@
 
     if (done || absent || !open) closeStudentScanner();
 
+    if (checkinNote) checkinNote.hidden = !pendingCheckout;
+    if (pendingCheckout && checkinTimeEl) {
+      checkinTimeEl.textContent = fmtClock(rec?.time_in);
+    }
+
     if (done) {
       if (toggleWrap) toggleWrap.hidden = true;
       if (submittedPanel) submittedPanel.hidden = false;
       if (submittedTimeEl) {
-        submittedTimeEl.textContent = `Checked in at ${fmtSubmittedTime(rec?.time_in)}`;
+        submittedTimeEl.textContent = `${fmtSubmittedTime(rec?.time_in)} – ${fmtSubmittedTime(rec?.time_out)}`;
       }
       if (sub) sub.textContent = "Your attendance for this class is on record.";
       if (statusEl) statusEl.textContent = "";
@@ -545,18 +580,23 @@
       if (sub) {
         sub.textContent = absent
           ? "Attendance is closed. You were marked absent because you did not scan in time."
-          : open
-            ? "Class attendance is open. Scan your teacher's QR code to check in."
-            : "Your teacher has not opened attendance yet.";
+          : pendingCheckout
+            ? "You're checked in. Scan again before you leave to check out."
+            : open
+              ? "Class attendance is open. Scan your teacher's QR code to check in."
+              : "Your teacher has not opened attendance yet.";
       }
       if (statusEl) {
         statusEl.textContent = absent
           ? "You can no longer check in for this session."
           : open
-            ? "Tap the button below, then point your camera at your teacher's screen."
+            ? pendingCheckout
+              ? "Tap the button below when you're ready to check out."
+              : "Tap the button below, then point your camera at your teacher's screen."
             : "The scan button will appear here once attendance opens.";
       }
       if (toggleWrap) toggleWrap.hidden = !open;
+      if (toggleLabel) toggleLabel.textContent = pendingCheckout ? "Scan to check out" : "Scan to check in";
     }
 
     if (data.enrolled && !done) {

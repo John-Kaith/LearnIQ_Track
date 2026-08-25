@@ -4,8 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StudentTabIcon } from '@/components/navigation/StudentTabIcon';
 
-const TAB_ACTIVE = '#4F8CFF';
-const TAB_INACTIVE = '#7B8BA8';
+const TAB_ACTIVE = '#ca8a04';
+const TAB_INACTIVE = '#78716c';
 const TAB_CONTENT_HEIGHT = 56;
 
 export default function StudentTabLayout() {
@@ -62,9 +62,9 @@ export default function StudentTabLayout() {
 
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: 'rgba(8, 14, 28, 0.96)',
+    backgroundColor: 'rgba(255, 254, 247, 0.97)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.14)',
+    borderTopColor: 'rgba(120, 53, 15, 0.12)',
     paddingTop: 8,
     paddingHorizontal: 4,
     elevation: 0,

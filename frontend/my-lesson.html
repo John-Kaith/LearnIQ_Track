@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082114" />
+<link rel="stylesheet" href="style.css?v=2026082115" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
@@ -23,7 +23,7 @@
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026082103" defer></script>
-  <script src="js/pages/class-attendance.js?v=2026082104" defer></script>
+  <script src="js/pages/class-attendance.js?v=2026082105" defer></script>
 </head>
 <body class="my-lesson-page">
   <div class="dashboard-shell container">
@@ -94,14 +94,18 @@
 
             <div id="student-class-attendance-submitted" class="class-attendance-submitted-view" hidden>
               <span class="badge badge-soft class-attendance-submitted-badge">
-                <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Attendance submitted
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Attendance complete
               </span>
               <span class="small-note" id="student-class-submitted-time">—</span>
             </div>
 
+            <div id="student-class-checkin-note" class="small-note class-attendance-checkin-note" hidden>
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Checked in at <span id="student-class-checkin-time">—</span> — scan again before you leave to check out.
+            </div>
+
             <div class="button-group" id="student-class-scan-toggle-wrap" hidden>
               <button type="button" class="btn btn-primary" id="student-class-scan-toggle-btn">
-                <i class="fa-solid fa-camera"></i> Scan to check in
+                <i class="fa-solid fa-camera"></i> <span id="student-class-scan-toggle-label">Scan to check in</span>
               </button>
             </div>
 
@@ -126,7 +130,7 @@
             </p>
           </article>
 
-          <!-- STREAM tab (default view of a subject — light overview, no post feed) -->
+          <!-- STREAM tab (subject overview + the teacher's class announcements feed) -->
           <div id="subject-tab-panel-stream" class="subject-tab-panel">
             <article class="glass-card content-card subject-stream-card">
               <h3 id="subject-stream-title">About this subject</h3>
@@ -135,6 +139,9 @@
                 <span class="pill" id="subject-stream-lesson-count">0 published lessons</span>
               </div>
             </article>
+
+            <div id="subject-announcements-feed" class="subject-announcements-feed"></div>
+            <p id="subject-announcements-empty" class="small-note" hidden>No announcements yet.</p>
           </div>
 
           <!-- CLASSWORK tab -->
@@ -149,17 +156,28 @@
 
           <!-- PEOPLE tab -->
           <div id="subject-tab-panel-people" class="subject-tab-panel" hidden>
-            <article id="subject-teacher-profile" class="glass-card subject-teacher-strip" hidden aria-label="Subject instructor">
-              <div class="subject-teacher-inner">
-                <div class="avatar subject-teacher-avatar" id="subject-teacher-avatar" aria-hidden="true">TC</div>
-                <div class="subject-teacher-info">
-                  <span class="subject-teacher-label">Subject instructor</span>
-                  <strong id="subject-teacher-name">Teacher</strong>
-                  <span id="subject-teacher-id" class="small-note"></span>
+            <section class="subject-people-section">
+              <h3 class="subject-people-heading">Teachers</h3>
+              <article id="subject-teacher-profile" class="glass-card subject-teacher-strip" hidden aria-label="Subject instructor">
+                <div class="subject-teacher-inner">
+                  <div class="avatar subject-teacher-avatar" id="subject-teacher-avatar" aria-hidden="true">TC</div>
+                  <div class="subject-teacher-info">
+                    <strong id="subject-teacher-name">Teacher</strong>
+                    <span id="subject-teacher-id" class="small-note"></span>
+                  </div>
+                  <span class="subject-teacher-icon" aria-hidden="true"><i class="fa-solid fa-chalkboard-user"></i></span>
                 </div>
-                <span class="subject-teacher-icon" aria-hidden="true"><i class="fa-solid fa-chalkboard-user"></i></span>
+              </article>
+            </section>
+
+            <section class="subject-people-section">
+              <div class="subject-people-heading-row">
+                <h3 class="subject-people-heading">Classmates</h3>
+                <span class="small-note" id="subject-classmates-count"></span>
               </div>
-            </article>
+              <div id="subject-classmates-list" class="subject-people-list"></div>
+              <p id="subject-classmates-empty" class="small-note" hidden>No classmates yet.</p>
+            </section>
           </div>
 
           <article id="student-workspace" class="glass-card content-card" hidden>

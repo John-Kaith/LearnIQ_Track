@@ -322,7 +322,9 @@
     grid.innerHTML = `<p class="small-note">Loading strands…</p>`;
     try {
       const params = new URLSearchParams({ teacher_id_number: tid });
-      const res = await fetch(apiUrl(`/teacher/gradecard/strands?${params}`));
+      const res = await fetch(apiUrl(`/teacher/gradecard/strands?${params}`), {
+        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       STATE.strands = Array.isArray(data.strands) ? data.strands : [];
@@ -365,7 +367,9 @@
       });
       const q = (filterText || "").trim();
       if (q) params.set("q", q);
-      const res = await fetch(apiUrl(`/teacher/gradecard/students?${params}`));
+      const res = await fetch(apiUrl(`/teacher/gradecard/students?${params}`), {
+        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       STATE.students = Array.isArray(data.students) ? data.students : [];
@@ -431,7 +435,9 @@
     STATE.editedSubjects.clear();
 
     try {
-      const res = await fetch(apiUrl(`/gradecard?${params.toString()}`));
+      const res = await fetch(apiUrl(`/gradecard?${params.toString()}`), {
+        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = data?.error || `HTTP ${res.status}`;
@@ -621,7 +627,10 @@
       try {
         const res = await fetch(apiUrl("/student-grades"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
+          },
           body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
@@ -642,7 +651,10 @@
       try {
         const res = await fetch(apiUrl("/gradecards"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
+          },
           body: JSON.stringify({
             student_id_number: STATE.activeStudentIdNumber,
             grading_period_id: periodId,

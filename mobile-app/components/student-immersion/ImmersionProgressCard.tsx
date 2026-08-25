@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   muted: { color: Colors.textMuted, fontWeight: '500' },
   track: {
     height: 8,
-    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    backgroundColor: 'rgba(120, 53, 15, 0.12)',
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 8,

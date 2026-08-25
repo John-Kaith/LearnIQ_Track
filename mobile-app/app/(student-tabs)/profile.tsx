@@ -1,4 +1,5 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -6,14 +7,45 @@ import { LogoutCard } from '@/components/student-profile/LogoutCard';
 import { ProfileCard } from '@/components/student-profile/ProfileCard';
 import { SettingsItem } from '@/components/student-profile/SettingsItem';
 import { Colors } from '@/constants/colors';
-import { profileSettingsItems, studentProfileMock } from '@/data/studentProfileMock';
+import { profileSettingsItems } from '@/data/studentProfileMock';
+import { fetchMyProfileExtra } from '@/services/dashboard';
 import { useAuthStore } from '@/store/authStore';
+
+function initialsFor(firstName: string, lastName: string): string {
+  const a = firstName.trim().charAt(0);
+  const b = lastName.trim().charAt(0);
+  return `${a}${b}`.toUpperCase() || '?';
+}
+
+function formatMemberSince(iso: string | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
 
 export default function StudentProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const logout = useAuthStore((s) => s.logout);
-  const profile = studentProfileMock;
+  const user = useAuthStore((s) => s.user);
+
+  const [adviserIdNumber, setAdviserIdNumber] = useState('');
+  const [memberSince, setMemberSince] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyProfileExtra()
+        .then(({ adviserIdNumber: adviser, createdAt }) => {
+          setAdviserIdNumber(adviser);
+          setMemberSince(createdAt);
+        })
+        .catch(() => {
+          setAdviserIdNumber('');
+          setMemberSince(null);
+        });
+    }, []),
+  );
 
   function handleLogout() {
     Alert.alert('Logout', 'Sign out from your account?', [
@@ -29,6 +61,14 @@ export default function StudentProfileScreen() {
     ]);
   }
 
+  const roleAcademic = [
+    'Student',
+    user?.grade_level ? `Grade ${user.grade_level}` : null,
+    user?.strand || null,
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -41,15 +81,14 @@ export default function StudentProfileScreen() {
         <Text style={styles.pageSubtitle}>Manage your account and app preferences.</Text>
 
         <ProfileCard
-          initials={profile.initials}
-          fullName={profile.fullName}
-          roleAcademic={profile.roleAcademic}
-          idNumber={profile.idNumber}
-          approvalStatus={profile.approvalStatus}
-          section={profile.section}
-          strand={profile.strand}
-          adviser={profile.adviser}
-          memberSince={profile.memberSince}
+          initials={initialsFor(user?.first_name ?? '', user?.last_name ?? '')}
+          fullName={user?.display_name ?? 'Student'}
+          roleAcademic={roleAcademic || 'Student'}
+          idNumber={user?.id_number ?? '—'}
+          section={user?.section || '—'}
+          strand={user?.strand || '—'}
+          adviser={adviserIdNumber || 'Not assigned'}
+          memberSince={formatMemberSince(memberSince)}
         />
 
         <Text style={styles.sectionTitle}>Settings</Text>
