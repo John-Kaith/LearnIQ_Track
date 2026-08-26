@@ -4678,6 +4678,8 @@ async function loadTeacherDashboardLessons() {
         ? allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter))
         : lessons;
 
+    if (isSubjectPage) populateAnnouncementLessonPicker(yourLessons);
+
     const recentLessonsList = document.getElementById("recent-lessons-list");
     if (recentLessonsList) {
       const displayLessons =
@@ -6517,10 +6519,37 @@ async function loadTeacherAnnouncements() {
   }
 }
 
+/** Fills the "Attach a lesson" dropdown on the Class stream compose form. */
+function populateAnnouncementLessonPicker(lessons) {
+  const select = document.getElementById("teacher-announcement-lesson-select");
+  if (!select) return;
+  const prevValue = select.value;
+  const options = (lessons || [])
+    .map((l) => {
+      const id = String(l.id || l.file_id || "");
+      if (!id) return "";
+      const label = `${l.filename || "Untitled lesson"}${l.is_published ? "" : " (unpublished)"}`;
+      return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  select.innerHTML = `<option value="">No lesson attached</option>${options}`;
+  if (prevValue && lessons?.some((l) => String(l.id || l.file_id) === prevValue)) {
+    select.value = prevValue;
+  }
+}
+
 function bindTeacherAnnouncementForm() {
   const form = document.getElementById("teacher-announcement-form");
   const textEl = document.getElementById("teacher-announcement-text");
+  const lessonSelect = document.getElementById("teacher-announcement-lesson-select");
   const postBtn = document.getElementById("teacher-announcement-post-btn");
+  const uploadLink = form?.querySelector(".teacher-announcement-upload-link");
+  if (uploadLink && uploadLink.dataset.bound !== "1") {
+    uploadLink.dataset.bound = "1";
+    uploadLink.addEventListener("click", () => {
+      setTeacherSubjectActiveTab(uploadLink.getAttribute("data-teacher-subject-tab") || "upload");
+    });
+  }
   if (!form || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
 
@@ -6538,13 +6567,14 @@ function bindTeacherAnnouncementForm() {
 
     if (postBtn) postBtn.disabled = true;
     try {
+      const lessonId = lessonSelect?.value || null;
       const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${user.access_token}`,
         },
-        body: JSON.stringify({ body: text }),
+        body: JSON.stringify({ body: text, lesson_id: lessonId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not post announcement.");
@@ -6556,6 +6586,7 @@ function bindTeacherAnnouncementForm() {
       if (emptyEl) emptyEl.hidden = announcements.length > 0;
 
       if (textEl) textEl.value = "";
+      if (lessonSelect) lessonSelect.value = "";
       showToast("Announcement posted.", "success");
     } catch (e) {
       showToast(e.message || "Could not post announcement.", "error");
@@ -7953,6 +7984,28 @@ function renderAnnouncementCommentHtml(c) {
     </div>`;
 }
 
+/** Role-aware URL to open a lesson's original file (used by Class stream attachment cards). */
+function announcementLessonFileUrl(lessonId) {
+  const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  const role = String(user?.role || "").trim().toLowerCase();
+  return role === "teacher" ? teacherLessonFileViewUrl(lessonId) : studentLessonFileViewUrl(lessonId);
+}
+
+function renderAnnouncementLessonCardHtml(lesson) {
+  if (!lesson || !lesson.id) return "";
+  const ext = String(lesson.file_type || "").replace(/^\./, "").toUpperCase() || "FILE";
+  const icon = ext === "PDF" ? "fa-file-pdf" : ext === "PPT" || ext === "PPTX" ? "fa-file-powerpoint" : "fa-file-lines";
+  const url = announcementLessonFileUrl(lesson.id);
+  return `
+    <a class="subject-announcement-lesson-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+      <div class="subject-announcement-lesson-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></div>
+      <div class="subject-announcement-lesson-meta">
+        <strong>${escapeHtml(lesson.filename || "Lesson file")}</strong>
+        <span class="small-note">${escapeHtml(ext)}${lesson.is_published ? "" : " · Unpublished"}</span>
+      </div>
+    </a>`;
+}
+
 function renderAnnouncementFeedHtml(announcements) {
   return announcements
     .map((a) => {
@@ -7973,6 +8026,7 @@ function renderAnnouncementFeedHtml(announcements) {
           </div>
         </div>
         <div class="subject-announcement-body">${escapeHtml(a.body || "")}</div>
+        ${renderAnnouncementLessonCardHtml(a.lesson)}
         <div class="subject-announcement-actions">
           <button type="button" class="subject-announcement-like-btn${reacted ? " is-active" : ""}" data-announcement-react-btn aria-pressed="${reacted ? "true" : "false"}">
             <i class="fa-solid fa-heart" aria-hidden="true"></i>

@@ -1545,8 +1545,9 @@ async def create_subject_announcement_endpoint(
     text = str((body or {}).get("body") or "").strip()
     if not text:
         return JSONResponse({"error": "Announcement text is required."}, status_code=400)
+    lesson_id = (body or {}).get("lesson_id") or None
     try:
-        db_supabase.create_subject_announcement(subject_id, caller_idn, text)
+        db_supabase.create_subject_announcement(subject_id, caller_idn, text, lesson_id=lesson_id)
         return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)

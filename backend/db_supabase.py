@@ -3295,14 +3295,23 @@ def _subject_owned_by_teacher(subject_id: str, teacher_id_number: str) -> bool:
     ).strip()
 
 
-def create_subject_announcement(subject_id: str, teacher_id_number: str, body: str) -> dict[str, Any]:
-    """Class Stream: teacher posts a text-only announcement to a subject."""
+def create_subject_announcement(
+    subject_id: str, teacher_id_number: str, body: str, lesson_id: str | None = None
+) -> dict[str, Any]:
+    """Class Stream: teacher posts an announcement to a subject, optionally
+    attaching one of their own lessons (shown as a file card, like Classroom)."""
     sid = str(subject_id or "").strip()
     idn = str(teacher_id_number or "").strip()
     text = str(body or "").strip()
     if not sid or not idn or not text:
         raise ValueError("subject_id, teacher_id_number, and body are required.")
-    row = {"subject_id": sid, "teacher_id_number": idn, "body": text}
+    row: dict[str, Any] = {"subject_id": sid, "teacher_id_number": idn, "body": text}
+    lid = str(lesson_id or "").strip()
+    if lid:
+        lesson = get_lesson_row(lid)
+        if not lesson or str(lesson.get("teacher_id_number") or "") != idn:
+            raise ValueError("You can only attach your own lessons.")
+        row["lesson_id"] = lid
     res = _sb().table("subject_announcements").insert(row).execute()
     inserted = (res.data or [None])[0]
     if not inserted:
@@ -3343,6 +3352,23 @@ def list_subject_announcements(
     comments_by_ann = _list_comments_for_announcements(ann_ids)
     reaction_counts, reacted_ids = _reaction_summary_for_announcements(ann_ids, viewer_id_number)
 
+    # Attach lesson file-card info for posts that reference one.
+    lesson_ids = list({str(r.get("lesson_id")) for r in rows if r.get("lesson_id")})
+    lesson_cache: dict[str, dict[str, Any]] = {}
+    if lesson_ids:
+        try:
+            lres = (
+                _sb()
+                .table("lessons")
+                .select("id, filename, file_type, is_published")
+                .in_("id", lesson_ids)
+                .execute()
+            )
+            for lrow in lres.data or []:
+                lesson_cache[str(lrow.get("id"))] = lrow
+        except Exception as e:
+            print(f"list_subject_announcements (lesson attachments): {e}")
+
     # Attach the posting teacher's display name/avatar for the feed UI.
     profile_cache: dict[str, dict[str, Any]] = {}
 
@@ -3376,6 +3402,7 @@ def list_subject_announcements(
                     "author_role": c.get("author_role") or "",
                 }
             )
+        lesson_row = lesson_cache.get(str(r.get("lesson_id") or "")) if r.get("lesson_id") else None
         out.append(
             {
                 "id": r.get("id"),
@@ -3389,6 +3416,16 @@ def list_subject_announcements(
                 "comment_count": len(comments),
                 "reaction_count": reaction_counts.get(ann_id, 0),
                 "viewer_reacted": ann_id in reacted_ids,
+                "lesson": (
+                    {
+                        "id": lesson_row.get("id"),
+                        "filename": lesson_row.get("filename") or "Lesson file",
+                        "file_type": lesson_row.get("file_type") or "",
+                        "is_published": bool(lesson_row.get("is_published")),
+                    }
+                    if lesson_row
+                    else None
+                ),
             }
         )
     return out

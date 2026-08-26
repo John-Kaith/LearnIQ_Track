@@ -9,14 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082702" />
+<link rel="stylesheet" href="style.css?v=2026082703" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/shared/voice-announcer.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082702" defer></script>
+  <script src="script.js?v=2026082703" defer></script>
   <script src="js/pages/class-attendance.js?v=2026082105" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
@@ -179,6 +179,17 @@
             <p class="content-subtitle teacher-subject-panel-intro">Post updates and announcements for students enrolled in this subject.</p>
             <form id="teacher-announcement-form" class="teacher-announcement-form">
               <textarea id="teacher-announcement-text" class="form-input" rows="3" maxlength="4000" placeholder="Share an announcement with your class…" required></textarea>
+              <div class="teacher-announcement-attach-row">
+                <label for="teacher-announcement-lesson-select" class="small-note">
+                  <i class="fa-solid fa-paperclip" aria-hidden="true"></i> Attach a lesson (optional)
+                </label>
+                <select id="teacher-announcement-lesson-select" class="form-input teacher-announcement-lesson-select">
+                  <option value="">No lesson attached</option>
+                </select>
+                <button type="button" class="teacher-announcement-upload-link" data-teacher-subject-tab="upload">
+                  Wala pang lesson? Mag-upload muna →
+                </button>
+              </div>
               <div class="button-group" style="justify-content: flex-end; margin-top: 0.6rem;">
                 <button type="submit" class="btn btn-primary" id="teacher-announcement-post-btn">
                   <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Post
