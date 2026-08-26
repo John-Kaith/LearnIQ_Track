@@ -1517,7 +1517,7 @@ def list_subject_announcements_endpoint(subject_id: str, authorization: str | No
     if not _subject_people_access(subject, caller_prof, caller_idn):
         return JSONResponse({"error": "You don't have access to this class."}, status_code=403)
     try:
-        return {"announcements": db_supabase.list_subject_announcements(subject_id)}
+        return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -1547,7 +1547,77 @@ async def create_subject_announcement_endpoint(
         return JSONResponse({"error": "Announcement text is required."}, status_code=400)
     try:
         db_supabase.create_subject_announcement(subject_id, caller_idn, text)
-        return {"announcements": db_supabase.list_subject_announcements(subject_id)}
+        return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+def _announcement_access_or_403(subject_id: str, announcement_id: str, authorization: str | None):
+    """Shared guard for comment/reaction endpoints: caller must be the subject's
+    teacher, an enrolled student, or admin — same rule as viewing the Class Stream.
+    Returns (caller_idn, announcement_row, error_response_or_None)."""
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return None, None, JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    if not caller_prof:
+        return None, None, JSONResponse({"error": "Profile not found."}, status_code=404)
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return None, None, JSONResponse({"error": "Subject not found."}, status_code=404)
+    if not _subject_people_access(subject, caller_prof, caller_idn):
+        return None, None, JSONResponse({"error": "You don't have access to this class."}, status_code=403)
+    ann = db_supabase.get_announcement_row(announcement_id)
+    if not ann or str(ann.get("subject_id") or "") != str(subject.get("id") or ""):
+        return None, None, JSONResponse({"error": "Announcement not found."}, status_code=404)
+    return caller_idn, caller_prof, None
+
+
+@app.post("/subjects/{subject_id}/announcements/{announcement_id}/comments")
+async def create_announcement_comment_endpoint(
+    subject_id: str,
+    announcement_id: str,
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Anyone with Class Stream access (owning teacher, enrolled student, admin) can comment."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn, caller_prof, bad = _announcement_access_or_403(subject_id, announcement_id, authorization)
+    if bad is not None:
+        return bad
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    comment_role = "teacher" if role in ("teacher", "admin") else "student"
+    text = str((body or {}).get("body") or "").strip()
+    if not text:
+        return JSONResponse({"error": "Comment text is required."}, status_code=400)
+    try:
+        db_supabase.create_announcement_comment(announcement_id, caller_idn, comment_role, text)
+        return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.post("/subjects/{subject_id}/announcements/{announcement_id}/react")
+async def toggle_announcement_reaction_endpoint(
+    subject_id: str,
+    announcement_id: str,
+    authorization: str | None = Header(default=None),
+):
+    """Toggle the signed-in user's like on an announcement."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn, _caller_prof, bad = _announcement_access_or_403(subject_id, announcement_id, authorization)
+    if bad is not None:
+        return bad
+    try:
+        return db_supabase.toggle_announcement_reaction(announcement_id, caller_idn)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:

@@ -3505,6 +3505,122 @@ html[data-theme="dark"] .subject-announcement-avatar {
   white-space: pre-wrap;
 }
 
+.subject-announcement-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--lq-border-subtle);
+}
+
+.subject-announcement-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: none;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--lq-radius-sm, 8px);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.subject-announcement-like-btn:hover {
+  color: #ef4444;
+}
+
+.subject-announcement-like-btn:active {
+  transform: scale(0.94);
+}
+
+.subject-announcement-like-btn.is-active {
+  color: #ef4444;
+}
+
+.subject-announcement-comment-count {
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.subject-announcement-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.subject-announcement-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.subject-announcement-comment-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.65rem;
+  background: rgba(217, 119, 6, 0.14);
+  color: #78350f;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+}
+
+html[data-theme="dark"] .subject-announcement-comment-avatar {
+  background: rgba(96, 165, 250, 0.2);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.subject-announcement-comment-body {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  background: var(--panel-soft, rgba(148, 163, 184, 0.1));
+  border-radius: var(--lq-radius-sm, 10px);
+  padding: 0.5rem 0.75rem;
+}
+
+.subject-announcement-comment-body strong {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.subject-announcement-comment-body p {
+  margin: 0.15rem 0 0;
+  color: var(--text);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.subject-announcement-comment-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.subject-announcement-comment-form .form-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.subject-announcement-comment-form .btn-sm {
+  padding: 0.5rem 0.7rem;
+  flex-shrink: 0;
+}
+
 /* My Lesson: dashboard-grid expects 2 columns elsewhere; this page only has one child — use full main width */
 .my-lesson-page .dashboard-grid,
 .subjects-page .dashboard-grid,

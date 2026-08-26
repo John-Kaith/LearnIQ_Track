@@ -7939,14 +7939,32 @@ function formatAnnouncementDate(iso) {
   }
 }
 
+function renderAnnouncementCommentHtml(c) {
+  const name = (c.author_name || "Someone").trim();
+  const initials = getUserInitials(name);
+  const when = formatAnnouncementDate(c.created_at);
+  return `
+    <div class="subject-announcement-comment">
+      <div class="subject-announcement-comment-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+      <div class="subject-announcement-comment-body">
+        <strong>${escapeHtml(name)}</strong> <span class="small-note">${escapeHtml(when)}</span>
+        <p>${escapeHtml(c.body || "")}</p>
+      </div>
+    </div>`;
+}
+
 function renderAnnouncementFeedHtml(announcements) {
   return announcements
     .map((a) => {
       const name = (a.teacher_name || "Teacher").trim();
       const initials = getUserInitials(name);
       const when = formatAnnouncementDate(a.created_at);
+      const comments = Array.isArray(a.comments) ? a.comments : [];
+      const commentCount = a.comment_count ?? comments.length;
+      const reactionCount = a.reaction_count ?? 0;
+      const reacted = !!a.viewer_reacted;
       return `
-      <article class="subject-announcement-item">
+      <article class="subject-announcement-item" data-announcement-id="${escapeHtml(String(a.id))}" data-subject-id="${escapeHtml(String(a.subject_id || ""))}">
         <div class="subject-announcement-head">
           <div class="subject-announcement-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
           <div class="subject-announcement-meta">
@@ -7955,9 +7973,101 @@ function renderAnnouncementFeedHtml(announcements) {
           </div>
         </div>
         <div class="subject-announcement-body">${escapeHtml(a.body || "")}</div>
+        <div class="subject-announcement-actions">
+          <button type="button" class="subject-announcement-like-btn${reacted ? " is-active" : ""}" data-announcement-react-btn aria-pressed="${reacted ? "true" : "false"}">
+            <i class="fa-solid fa-heart" aria-hidden="true"></i>
+            <span class="subject-announcement-like-count">${reactionCount}</span>
+          </button>
+          <span class="subject-announcement-comment-count">
+            <i class="fa-regular fa-comment" aria-hidden="true"></i> ${commentCount} comment${commentCount === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div class="subject-announcement-comments">${comments.map(renderAnnouncementCommentHtml).join("")}</div>
+        <form class="subject-announcement-comment-form" data-announcement-comment-form>
+          <input type="text" class="form-input" placeholder="Add a comment…" maxlength="2000" required />
+          <button type="submit" class="btn btn-secondary btn-sm" aria-label="Post comment">
+            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+          </button>
+        </form>
       </article>`;
     })
     .join("");
+}
+
+/** Delegated so it keeps working after every innerHTML re-render of a feed. */
+function bindAnnouncementFeedInteractions() {
+  if (document.body.dataset.announcementInteractionsBound === "1") return;
+  document.body.dataset.announcementInteractionsBound = "1";
+
+  document.addEventListener("click", async (event) => {
+    const btn = event.target.closest("[data-announcement-react-btn]");
+    if (!btn) return;
+    const article = btn.closest(".subject-announcement-item");
+    const subjectId = article?.dataset.subjectId;
+    const announcementId = article?.dataset.announcementId;
+    if (!subjectId || !announcementId) return;
+    const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    if (!user?.access_token) {
+      showToast("Sign in required.", "error");
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const res = await fetch(
+        apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements/${encodeURIComponent(announcementId)}/react`),
+        { method: "POST", headers: { Authorization: `Bearer ${user.access_token}` } },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not react.");
+      btn.classList.toggle("is-active", !!data.reacted);
+      btn.setAttribute("aria-pressed", data.reacted ? "true" : "false");
+      const countEl = btn.querySelector(".subject-announcement-like-count");
+      if (countEl) countEl.textContent = String(data.reaction_count ?? 0);
+    } catch (e) {
+      showToast(e.message || "Could not react.", "error");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-announcement-comment-form]");
+    if (!form) return;
+    event.preventDefault();
+    const article = form.closest(".subject-announcement-item");
+    const feedContainer = form.closest(".subject-announcements-feed");
+    const subjectId = article?.dataset.subjectId;
+    const announcementId = article?.dataset.announcementId;
+    const input = form.querySelector("input");
+    const text = (input?.value || "").trim();
+    if (!subjectId || !announcementId || !text || !feedContainer) return;
+
+    const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    if (!user?.access_token) {
+      showToast("Sign in required.", "error");
+      return;
+    }
+    const submitBtn = form.querySelector("button[type=submit]");
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await fetch(
+        apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements/${encodeURIComponent(announcementId)}/comments`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${user.access_token}` },
+          body: JSON.stringify({ body: text }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not post comment.");
+      const announcements = Array.isArray(data.announcements) ? data.announcements : [];
+      feedContainer.innerHTML = renderAnnouncementFeedHtml(announcements);
+    } catch (e) {
+      showToast(e.message || "Could not post comment.", "error");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
 }
 
 let lastLoadedSubjectAnnouncementsId = null;
@@ -10786,3 +10896,6 @@ function setupProfilePage() {
       .catch((err) => console.warn("Profile load failed:", err));
   }
 }
+
+// Class Stream comments/reactions — delegated listeners, safe on every page.
+bindAnnouncementFeedInteractions();

@@ -3310,7 +3310,17 @@ def create_subject_announcement(subject_id: str, teacher_id_number: str, body: s
     return inserted
 
 
-def list_subject_announcements(subject_id: str, limit: int = 50) -> list[dict[str, Any]]:
+def get_announcement_row(announcement_id: str) -> dict[str, Any] | None:
+    aid = str(announcement_id or "").strip()
+    if not aid:
+        return None
+    res = _sb().table("subject_announcements").select("*").eq("id", aid).limit(1).execute()
+    return res.data[0] if res.data else None
+
+
+def list_subject_announcements(
+    subject_id: str, limit: int = 50, viewer_id_number: str | None = None
+) -> list[dict[str, Any]]:
     sid = str(subject_id or "").strip()
     if not sid:
         return []
@@ -3329,14 +3339,43 @@ def list_subject_announcements(subject_id: str, limit: int = 50) -> list[dict[st
         print(f"list_subject_announcements: {e}")
         return []
 
+    ann_ids = [str(r.get("id")) for r in rows if r.get("id")]
+    comments_by_ann = _list_comments_for_announcements(ann_ids)
+    reaction_counts, reacted_ids = _reaction_summary_for_announcements(ann_ids, viewer_id_number)
+
     # Attach the posting teacher's display name/avatar for the feed UI.
-    teacher_cache: dict[str, dict[str, Any]] = {}
+    profile_cache: dict[str, dict[str, Any]] = {}
+
+    def _named(idn: str) -> dict[str, Any]:
+        idn = str(idn or "")
+        if idn and idn not in profile_cache:
+            profile_cache[idn] = get_profile_by_id_number(idn) or {}
+        prof = profile_cache.get(idn) or {}
+        return {
+            "id_number": idn,
+            "name": profile_display_name(prof) if prof else idn,
+            "avatar_data": (prof.get("avatar_data") or "") if prof else "",
+        }
+
     out: list[dict[str, Any]] = []
     for r in rows:
+        ann_id = str(r.get("id"))
         idn = str(r.get("teacher_id_number") or "")
-        if idn and idn not in teacher_cache:
-            teacher_cache[idn] = get_profile_by_id_number(idn) or {}
-        teacher = teacher_cache.get(idn) or {}
+        teacher = _named(idn)
+        comments = []
+        for c in comments_by_ann.get(ann_id, []):
+            author = _named(c.get("author_id_number"))
+            comments.append(
+                {
+                    "id": c.get("id"),
+                    "body": c.get("body") or "",
+                    "created_at": c.get("created_at"),
+                    "author_id_number": author["id_number"],
+                    "author_name": author["name"],
+                    "author_avatar_data": author["avatar_data"],
+                    "author_role": c.get("author_role") or "",
+                }
+            )
         out.append(
             {
                 "id": r.get("id"),
@@ -3344,11 +3383,117 @@ def list_subject_announcements(subject_id: str, limit: int = 50) -> list[dict[st
                 "body": r.get("body") or "",
                 "created_at": r.get("created_at"),
                 "teacher_id_number": idn,
-                "teacher_name": profile_display_name(teacher) if teacher else idn,
-                "teacher_avatar_data": (teacher.get("avatar_data") or "") if teacher else "",
+                "teacher_name": teacher["name"],
+                "teacher_avatar_data": teacher["avatar_data"],
+                "comments": comments,
+                "comment_count": len(comments),
+                "reaction_count": reaction_counts.get(ann_id, 0),
+                "viewer_reacted": ann_id in reacted_ids,
             }
         )
     return out
+
+
+def _list_comments_for_announcements(announcement_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """announcement_id -> ordered list of comment rows (oldest first)."""
+    if not announcement_ids:
+        return {}
+    try:
+        res = (
+            _sb()
+            .table("subject_announcement_comments")
+            .select("*")
+            .in_("announcement_id", announcement_ids)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"_list_comments_for_announcements: {e}")
+        return {}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        out.setdefault(str(r.get("announcement_id")), []).append(r)
+    return out
+
+
+def _reaction_summary_for_announcements(
+    announcement_ids: list[str], viewer_id_number: str | None
+) -> tuple[dict[str, int], set[str]]:
+    """announcement_id -> like count, and the set of announcement_ids the viewer has liked."""
+    if not announcement_ids:
+        return {}, set()
+    try:
+        res = (
+            _sb()
+            .table("subject_announcement_reactions")
+            .select("announcement_id, reactor_id_number")
+            .in_("announcement_id", announcement_ids)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        print(f"_reaction_summary_for_announcements: {e}")
+        return {}, set()
+    counts: dict[str, int] = {}
+    reacted: set[str] = set()
+    viewer = str(viewer_id_number or "")
+    for r in rows:
+        aid = str(r.get("announcement_id"))
+        counts[aid] = counts.get(aid, 0) + 1
+        if viewer and str(r.get("reactor_id_number") or "") == viewer:
+            reacted.add(aid)
+    return counts, reacted
+
+
+def create_announcement_comment(
+    announcement_id: str, author_id_number: str, author_role: str, body: str
+) -> dict[str, Any]:
+    aid = str(announcement_id or "").strip()
+    idn = str(author_id_number or "").strip()
+    role = str(author_role or "").strip().lower()
+    text = str(body or "").strip()
+    if not aid or not idn or role not in ("teacher", "student") or not text:
+        raise ValueError("announcement_id, author, and body are required.")
+    row = {"announcement_id": aid, "author_id_number": idn, "author_role": role, "body": text}
+    res = _sb().table("subject_announcement_comments").insert(row).execute()
+    inserted = (res.data or [None])[0]
+    if not inserted:
+        raise RuntimeError("Could not save comment.")
+    return inserted
+
+
+def toggle_announcement_reaction(announcement_id: str, reactor_id_number: str) -> dict[str, Any]:
+    """Like if not yet reacted, unlike if already reacted. Returns {reacted, reaction_count}."""
+    aid = str(announcement_id or "").strip()
+    idn = str(reactor_id_number or "").strip()
+    if not aid or not idn:
+        raise ValueError("announcement_id and reactor are required.")
+    existing = (
+        _sb()
+        .table("subject_announcement_reactions")
+        .select("id")
+        .eq("announcement_id", aid)
+        .eq("reactor_id_number", idn)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        _sb().table("subject_announcement_reactions").delete().eq("id", existing.data[0]["id"]).execute()
+        reacted = False
+    else:
+        _sb().table("subject_announcement_reactions").insert(
+            {"announcement_id": aid, "reactor_id_number": idn}
+        ).execute()
+        reacted = True
+    count_res = (
+        _sb()
+        .table("subject_announcement_reactions")
+        .select("id", count="exact")
+        .eq("announcement_id", aid)
+        .execute()
+    )
+    return {"reacted": reacted, "reaction_count": count_res.count or 0}
 
 
 def student_enrolled_in_subject(student_uuid: str, subject_id: str) -> bool:
