@@ -2577,6 +2577,9 @@ html:not([data-theme="dark"]) .teacher-stats-dashboard-page .teacher-stats-activ
   place-items: center;
   font-weight: 700;
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.25), rgba(234, 179, 8, 0.25));
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
 }
 
 html[data-theme="dark"] .avatar {
