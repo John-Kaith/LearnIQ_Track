@@ -3,5 +3,5 @@
  * See learniq-config.example.js
  */
 window.LEARNIQ_CONFIG = {
-  apiBase: "",
+  apiBase: "https://api.learniqtrack.site",
 };

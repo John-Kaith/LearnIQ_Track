@@ -58,7 +58,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8000"
+      "apiBaseUrl": "https://api.learniqtrack.site"
     }
   }
 }
