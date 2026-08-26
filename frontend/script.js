@@ -4678,8 +4678,6 @@ async function loadTeacherDashboardLessons() {
         ? allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter))
         : lessons;
 
-    if (isSubjectPage) populateAnnouncementLessonPicker(yourLessons);
-
     const recentLessonsList = document.getElementById("recent-lessons-list");
     if (recentLessonsList) {
       const displayLessons =
@@ -6436,6 +6434,11 @@ function bindTeacherSubjectLessonUploadForm() {
   const subjectId = getTeacherDashboardUploadSubjectId();
 
   if (!subjectId) return;
+  // Guard against double-binding: this function can be called more than once
+  // per page load, and without this, each extra bind adds another "submit"
+  // listener — one Upload click then fires N uploads of the same file.
+  if (!uploadForm || uploadForm.dataset.bound === "1") return;
+  uploadForm.dataset.bound = "1";
 
   if (fileMeta) fileMeta.textContent = "No file selected yet.";
 
@@ -6519,37 +6522,42 @@ async function loadTeacherAnnouncements() {
   }
 }
 
-/** Fills the "Attach a lesson" dropdown on the Class stream compose form. */
-function populateAnnouncementLessonPicker(lessons) {
-  const select = document.getElementById("teacher-announcement-lesson-select");
-  if (!select) return;
-  const prevValue = select.value;
-  const options = (lessons || [])
-    .map((l) => {
-      const id = String(l.id || l.file_id || "");
-      if (!id) return "";
-      const label = `${l.filename || "Untitled lesson"}${l.is_published ? "" : " (unpublished)"}`;
-      return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
-    })
-    .join("");
-  select.innerHTML = `<option value="">No lesson attached</option>${options}`;
-  if (prevValue && lessons?.some((l) => String(l.id || l.file_id) === prevValue)) {
-    select.value = prevValue;
-  }
-}
-
 function bindTeacherAnnouncementForm() {
   const form = document.getElementById("teacher-announcement-form");
   const textEl = document.getElementById("teacher-announcement-text");
-  const lessonSelect = document.getElementById("teacher-announcement-lesson-select");
   const postBtn = document.getElementById("teacher-announcement-post-btn");
-  const uploadLink = form?.querySelector(".teacher-announcement-upload-link");
-  if (uploadLink && uploadLink.dataset.bound !== "1") {
-    uploadLink.dataset.bound = "1";
-    uploadLink.addEventListener("click", () => {
-      setTeacherSubjectActiveTab(uploadLink.getAttribute("data-teacher-subject-tab") || "upload");
+  const fileInput = document.getElementById("teacher-announcement-file-input");
+  const attachBtn = document.getElementById("teacher-announcement-attach-btn");
+  const fileNameEl = document.getElementById("teacher-announcement-file-name");
+  const fileClearBtn = document.getElementById("teacher-announcement-file-clear");
+
+  const clearAttachedFile = () => {
+    if (fileInput) fileInput.value = "";
+    if (fileNameEl) {
+      fileNameEl.hidden = true;
+      fileNameEl.textContent = "";
+    }
+    if (fileClearBtn) fileClearBtn.hidden = true;
+  };
+
+  if (attachBtn && attachBtn.dataset.bound !== "1") {
+    attachBtn.dataset.bound = "1";
+    attachBtn.addEventListener("click", () => fileInput?.click());
+    fileInput?.addEventListener("change", () => {
+      const f = fileInput.files?.[0];
+      if (!f) {
+        clearAttachedFile();
+        return;
+      }
+      if (fileNameEl) {
+        fileNameEl.textContent = f.name;
+        fileNameEl.hidden = false;
+      }
+      if (fileClearBtn) fileClearBtn.hidden = false;
     });
+    fileClearBtn?.addEventListener("click", clearAttachedFile);
   }
+
   if (!form || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
 
@@ -6565,9 +6573,22 @@ function bindTeacherAnnouncementForm() {
       return;
     }
 
-    if (postBtn) postBtn.disabled = true;
+    const attachedFile = fileInput?.files?.[0] || null;
+    const originalBtnHtml = postBtn?.innerHTML;
+    if (postBtn) {
+      postBtn.disabled = true;
+      if (attachedFile) postBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Uploading & posting…`;
+    }
     try {
-      const lessonId = lessonSelect?.value || null;
+      // One click, two calls under the hood: upload the file (same pipeline as
+      // the Upload tab — text extraction runs here; AI quiz/reviewer generation
+      // stays a separate explicit step) then attach its id to the post.
+      let lessonId = null;
+      if (attachedFile) {
+        const uploaded = await uploadFile(attachedFile, getTeacherDashboardUploadSubjectId() || subjectId);
+        lessonId = uploaded?.file_id || null;
+      }
+
       const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
         method: "POST",
         headers: {
@@ -6586,12 +6607,15 @@ function bindTeacherAnnouncementForm() {
       if (emptyEl) emptyEl.hidden = announcements.length > 0;
 
       if (textEl) textEl.value = "";
-      if (lessonSelect) lessonSelect.value = "";
+      clearAttachedFile();
       showToast("Announcement posted.", "success");
     } catch (e) {
       showToast(e.message || "Could not post announcement.", "error");
     } finally {
-      if (postBtn) postBtn.disabled = false;
+      if (postBtn) {
+        postBtn.disabled = false;
+        if (originalBtnHtml) postBtn.innerHTML = originalBtnHtml;
+      }
     }
   });
 }
