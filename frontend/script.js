@@ -6611,6 +6611,7 @@ function setupTeacherSubjectLessonsPage() {
   setupTeacherSubjectLessonsTabs();
   bindTeacherSubjectLessonUploadForm();
   bindTeacherAnnouncementForm();
+  bindAnnouncementFeedInteractions();
   void loadTeacherSubjectLessonsPage();
   void loadTeacherAnnouncements();
 }
@@ -8267,6 +8268,7 @@ function renderLessonSelection() {
   renderSubjectTeacherProfile();
   loadSubjectPeople(selectedSubjectId);
   loadSubjectAnnouncements(selectedSubjectId);
+  bindAnnouncementFeedInteractions();
 
   const lessons = getActiveStudentLessons();
   selectionEl.hidden = false;
