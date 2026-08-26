@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082700" defer></script>
+  <script src="script.js?v=2026082701" defer></script>
   <script src="js/pages/class-attendance.js?v=2026082105" defer></script>
 </head>
 <body class="teacher-subject-lessons-page teacher-learniq-page" data-sidebar-active="subjects">
@@ -89,22 +89,6 @@
         </article>
       </section>
 
-      <section class="glass-card content-card teacher-stream-panel" id="teacher-stream-panel" aria-label="Class stream">
-        <div class="content-card-header-row">
-          <h2><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Class stream</h2>
-        </div>
-        <form id="teacher-announcement-form" class="teacher-announcement-form">
-          <textarea id="teacher-announcement-text" class="form-input" rows="3" maxlength="4000" placeholder="Share an announcement with your class…" required></textarea>
-          <div class="button-group" style="justify-content: flex-end; margin-top: 0.6rem;">
-            <button type="submit" class="btn btn-primary" id="teacher-announcement-post-btn">
-              <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Post
-            </button>
-          </div>
-        </form>
-        <div id="teacher-announcements-feed" class="subject-announcements-feed"></div>
-        <p id="teacher-announcements-empty" class="small-note" hidden>No announcements yet. Post one above.</p>
-      </section>
-
       <section class="glass-card content-card class-attendance-teacher-panel" id="teacher-class-attendance-panel" aria-label="Class attendance">
         <div class="class-attendance-teacher-head">
           <div>
@@ -175,7 +159,10 @@
       <section class="dashboard-grid teacher-subject-lessons-grid">
         <article class="glass-card content-card teacher-subject-workspace">
           <div class="workspace-tabs" role="tablist" aria-label="Subject lesson sections">
-            <button type="button" class="workspace-tab is-active" data-teacher-subject-tab="upload" role="tab" aria-selected="true" aria-controls="teacher-subject-panel-upload" id="teacher-subject-tab-upload">
+            <button type="button" class="workspace-tab is-active" data-teacher-subject-tab="stream" role="tab" aria-selected="true" aria-controls="teacher-subject-panel-stream" id="teacher-subject-tab-stream">
+              <i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Class stream
+            </button>
+            <button type="button" class="workspace-tab" data-teacher-subject-tab="upload" role="tab" aria-selected="false" aria-controls="teacher-subject-panel-upload" id="teacher-subject-tab-upload">
               <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload lesson
             </button>
             <button type="button" class="workspace-tab" data-teacher-subject-tab="lessons" role="tab" aria-selected="false" aria-controls="teacher-subject-panel-lessons" id="teacher-subject-tab-lessons">
@@ -188,7 +175,21 @@
             </button>
           </div>
 
-          <div id="teacher-subject-panel-upload" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-upload">
+          <div id="teacher-subject-panel-stream" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-stream">
+            <p class="content-subtitle teacher-subject-panel-intro">Post updates and announcements for students enrolled in this subject.</p>
+            <form id="teacher-announcement-form" class="teacher-announcement-form">
+              <textarea id="teacher-announcement-text" class="form-input" rows="3" maxlength="4000" placeholder="Share an announcement with your class…" required></textarea>
+              <div class="button-group" style="justify-content: flex-end; margin-top: 0.6rem;">
+                <button type="submit" class="btn btn-primary" id="teacher-announcement-post-btn">
+                  <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Post
+                </button>
+              </div>
+            </form>
+            <div id="teacher-announcements-feed" class="subject-announcements-feed"></div>
+            <p id="teacher-announcements-empty" class="small-note" hidden>No announcements yet. Post one above.</p>
+          </div>
+
+          <div id="teacher-subject-panel-upload" class="workspace-tab-panel teacher-subject-tab-panel" role="tabpanel" aria-labelledby="teacher-subject-tab-upload" hidden>
             <p class="content-subtitle teacher-subject-panel-intro">Files you upload here are saved under <strong id="teacher-subject-upload-label">this subject</strong>.</p>
             <form id="upload-form" class="upload-form teacher-subject-upload-form upload-box" autocomplete="off">
               <div class="file-input-wrapper">

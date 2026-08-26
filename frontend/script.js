@@ -6328,11 +6328,11 @@ function updateTeacherSubjectPageStats(yourLessons, publishedSource) {
   setText("teacher-subject-tab-count-published", String(published));
 }
 
-let activeTeacherSubjectTab = "upload";
+let activeTeacherSubjectTab = "stream";
 
 function setTeacherSubjectActiveTab(tab) {
-  const valid = ["upload", "lessons", "published"];
-  const next = valid.includes(tab) ? tab : "upload";
+  const valid = ["stream", "upload", "lessons", "published"];
+  const next = valid.includes(tab) ? tab : "stream";
   activeTeacherSubjectTab = next;
 
   document.querySelectorAll(".workspace-tab[data-teacher-subject-tab]").forEach((btn) => {
@@ -6343,6 +6343,7 @@ function setTeacherSubjectActiveTab(tab) {
   });
 
   const panels = {
+    stream: document.getElementById("teacher-subject-panel-stream"),
     upload: document.getElementById("teacher-subject-panel-upload"),
     lessons: document.getElementById("teacher-subject-panel-lessons"),
     published: document.getElementById("teacher-subject-panel-published"),
