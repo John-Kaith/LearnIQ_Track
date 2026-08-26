@@ -5544,6 +5544,104 @@ async function joinSubjectWithCode(joinCode) {
   return data;
 }
 
+/**
+ * Global "Join a class" modal, opened from the sidebar nav on any student
+ * page (not just My lesson) — built once on demand, reuses joinSubjectWithCode().
+ */
+function openJoinClassModal() {
+  let backdrop = document.getElementById("join-class-modal-backdrop");
+  if (backdrop) {
+    backdrop.hidden = false;
+    document.getElementById("join-class-code-input")?.focus();
+    return;
+  }
+
+  backdrop = document.createElement("div");
+  backdrop.id = "join-class-modal-backdrop";
+  backdrop.className = "action-modal-backdrop";
+
+  backdrop.innerHTML = `
+    <div class="action-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="join-class-modal-title">
+      <div class="action-modal-head">
+        <h3 id="join-class-modal-title"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Join a class</h3>
+      </div>
+      <p class="small-note">Your teacher will give you a code like <strong>MAT-C5DL</strong>.</p>
+      <form id="join-class-modal-form">
+        <input type="text" id="join-class-code-input" class="form-input" placeholder="E.G. MAT-C5DL" maxlength="12" autocomplete="off" required />
+        <p class="small-note add-subject-error" id="join-class-code-error" hidden role="alert"></p>
+        <div class="learniq-confirm-actions" style="margin-top: 0.85rem;">
+          <button type="button" class="btn btn-ghost" id="join-class-modal-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="join-class-modal-submit">
+            <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Join class
+          </button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  const closeModal = () => {
+    backdrop.hidden = true;
+  };
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeModal();
+  });
+  document.getElementById("join-class-modal-cancel")?.addEventListener("click", closeModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !backdrop.hidden) closeModal();
+  });
+
+  const input = document.getElementById("join-class-code-input");
+  input?.addEventListener("input", () => {
+    const v = String(input.value || "").toUpperCase().replace(/\s+/g, "");
+    if (input.value !== v) input.value = v;
+  });
+
+  document.getElementById("join-class-modal-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorEl = document.getElementById("join-class-code-error");
+    if (errorEl) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+    const submitBtn = document.getElementById("join-class-modal-submit");
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const data = await joinSubjectWithCode(input?.value || "");
+      const name = data?.subject?.name || "Subject";
+      showToast(`Joined "${name}" successfully.`, "success");
+      if (input) input.value = "";
+      closeModal();
+      if (typeof renderSubjectsPage === "function" && document.getElementById("subjects-list")) {
+        await renderSubjectsPage();
+      }
+    } catch (e) {
+      const msg = e?.message || "Could not join subject.";
+      if (errorEl) {
+        errorEl.textContent = msg;
+        errorEl.hidden = false;
+      }
+      showToast(msg, "error");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  input?.focus();
+}
+
+/** Delegated so the sidebar's "Join a class" link works on every student page. */
+function bindJoinClassSidebarLink() {
+  if (document.body.dataset.joinClassLinkBound === "1") return;
+  document.body.dataset.joinClassLinkBound = "1";
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest('[data-action="join-class"]');
+    if (!link) return;
+    event.preventDefault();
+    openJoinClassModal();
+  });
+}
+bindJoinClassSidebarLink();
+
 async function regenerateSubjectJoinCode(subjectId) {
   const teacher = getCurrentUserSession();
   const teacherId = String(teacher?.id_number || "").trim();
@@ -5733,10 +5831,8 @@ async function renderSubjectsPage() {
   const selectionEl = document.getElementById("subjects-selection");
   const emptyEl = document.getElementById("subjects-empty");
   const emptyText = document.getElementById("subjects-empty-text");
-  const joinPanel = document.getElementById("student-join-subject-panel");
   if (!listEl || !selectionEl || !emptyEl) return;
 
-  if (joinPanel) joinPanel.hidden = false;
   closeAllSubjectCardMenus();
 
   const studentId = getStudentIdNumberForApi();
@@ -5778,7 +5874,7 @@ async function renderSubjectsPage() {
       emptyEl.hidden = false;
       if (emptyText) {
         emptyText.textContent =
-          "You have not joined any subjects yet. Enter your teacher's class code in the form above.";
+          "You have not joined any subjects yet. Use \"Join a class\" in the sidebar to enter your teacher's class code.";
       }
       return;
     }
@@ -5802,40 +5898,8 @@ function setupSubjectsPage() {
   initRoleAwareDashboardSidebar();
   void hydrateSidebarProfileFromDatabase();
 
-  const joinForm = document.getElementById("student-join-subject-form");
-  const joinInput = document.getElementById("student-join-code-input");
-  const joinError = document.getElementById("student-join-code-error");
-
-  joinInput?.addEventListener("input", () => {
-    const v = String(joinInput.value || "").toUpperCase().replace(/\s+/g, "");
-    if (joinInput.value !== v) joinInput.value = v;
-  });
-
-  joinForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (joinError) {
-      joinError.hidden = true;
-      joinError.textContent = "";
-    }
-    const submitBtn = joinForm.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
-    try {
-      const data = await joinSubjectWithCode(joinInput?.value || "");
-      const name = data?.subject?.name || "Subject";
-      showToast(`Joined "${name}" successfully.`, "success");
-      if (joinInput) joinInput.value = "";
-      await renderSubjectsPage();
-    } catch (e) {
-      const msg = e?.message || "Could not join subject.";
-      if (joinError) {
-        joinError.textContent = msg;
-        joinError.hidden = false;
-      }
-      showToast(msg, "error");
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-    }
-  });
+  // "Join a class" now lives in the sidebar (openJoinClassModal, bound
+  // globally) instead of a form on this page — see bindJoinClassSidebarLink().
 
   document.getElementById("subjects-refresh-btn")?.addEventListener("click", () => {
     renderSubjectsPage();

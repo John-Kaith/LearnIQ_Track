@@ -9,12 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082706" />
+<link rel="stylesheet" href="style.css?v=2026082707" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082706" defer></script>
+  <script src="script.js?v=2026082707" defer></script>
 </head>
 <body class="subjects-page" data-sidebar-active="subjects">
   <div class="dashboard-shell container">
@@ -32,6 +32,7 @@
       <nav class="side-links">
         <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
         <a class="active" href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="#" data-action="join-class"><i class="fa-solid fa-right-to-bracket"></i> Join a class</a>
         <a href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
         <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
         <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
@@ -56,51 +57,16 @@
       <section class="glass-card panel-header">
         <div class="panel-title">
           <h1>My lesson</h1>
-          <p>Enter your teacher's class code to join a subject, then open it to view published lessons.</p>
+          <p>Tap a subject to view its published lessons. Use <strong>Join a class</strong> in the sidebar to enroll in a new one.</p>
         </div>
       </section>
 
       <section class="dashboard-grid">
         <div class="content-stack lesson-workspace-main">
-          <article class="glass-card content-card student-join-hero" id="student-join-subject-panel" aria-label="Join subject with class code">
-            <div class="student-join-hero-head">
-              <div class="student-join-hero-icon" aria-hidden="true">
-                <i class="fa-solid fa-right-to-bracket"></i>
-              </div>
-              <div>
-                <h3>Join a subject</h3>
-                <p class="content-subtitle">Your teacher will give you a code like <strong>MAT-C5DL</strong>. Paste it below to enroll.</p>
-              </div>
-            </div>
-
-            <form id="student-join-subject-form" class="join-subject-form" autocomplete="off">
-              <div class="join-subject-form-row">
-                <label class="form-field join-code-field">
-                  <span class="small-note">Class code</span>
-                  <input
-                    type="text"
-                    id="student-join-code-input"
-                    class="form-input join-code-input"
-                    placeholder="e.g. MAT-C5DL"
-                    maxlength="16"
-                    autocapitalize="characters"
-                    autocomplete="off"
-                    spellcheck="false"
-                    required
-                  />
-                </label>
-                <button type="submit" class="btn btn-primary join-submit-btn" id="student-join-submit-btn">
-                  <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Join class
-                </button>
-              </div>
-              <p id="student-join-code-error" class="small-note add-subject-error" hidden role="alert"></p>
-            </form>
-          </article>
-
           <article id="subjects-empty" class="glass-card content-card" hidden>
             <h3>No subjects yet</h3>
             <p class="content-subtitle" id="subjects-empty-text">
-              You have not joined any subjects. Use the form above to enter your teacher's class code.
+              You have not joined any subjects. Use <strong>Join a class</strong> in the sidebar to enter your teacher's class code.
             </p>
           </article>
 

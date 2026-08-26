@@ -4142,7 +4142,9 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   background: var(--subject-color);
   color: #fff;
   text-decoration: none;
-  overflow: hidden;
+  /* No overflow:hidden here — the avatar below is meant to straddle the
+     banner/body seam (bottom: -1.4rem). The outer .subject-classroom-card
+     already clips to the card's rounded corners, so this stays contained. */
 }
 
 .subject-classroom-card-banner::before {
