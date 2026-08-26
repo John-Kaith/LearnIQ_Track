@@ -1,0 +1,88 @@
+====================================================
+LEARNIQ TRACK — UBUNTU SERVER COMMAND CHEAT SHEET
+====================================================
+Updated: 2026-08-27
+
+Setup: Ubuntu laptop runs everything as ONE background
+service (learniq-backend). It auto-starts when the laptop
+boots and keeps running even if you close the terminal.
+No more manual "2 terminal" routine, no more changing URL.
+
+Public links (permanent, never change):
+  Website:      https://learniqtrack.site
+  API docs:     https://api.learniqtrack.site/docs
+
+
+----------------------------------------------------
+1. STOP / START THE SERVER
+----------------------------------------------------
+learniq-stop        -> turns OFF everything (site + API)
+learniq-start        -> turns it back ON
+
+Use learniq-stop before doing updates so nobody uses the
+site while you're changing something. Nothing comes back
+on its own until you run learniq-start again (unless you
+restart the whole laptop).
+
+
+----------------------------------------------------
+2. CHECK IF IT'S RUNNING
+----------------------------------------------------
+sudo systemctl status learniq-backend
+
+  "active (running)"  = server is UP
+  "inactive (dead)"   = server is DOWN
+
+
+----------------------------------------------------
+3. WATCH LIVE REQUESTS (like the old scrolling terminal)
+----------------------------------------------------
+sudo journalctl -u learniq-backend -f
+
+Shows every request in real time as people use the site
+(logins, uploads, lesson views, etc). Press Ctrl+C to stop
+watching — this does NOT stop the server, just the log view.
+
+To see recent history instead of live:
+sudo journalctl -u learniq-backend -n 50
+
+
+----------------------------------------------------
+4. UPDATING THE CODE
+----------------------------------------------------
+learniq-stop
+git pull
+learniq-start
+
+
+----------------------------------------------------
+5. THE TUNNEL (Cloudflare) — rarely needed, should
+   already be running all the time
+----------------------------------------------------
+sudo systemctl status cloudflared
+sudo systemctl restart cloudflared
+
+If you ever edit ~/.cloudflared/config.yml, you must also
+copy it to the other location systemd actually reads from,
+then restart:
+sudo cp ~/.cloudflared/config.yml /etc/cloudflared/config.yml
+sudo systemctl restart cloudflared
+
+
+----------------------------------------------------
+6. IMPORTANT FOLDERS
+----------------------------------------------------
+Project code:            ~/learniq/LearnIQ_Track
+Uploaded lesson files:    ~/learniq/LearnIQ_Track/uploads/lessons/
+Tunnel config:            ~/.cloudflared/config.yml
+
+
+----------------------------------------------------
+NOTE — uploaded lesson files
+----------------------------------------------------
+Uploaded lesson files (PDF/PPTX) are saved ONLY on this
+laptop's disk, not backed up to the cloud database. If this
+laptop's disk ever fails or gets wiped, those files are lost
+for good. Known issue, not fixed yet — back up the uploads/
+folder occasionally if this matters to you.
+====================================================
