@@ -4098,9 +4098,21 @@ html[data-theme="dark"] .subject-card-menu-btn {
   color: rgba(226, 232, 240, 0.92);
 }
 
+html[data-theme="dark"] body.teacher-subjects-page .subject-card-menu-btn {
+  background: #ffffff;
+  color: #44403c;
+  border-color: var(--lq-border-subtle);
+}
+
 html[data-theme="dark"] .subject-card-menu-btn:hover {
   border-color: rgba(148, 163, 184, 0.4);
   background: rgba(30, 41, 59, 0.9);
+}
+
+html[data-theme="dark"] body.teacher-subjects-page .subject-card-menu-btn:hover {
+  background: #ffffff;
+  color: #1c1917;
+  border-color: var(--lq-border-accent);
 }
 
 html[data-theme="dark"] .subject-card-menu {
@@ -4466,6 +4478,21 @@ html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-actions 
   background: var(--lq-bg-deep);
   color: var(--lq-text-primary);
   border-color: var(--lq-border-accent);
+}
+
+body.teacher-subjects-page button.subject-card-menu-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #ffffff !important;
+  color: #44403c !important;
+  border: 1px solid rgba(120, 53, 15, 0.14) !important;
+  box-shadow: none !important;
+}
+
+body.teacher-subjects-page button.subject-card-menu-btn:hover {
+  background: #ffffff !important;
+  color: #1c1917 !important;
+  border-color: rgba(217, 119, 6, 0.35) !important;
 }
 
 html:not([data-theme="dark"]) .teacher-subjects-page .subject-card-menu-btn {
@@ -11309,19 +11336,19 @@ html[data-theme="dark"] .immersion-row-badge.completed {
   }
 }
 
-html:not([data-theme="dark"]) body.teacher-subjects-page .subject-card-menu-btn,
-html:not([data-theme="dark"]) body.teacher-subjects-page .subject-card-menu-btn:hover {
+body.teacher-subjects-page button.subject-card-menu-btn,
+body.teacher-subjects-page button.subject-card-menu-btn:hover {
   appearance: none;
   -webkit-appearance: none;
-  background: #ffffff;
-  color: #44403c;
-  border: 1px solid var(--lq-border-subtle);
-  box-shadow: none;
+  background: #ffffff !important;
+  color: #44403c !important;
+  border: 1px solid rgba(120, 53, 15, 0.14) !important;
+  box-shadow: none !important;
 }
 
-html:not([data-theme="dark"]) body.teacher-subjects-page .subject-card-menu-btn:hover {
-  border-color: var(--lq-border-accent);
-  color: #1c1917;
+body.teacher-subjects-page button.subject-card-menu-btn:hover {
+  border-color: rgba(217, 119, 6, 0.35) !important;
+  color: #1c1917 !important;
 }
 
 /* ── Global safety net: the `hidden` attribute must always win ──
