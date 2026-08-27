@@ -4029,6 +4029,10 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   grid-column: 1 / -1;
 }
 
+.lesson-card.subject-card-with-menu:has(.subject-card-menu:not([hidden])) {
+  z-index: 6;
+}
+
 .subject-card-menu-btn {
   display: inline-flex;
   align-items: center;
@@ -4036,16 +4040,17 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.72);
-  color: rgba(226, 232, 240, 0.92);
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-sm);
+  background: var(--lq-bg-elevated);
+  color: var(--lq-text-secondary);
   cursor: pointer;
 }
 
 .subject-card-menu-btn:hover {
-  border-color: rgba(148, 163, 184, 0.4);
-  background: rgba(30, 41, 59, 0.9);
+  border-color: var(--lq-border-accent);
+  background: var(--lq-bg-soft);
+  color: var(--lq-text-primary);
 }
 
 .subject-card-menu {
@@ -4054,10 +4059,11 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   right: 0;
   min-width: 10.5rem;
   padding: 0.35rem;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.96);
-  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid var(--lq-border-subtle);
+  background: var(--lq-bg-elevated);
+  box-shadow: var(--lq-shadow-elevated);
+  z-index: 8;
 }
 
 .subject-card-menu button {
@@ -4069,14 +4075,47 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: rgba(226, 232, 240, 0.95);
+  color: var(--lq-text-body);
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
 }
 
 .subject-card-menu button:hover {
+  background: var(--lq-bg-soft);
+}
+
+.subject-card-menu .teacher-subject-delete-trigger {
+  color: #b91c1c;
+}
+
+html[data-theme="dark"] .subject-card-menu-btn {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+html[data-theme="dark"] .subject-card-menu-btn:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+html[data-theme="dark"] .subject-card-menu {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
+}
+
+html[data-theme="dark"] .subject-card-menu button {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+html[data-theme="dark"] .subject-card-menu button:hover {
   background: rgba(202, 138, 4, 0.14);
+}
+
+html[data-theme="dark"] .subject-card-menu .teacher-subject-delete-trigger {
+  color: #fca5a5;
 }
 
 .subject-status-pill {
@@ -4270,6 +4309,10 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   align-items: start;
 }
 
+.teacher-subjects-page .lesson-card.subject-card-with-menu {
+  grid-template-columns: 44px minmax(0, 1fr) 2.25rem;
+}
+
 .teacher-subjects-page .lesson-card-tagline {
   margin-top: 0.4rem;
   font-weight: 500;
@@ -4296,34 +4339,6 @@ html:not([data-theme="dark"]) .admin-subject-card-actions .btn-danger:hover {
   border-radius: 12px;
   font-size: 0.88rem;
   font-weight: 600;
-}
-
-.teacher-subjects-page .teacher-subject-secondary-actions {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.45rem;
-  align-items: stretch;
-}
-
-.teacher-subjects-page .teacher-subject-secondary-actions .btn {
-  width: 100%;
-  justify-content: center;
-  padding: 0.48rem 0.65rem;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.teacher-subjects-page .teacher-subject-delete-trigger {
-  min-width: 2.75rem;
-  padding-left: 0.55rem;
-  padding-right: 0.55rem;
-}
-
-.teacher-subjects-page .teacher-subject-delete-trigger .btn-label,
-.teacher-subjects-page .teacher-subject-upload-trigger .btn-label {
-  display: none;
 }
 
 .teacher-subjects-page .lesson-card .lesson-actions .btn i {

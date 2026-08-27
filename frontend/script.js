@@ -6110,20 +6110,25 @@ function buildTeacherSubjectCardHtml(subject) {
   const myLabel = myCount === 1 ? "1 of your lessons" : `${myCount} of your lessons`;
   const pubLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
   const targetUrl = `teacher-subject-lessons.html?subject_id=${encodeURIComponent(subject.id)}`;
-  const uploadBtn =
-    String(subject.id) === "__unassigned__"
-      ? ""
-      : `<button type="button" class="btn btn-secondary btn-small teacher-subject-upload-trigger" data-subject-id="${safeId}" title="Upload lesson">
-          <i class="fa-solid fa-upload" aria-hidden="true"></i><span class="btn-label">Upload</span>
-        </button>`;
-  const deleteBtn =
-    String(subject.id) === "__unassigned__"
-      ? ""
-      : `<button type="button" class="btn btn-danger btn-small teacher-subject-delete-trigger" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}" data-lesson-count="${myCount}" title="Delete subject">
-          <i class="fa-solid fa-trash" aria-hidden="true"></i><span class="btn-label">Delete</span>
-        </button>`;
+  const isUnassigned = String(subject.id) === "__unassigned__";
+  const menuHtml = isUnassigned
+    ? ""
+    : `
+      <div class="subject-card-menu-wrap">
+        <button type="button" class="subject-card-menu-btn" aria-label="Subject options" aria-haspopup="menu" aria-expanded="false" data-subject-menu-toggle="${safeId}">
+          <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+        </button>
+        <div class="subject-card-menu" role="menu" hidden data-subject-menu="${safeId}">
+          <button type="button" role="menuitem" class="teacher-subject-upload-trigger" data-subject-id="${safeId}">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload
+          </button>
+          <button type="button" role="menuitem" class="teacher-subject-delete-trigger" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}" data-lesson-count="${myCount}">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+          </button>
+        </div>
+      </div>`;
   return `
-    <article class="lesson-card subject-card-themed" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+    <article class="lesson-card subject-card-themed${isUnassigned ? "" : " subject-card-with-menu"}" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
       <div class="lesson-info">
         <h4>${escapeHtml(name)}</h4>
@@ -6132,14 +6137,11 @@ function buildTeacherSubjectCardHtml(subject) {
           <span class="lesson-card-pill"><i class="fa-solid fa-eye"></i> ${pubLabel}</span>
         </div>
         <p class="lesson-card-tagline">${escapeHtml(description)}</p>
-        ${String(subject.id) === "__unassigned__" ? "" : buildTeacherJoinCodeBlockHtml(subject)}
+        ${isUnassigned ? "" : buildTeacherJoinCodeBlockHtml(subject)}
       </div>
+      ${menuHtml}
       <div class="lesson-actions teacher-subject-card-actions">
         <a class="btn btn-primary btn-small teacher-subject-open-btn" href="${targetUrl}">Open Subject</a>
-        <div class="teacher-subject-secondary-actions">
-          ${uploadBtn}
-          ${deleteBtn}
-        </div>
       </div>
     </article>
   `;
@@ -6294,6 +6296,21 @@ function setupTeacherSubjectsQuickUpload() {
   if (listEl && !listEl.dataset.uploadBound) {
     listEl.dataset.uploadBound = "1";
     listEl.addEventListener("click", (event) => {
+      const menuToggle = event.target.closest("[data-subject-menu-toggle]");
+      if (menuToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = menuToggle.getAttribute("data-subject-menu-toggle");
+        const menu = listEl.querySelector(`[data-subject-menu="${subjectId}"]`);
+        const wasOpen = menu && !menu.hidden;
+        closeAllSubjectCardMenus();
+        if (menu && !wasOpen) {
+          menu.hidden = false;
+          menuToggle.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
       const copyBtn = event.target.closest(".teacher-subject-copy-code");
       if (copyBtn) {
         event.preventDefault();
@@ -6347,6 +6364,7 @@ function setupTeacherSubjectsQuickUpload() {
       if (deleteTrigger) {
         event.preventDefault();
         event.stopPropagation();
+        closeAllSubjectCardMenus();
         void teacherDeleteSubject(
           deleteTrigger.getAttribute("data-subject-id") || "",
           deleteTrigger.getAttribute("data-subject-name") || "",
@@ -6359,8 +6377,17 @@ function setupTeacherSubjectsQuickUpload() {
       if (!trigger || !quickFileInput) return;
       event.preventDefault();
       event.stopPropagation();
+      closeAllSubjectCardMenus();
       pendingQuickSubjectId = trigger.getAttribute("data-subject-id") || "";
       quickFileInput.click();
+    });
+  }
+
+  if (document.body.dataset.teacherSubjectMenusBound !== "1") {
+    document.body.dataset.teacherSubjectMenusBound = "1";
+    document.addEventListener("click", (event) => {
+      if (event.target.closest(".subject-card-menu-wrap")) return;
+      closeAllSubjectCardMenus();
     });
   }
 }
