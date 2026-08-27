@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from supabase import Client, create_client
 
 _env_dir = Path(__file__).resolve().parent
-load_dotenv(_env_dir / ".env", override=True)
+load_dotenv(_env_dir / ".env")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = (
