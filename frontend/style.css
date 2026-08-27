@@ -4407,12 +4407,80 @@ html[data-theme="dark"] .subject-card-menu .teacher-subject-delete-trigger {
 }
 
 html:not([data-theme="dark"]) .teacher-subjects-page .teacher-subject-join-code {
-  background: rgba(15, 23, 42, 0.04);
-  border-color: rgba(15, 23, 42, 0.1);
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-subtle);
 }
 
 html:not([data-theme="dark"]) .teacher-subjects-page .lesson-card-tagline {
-  color: rgba(15, 23, 42, 0.65);
+  color: var(--lq-text-secondary);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .lesson-card,
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-card-themed.lesson-card {
+  background: var(--lq-bg-deep);
+  border: 1px solid var(--lq-border-subtle);
+  box-shadow: var(--lq-shadow-card);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .lesson-card:hover {
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-accent);
+  box-shadow: var(--lq-shadow-elevated);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .lesson-card-icon {
+  color: var(--subject-color, var(--lq-accent-indigo));
+  background: var(--lq-bg-deep);
+  border: 1px solid var(--lq-border-subtle);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .lesson-card-pill {
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-subtle);
+  color: var(--lq-text-secondary);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-label,
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-empty {
+  color: var(--lq-text-muted);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-value {
+  background: var(--lq-bg-deep);
+  color: var(--lq-text-primary);
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-sm);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-actions .btn {
+  background: var(--lq-bg-deep);
+  color: var(--lq-text-secondary);
+  border: 1px solid var(--lq-border-subtle);
+  box-shadow: none;
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-join-code-actions .btn:hover {
+  background: var(--lq-bg-deep);
+  color: var(--lq-text-primary);
+  border-color: var(--lq-border-accent);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-card-menu-btn {
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-subtle);
+  color: var(--lq-text-muted);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-card-menu-btn:hover {
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-accent);
+  color: var(--lq-text-primary);
+}
+
+html:not([data-theme="dark"]) .teacher-subjects-page .subject-card-menu {
+  background: var(--lq-bg-deep);
+  border-color: var(--lq-border-subtle);
+  box-shadow: var(--lq-shadow-elevated);
 }
 
 .panel-header-actions {
