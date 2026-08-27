@@ -3579,6 +3579,17 @@ html[data-theme="dark"] .subject-announcement-lesson-icon {
   margin-bottom: 0.65rem;
 }
 
+.subject-announcement-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.subject-announcement-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .subject-announcement-avatar {
   flex-shrink: 0;
   width: 40px;
@@ -11336,8 +11347,8 @@ html[data-theme="dark"] .immersion-row-badge.completed {
   }
 }
 
-body.teacher-subjects-page button.subject-card-menu-btn,
-body.teacher-subjects-page button.subject-card-menu-btn:hover {
+body.teacher-subject-lessons-page button.subject-card-menu-btn,
+body.teacher-subject-lessons-page button.subject-card-menu-btn:hover {
   appearance: none;
   -webkit-appearance: none;
   background: #ffffff !important;
@@ -11346,7 +11357,7 @@ body.teacher-subjects-page button.subject-card-menu-btn:hover {
   box-shadow: none !important;
 }
 
-body.teacher-subjects-page button.subject-card-menu-btn:hover {
+body.teacher-subject-lessons-page button.subject-card-menu-btn:hover {
   border-color: rgba(217, 119, 6, 0.35) !important;
   color: #1c1917 !important;
 }

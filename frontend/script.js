@@ -6630,6 +6630,8 @@ function renderAnnouncementLessonCardHtml(lesson) {
 }
 
 function renderAnnouncementFeedHtml(announcements) {
+  const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+  const canManage = String(user?.role || "").trim().toLowerCase() === "teacher";
   return (announcements || [])
     .map((a) => {
       const name = (a.teacher_name || "Teacher").trim();
@@ -6639,14 +6641,30 @@ function renderAnnouncementFeedHtml(announcements) {
       const commentCount = a.comment_count ?? comments.length;
       const reactionCount = a.reaction_count ?? 0;
       const reacted = !!a.viewer_reacted;
+      const aid = escapeHtml(String(a.id));
+      const sid = escapeHtml(String(a.subject_id || ""));
+      const menuHtml = canManage
+        ? `
+        <div class="subject-card-menu-wrap subject-announcement-menu-wrap">
+          <button type="button" class="subject-card-menu-btn" aria-label="Post options" aria-haspopup="menu" aria-expanded="false" data-announcement-menu-toggle="${aid}">
+            <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+          </button>
+          <div class="subject-card-menu" role="menu" hidden data-announcement-menu="${aid}">
+            <button type="button" role="menuitem" class="teacher-subject-delete-trigger" data-announcement-delete data-announcement-id="${aid}" data-subject-id="${sid}">
+              <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+            </button>
+          </div>
+        </div>`
+        : "";
       return `
-      <article class="subject-announcement-item" data-announcement-id="${escapeHtml(String(a.id))}" data-subject-id="${escapeHtml(String(a.subject_id || ""))}">
+      <article class="subject-announcement-item" data-announcement-id="${aid}" data-subject-id="${sid}">
         <div class="subject-announcement-head">
           <div class="subject-announcement-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
           <div class="subject-announcement-meta">
             <strong>${escapeHtml(name)}</strong>
             <span>${escapeHtml(when)}</span>
           </div>
+          ${menuHtml}
         </div>
         <div class="subject-announcement-body">${escapeHtml(a.body || "")}</div>
         ${renderAnnouncementLessonCardHtml(a.lesson)}
@@ -6672,11 +6690,99 @@ function renderAnnouncementFeedHtml(announcements) {
 }
 
 /** Delegated so it keeps working after every innerHTML re-render of a feed. */
+function closeAllAnnouncementMenus() {
+  document.querySelectorAll("[data-announcement-menu]").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-announcement-menu-toggle]").forEach((btn) => {
+    btn.setAttribute("aria-expanded", "false");
+  });
+}
+
+function applyAnnouncementFeedHtml(feedEl, announcements) {
+  if (!feedEl) return;
+  const list = Array.isArray(announcements) ? announcements : [];
+  const emptyEl =
+    feedEl.id === "teacher-announcements-feed"
+      ? document.getElementById("teacher-announcements-empty")
+      : document.getElementById("subject-announcements-empty");
+  if (!list.length) {
+    feedEl.innerHTML = "";
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+  feedEl.innerHTML = renderAnnouncementFeedHtml(list);
+}
+
 function bindAnnouncementFeedInteractions() {
   if (document.body.dataset.announcementInteractionsBound === "1") return;
   document.body.dataset.announcementInteractionsBound = "1";
 
   document.addEventListener("click", async (event) => {
+    const menuToggle = event.target.closest("[data-announcement-menu-toggle]");
+    if (menuToggle) {
+      event.preventDefault();
+      event.stopPropagation();
+      const aid = menuToggle.getAttribute("data-announcement-menu-toggle");
+      const menu = document.querySelector(`[data-announcement-menu="${aid}"]`);
+      const wasOpen = menu && !menu.hidden;
+      closeAllAnnouncementMenus();
+      if (typeof closeAllSubjectCardMenus === "function") closeAllSubjectCardMenus();
+      if (menu && !wasOpen) {
+        menu.hidden = false;
+        menuToggle.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+
+    const deleteBtn = event.target.closest("[data-announcement-delete]");
+    if (deleteBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAllAnnouncementMenus();
+      const subjectId = deleteBtn.getAttribute("data-subject-id") || "";
+      const announcementId = deleteBtn.getAttribute("data-announcement-id") || "";
+      if (!subjectId || !announcementId) return;
+      const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+      if (!user?.access_token) {
+        showToast("Sign in required.", "error");
+        return;
+      }
+      let ok = false;
+      if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+        ok = await window.LearnIQConfirm.show({
+          title: "Delete this post?",
+          message: "This announcement will be removed from the class stream. This cannot be undone.",
+          confirmText: "Delete",
+          cancelText: "Cancel",
+          variant: "danger",
+        });
+      } else {
+        ok = window.confirm("Delete this post? This cannot be undone.");
+      }
+      if (!ok) return;
+      try {
+        const res = await fetch(
+          apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements/${encodeURIComponent(announcementId)}`),
+          { method: "DELETE", headers: { Authorization: `Bearer ${user.access_token}` } },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not delete post.");
+        const article = deleteBtn.closest(".subject-announcement-item");
+        const feedEl = article?.closest(".subject-announcements-feed");
+        applyAnnouncementFeedHtml(feedEl, data.announcements);
+        showToast("Post deleted.", "success");
+      } catch (e) {
+        showToast(e.message || "Could not delete post.", "error");
+      }
+      return;
+    }
+
+    if (!event.target.closest(".subject-announcement-menu-wrap")) {
+      closeAllAnnouncementMenus();
+    }
+
     const btn = event.target.closest("[data-announcement-react-btn]");
     if (!btn) return;
     const article = btn.closest(".subject-announcement-item");

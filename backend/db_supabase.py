@@ -3319,6 +3319,19 @@ def create_subject_announcement(
     return inserted
 
 
+def delete_subject_announcement(announcement_id: str, teacher_id_number: str, subject_id: str) -> None:
+    """Owning teacher removes a Class Stream post (comments/reactions cascade)."""
+    aid = str(announcement_id or "").strip()
+    idn = str(teacher_id_number or "").strip()
+    sid = str(subject_id or "").strip()
+    row = get_announcement_row(aid)
+    if not row or str(row.get("subject_id") or "") != sid:
+        raise ValueError("Announcement not found.")
+    if str(row.get("teacher_id_number") or "").strip() != idn:
+        raise PermissionError("Only this post's teacher can delete it.")
+    _sb().table("subject_announcements").delete().eq("id", aid).execute()
+
+
 def get_announcement_row(announcement_id: str) -> dict[str, Any] | None:
     aid = str(announcement_id or "").strip()
     if not aid:

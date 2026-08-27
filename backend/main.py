@@ -1555,6 +1555,37 @@ async def create_subject_announcement_endpoint(
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.delete("/subjects/{subject_id}/announcements/{announcement_id}")
+async def delete_subject_announcement_endpoint(
+    subject_id: str,
+    announcement_id: str,
+    authorization: str | None = Header(default=None),
+):
+    """Only the subject's owning teacher may delete a Class Stream post."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_prof = db_supabase.get_profile_by_id_number(caller_idn)
+    role = str((caller_prof or {}).get("role") or "").strip().lower()
+    subject = db_supabase.get_subject_row(subject_id)
+    if not subject:
+        return JSONResponse({"error": "Subject not found."}, status_code=404)
+    if role != "teacher" or str(subject.get("created_by_teacher_id_number") or "").strip() != caller_idn:
+        return JSONResponse({"error": "Only this subject's teacher can delete announcements."}, status_code=403)
+    try:
+        db_supabase.delete_subject_announcement(announcement_id, caller_idn, subject_id)
+        return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 def _announcement_access_or_403(subject_id: str, announcement_id: str, authorization: str | None):
     """Shared guard for comment/reaction endpoints: caller must be the subject's
     teacher, an enrolled student, or admin — same rule as viewing the Class Stream.
