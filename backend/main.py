@@ -21,20 +21,25 @@ from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 from supabase import create_client, Client
 
+# Always load `backend/.env` before other local modules so stale OS SMTP_USER
+# / API_KEY values cannot win. `override=True` is required on Windows.
+_backend_env = Path(__file__).resolve().parent / ".env"
+load_dotenv(_backend_env, override=True)
+
 import db_supabase
 import email_service
 import immersion_upload
 from supabase_client import is_configured
 
-# Always load `backend/.env` (same folder as this file), not only when cwd is `backend/`.
-# `override=True` so values here win over a stale Windows `API_KEY` user env var.
-_backend_env = Path(__file__).resolve().parent / ".env"
-load_dotenv(_backend_env, override=True)
-
 if not email_service.smtp_configured():
     print(
         "[LearnIQ] Email SMTP not configured — add SMTP_USER and SMTP_PASSWORD "
         f"to {_backend_env} (Gmail App Password). Registration emails will not send."
+    )
+else:
+    print(
+        "[LearnIQ] Email SMTP ready "
+        f"SMTP_USER={os.getenv('SMTP_USER')!r} SMTP_FROM={os.getenv('SMTP_FROM')!r}"
     )
 
 BASE_DIR = Path(__file__).resolve().parent.parent

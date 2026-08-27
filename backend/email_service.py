@@ -7,9 +7,18 @@ import secrets
 import smtplib
 import ssl
 from email.message import EmailMessage
+from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
+_BACKEND_ENV = Path(__file__).resolve().parent / ".env"
 _PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+
+
+def _reload_smtp_env() -> None:
+    """Re-read backend/.env so a stale OS/process SMTP_USER cannot win."""
+    load_dotenv(_BACKEND_ENV, override=True)
 
 
 def generate_registration_password(length: int = 12) -> str:
@@ -17,16 +26,20 @@ def generate_registration_password(length: int = 12) -> str:
 
 
 def smtp_configured() -> bool:
+    _reload_smtp_env()
     return bool((os.getenv("SMTP_USER") or "").strip() and (os.getenv("SMTP_PASSWORD") or "").strip())
 
 
 def _smtp_settings() -> dict[str, Any]:
+    _reload_smtp_env()
+    user = (os.getenv("SMTP_USER") or "").strip()
+    from_addr = (os.getenv("SMTP_FROM") or user).strip()
     return {
         "host": (os.getenv("SMTP_HOST") or "smtp.gmail.com").strip(),
         "port": int(os.getenv("SMTP_PORT") or "587"),
-        "user": (os.getenv("SMTP_USER") or "").strip(),
+        "user": user,
         "password": (os.getenv("SMTP_PASSWORD") or "").strip(),
-        "from_addr": (os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "").strip(),
+        "from_addr": from_addr,
         "login_url": (os.getenv("APP_LOGIN_URL") or "http://127.0.0.1:8000/login.html").strip(),
     }
 
@@ -60,6 +73,16 @@ def send_registration_credentials_email(
         return False, "Recipient email is missing."
 
     cfg = _smtp_settings()
+    # Temporary debug: confirm the live process is using backend/.env, not a stale OS SMTP_USER.
+    print(
+        f"[LearnIQ] SMTP dispatch SMTP_USER={cfg['user']!r} SMTP_FROM={cfg['from_addr']!r} "
+        f"host={cfg['host']!r} port={cfg['port']}"
+    )
+    if cfg["from_addr"].lower() != cfg["user"].lower():
+        print(
+            "[LearnIQ] SMTP warning: SMTP_FROM differs from SMTP_USER. "
+            "Gmail will send as the authenticated SMTP_USER unless SMTP_FROM is an allowed alias."
+        )
     name = _display_name(first_name, last_name, middle_name, name_suffix)
     role_label = "Student" if role == "student" else "Teacher"
     lrn_label = "LRN" if role == "student" else "ID / Employee ID"
