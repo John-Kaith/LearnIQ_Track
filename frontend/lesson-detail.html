@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson Detail — LearnIQ Track</title>
+  <link rel="icon" type="image/svg+xml" href="images/ico_learniq_track.svg" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css?v=202608301" />
+  <script src="js/shared/reviewer-markdown.js?v=202605153" defer></script>
+  <script src="js/shared/ai-generation-cooldown.js?v=202608302" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026082701" defer></script>
+  <script src="js/pages/lesson-detail.entry.js?v=202608301" defer></script>
+</head>
+<body class="lesson-detail-page">
+  <div class="app-frame">
+    <header class="app-header">
+      <nav class="app-nav">
+        <button type="button" class="nav-btn nav-back-btn" aria-label="Go back">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <div class="nav-title-section">
+          <h1 class="app-title" id="lesson-detail-title">Lesson</h1>
+          <p class="app-subtitle" id="lesson-detail-subtitle">—</p>
+        </div>
+        <div class="nav-spacer"></div>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <section class="content-section lesson-detail-section">
+        <article class="content-card lesson-detail-card">
+          <!-- Tab Navigation -->
+          <div class="lesson-detail-nav" role="tablist" aria-label="Lesson options">
+            <button type="button" class="lesson-detail-nav-btn is-active" data-tab="view" role="tab" aria-selected="true" aria-controls="tab-view">
+              <i class="fa-solid fa-file-pdf"></i>
+              <span>View</span>
+            </button>
+            <button type="button" class="lesson-detail-nav-btn" data-tab="reviewer" role="tab" aria-selected="false" aria-controls="tab-reviewer">
+              <i class="fa-solid fa-file-lines"></i>
+              <span>Reviewer</span>
+            </button>
+            <button type="button" class="lesson-detail-nav-btn" data-tab="quiz" role="tab" aria-selected="false" aria-controls="tab-quiz">
+              <i class="fa-solid fa-list-check"></i>
+              <span>Quiz</span>
+            </button>
+            <button type="button" class="lesson-detail-nav-btn" data-tab="activity" role="tab" aria-selected="false" aria-controls="tab-activity">
+              <i class="fa-solid fa-gamepad"></i>
+              <span>Activity</span>
+            </button>
+            <button type="button" class="lesson-detail-nav-btn" data-tab="flashcards" role="tab" aria-selected="false" aria-controls="tab-flashcards">
+              <i class="fa-solid fa-clone"></i>
+              <span>Flashcards</span>
+            </button>
+          </div>
+
+          <!-- View Tab -->
+          <div id="tab-view" class="lesson-detail-tab-panel is-active" role="tabpanel" aria-labelledby="tab-view">
+            <div class="file-viewer-container">
+              <div id="pdf-viewer" class="pdf-viewer"></div>
+              <p id="file-viewer-loading" class="small-note">Loading file...</p>
+              <p id="file-viewer-error" class="small-note error" hidden></p>
+            </div>
+          </div>
+
+          <!-- Reviewer Tab -->
+          <div id="tab-reviewer" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-reviewer" hidden>
+            <div class="lesson-detail-content">
+              <div class="action-controls">
+                <button id="reviewer-generate-btn" type="button" class="btn btn-primary">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Reviewer
+                </button>
+                <button id="reviewer-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
+                  <i class="fa-solid fa-xmark"></i> Cancel
+                </button>
+              </div>
+              <p id="reviewer-status" class="small-note">Click the button to generate a study reviewer from this lesson.</p>
+              
+              <div id="reviewer-container" hidden>
+                <div class="reviewer-card-head">
+                  <h4>Reviewer</h4>
+                  <button type="button" class="btn btn-secondary btn-small" id="reviewer-download-pdf-btn" hidden>
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF
+                  </button>
+                </div>
+                <div id="reviewer-content" class="reviewer-markdown-body reviewer-mount"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quiz Tab -->
+          <div id="tab-quiz" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-quiz" hidden>
+            <div class="lesson-detail-content">
+              <div class="action-controls">
+                <button id="quiz-generate-btn" type="button" class="btn btn-primary">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Quiz
+                </button>
+                <button id="quiz-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
+                  <i class="fa-solid fa-xmark"></i> Cancel
+                </button>
+              </div>
+              <p id="quiz-status" class="small-note">Click the button to generate quiz questions from this lesson.</p>
+              
+              <div id="quiz-container" hidden>
+                <p class="small-note" id="quiz-progress"></p>
+                <div id="quiz-body"></div>
+                <p class="metric-note" id="quiz-score" style="margin-top: 1rem;"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity Tab -->
+          <div id="tab-activity" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
+            <div class="lesson-detail-content">
+              <div class="action-controls">
+                <button id="activity-generate-btn" type="button" class="btn btn-primary">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Activity (Essays)
+                </button>
+                <button id="activity-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
+                  <i class="fa-solid fa-xmark"></i> Cancel
+                </button>
+              </div>
+              <p id="activity-status" class="small-note">Click the button to generate essay activities from this lesson.</p>
+              
+              <div id="activity-container" hidden>
+                <div id="activity-list" class="activity-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Flashcards Tab -->
+          <div id="tab-flashcards" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-flashcards" hidden>
+            <div class="lesson-detail-content">
+              <div class="action-controls">
+                <button id="flashcards-generate-btn" type="button" class="btn btn-primary">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Flashcards
+                </button>
+                <button id="flashcards-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
+                  <i class="fa-solid fa-xmark"></i> Cancel
+                </button>
+              </div>
+              <p id="flashcards-status" class="small-note">Click the button to generate flashcards from this lesson.</p>
+              
+              <div id="flashcards-container" hidden>
+                <div id="flashcards-list" class="activity-list"></div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <!-- Flashcards study modal (reused from my-lesson.html) -->
+  <div id="flashcards-modal" class="fc-modal-backdrop" hidden>
+    <div class="fc-modal" role="dialog" aria-modal="true" aria-labelledby="fc-modal-title">
+      <div class="fc-modal-head">
+        <div class="fc-modal-title-wrap">
+          <h3 id="fc-modal-title"><i class="fa-solid fa-clone"></i> Flashcards</h3>
+          <span class="fc-modal-counter" id="fc-modal-counter">1 / 1</span>
+        </div>
+        <button id="fc-modal-close" type="button" class="btn btn-ghost" aria-label="Close flashcards">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="fc-modal-body">
+        <div class="fc-card-container">
+          <div id="fc-front" class="fc-card fc-front-side"></div>
+          <div id="fc-back" class="fc-card fc-back-side" hidden></div>
+        </div>
+      </div>
+      <div class="fc-modal-controls">
+        <button id="fc-prev-btn" type="button" class="btn btn-secondary" aria-label="Previous card">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <button id="fc-flip-btn" type="button" class="btn btn-secondary">
+          <i class="fa-solid fa-repeat"></i> Flip
+        </button>
+        <button id="fc-next-btn" type="button" class="btn btn-secondary" aria-label="Next card">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
