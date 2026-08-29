@@ -4506,8 +4506,10 @@ function getTeacherSubjectYourLessons(allLessons, subjectFilter) {
   return allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter));
 }
 
-/** Download a lesson file with Authorization header (same tab). */
+/** Fetch a lesson file with the session token and open it in a new tab.
+ *  A bare API URL cannot carry Authorization, so target=_blank hits 401. */
 async function downloadLessonFileWithAuth(fileUrl) {
+  const tab = window.open("about:blank", "_blank");
   try {
     const user = getCurrentUserSession();
     const headers = {};
@@ -4520,11 +4522,21 @@ async function downloadLessonFileWithAuth(fileUrl) {
       throw new Error(errData.error || `HTTP ${response.status}`);
     }
     const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    window.location.href = blobUrl;
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+    const mime = String(response.headers.get("content-type") || blob.type || "application/octet-stream")
+      .split(";")[0]
+      .trim();
+    const typed = new Blob([blob], { type: mime });
+    const blobUrl = URL.createObjectURL(typed);
+    if (tab && !tab.closed) {
+      tab.opener = null;
+      tab.location.replace(blobUrl);
+    } else {
+      window.location.href = blobUrl;
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
   } catch (e) {
-    showToast(`Could not download file: ${e.message}`, "error");
+    if (tab && !tab.closed) tab.close();
+    showToast(`Could not open file: ${e.message}`, "error");
   }
 }
 
@@ -4569,6 +4581,9 @@ function viewStudentLessonFile(lessonId) {
   }
   downloadLessonFileWithAuth(studentLessonFileViewUrl(id));
 }
+
+window.viewStudentLessonFile = viewStudentLessonFile;
+window.viewTeacherLessonFile = viewTeacherLessonFile;
 
 function teacherSubjectYourLessonActionsHtml(lesson) {
   const lid = String(lesson.id || lesson.file_id || "").replace(/'/g, "\\'");
@@ -6640,15 +6655,15 @@ function renderAnnouncementLessonCardHtml(lesson) {
   if (!lesson || !lesson.id) return "";
   const ext = String(lesson.file_type || "").replace(/^\./, "").toUpperCase() || "FILE";
   const icon = ext === "PDF" ? "fa-file-pdf" : ext === "PPT" || ext === "PPTX" ? "fa-file-powerpoint" : "fa-file-lines";
-  const url = announcementLessonFileUrl(lesson.id);
+  const lid = escapeHtml(String(lesson.id));
   return `
-    <a class="subject-announcement-lesson-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+    <button type="button" class="subject-announcement-lesson-card" data-open-lesson-file="${lid}">
       <div class="subject-announcement-lesson-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></div>
       <div class="subject-announcement-lesson-meta">
         <strong>${escapeHtml(lesson.filename || "Lesson file")}</strong>
         <span class="small-note">${escapeHtml(ext)}${lesson.is_published ? "" : " · Unpublished"}</span>
       </div>
-    </a>`;
+    </button>`;
 }
 
 function renderAnnouncementFeedHtml(announcements) {
@@ -6803,6 +6818,18 @@ function bindAnnouncementFeedInteractions() {
 
     if (!event.target.closest(".subject-announcement-menu-wrap")) {
       closeAllAnnouncementMenus();
+    }
+
+    const fileCard = event.target.closest("[data-open-lesson-file]");
+    if (fileCard) {
+      event.preventDefault();
+      event.stopPropagation();
+      const lessonId = fileCard.getAttribute("data-open-lesson-file") || "";
+      const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+      const role = String(user?.role || "").trim().toLowerCase();
+      if (role === "teacher") viewTeacherLessonFile(lessonId);
+      else viewStudentLessonFile(lessonId);
+      return;
     }
 
     const btn = event.target.closest("[data-announcement-react-btn]");

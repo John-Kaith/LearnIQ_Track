@@ -3508,12 +3508,17 @@ html[data-theme="dark"] .teacher-announcement-attach-btn:hover {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
   margin-top: 0.75rem;
   padding: 0.7rem 0.85rem;
   border-radius: var(--lq-radius-sm, 10px);
   border: 1px solid var(--lq-border-subtle);
   background: var(--panel-soft, rgba(148, 163, 184, 0.08));
   text-decoration: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 

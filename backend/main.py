@@ -2098,6 +2098,7 @@ def view_lesson_file(
     lesson_id: str,
     teacher_id_number: str = Query(...),
     download: bool = Query(False),
+    authorization: str | None = Header(default=None),
 ):
     """Stream the uploaded lesson file (teacher must own the lesson)."""
     err = require_supabase()
@@ -2106,6 +2107,9 @@ def view_lesson_file(
     tid = (teacher_id_number or "").strip()
     if not tid:
         return JSONResponse({"error": "teacher_id_number is required."}, status_code=400)
+    allowed, bad = _can_view_teacher_data(authorization, tid)
+    if not allowed:
+        return bad
     try:
         lesson = db_supabase.get_lesson_row(str(lesson_id))
         if not lesson:
