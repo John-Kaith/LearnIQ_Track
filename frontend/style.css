@@ -11619,6 +11619,227 @@ html[data-theme="dark"] .lesson-detail-tab.is-active {
   font-weight: 600;
 }
 
+/* Lesson Detail Sidebar Layout */
+.lesson-detail-main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.lesson-detail-sidebar {
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+}
+
+.lesson-detail-sidebar-card {
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lesson-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lesson-title-sidebar {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.lesson-teacher-sidebar {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.lesson-detail-divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.1);
+  margin: 0.5rem 0;
+}
+
+.lesson-detail-ai-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ai-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ai-section-title i {
+  color: #fbbf24;
+}
+
+.ai-section-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ai-feature-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ai-feature-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(96, 165, 250, 0.08);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.ai-feature-btn:hover {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.ai-feature-btn.is-active {
+  background: rgba(96, 165, 250, 0.25);
+  border-color: rgba(96, 165, 250, 0.5);
+  color: #bfdbfe;
+}
+
+.ai-feature-btn i {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.lesson-detail-content-section {
+  min-width: 0;
+}
+
+.ai-feature-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.ai-feature-panel[hidden] {
+  display: none;
+}
+
+.ai-feature-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ai-feature-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.feature-description {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.ai-feature-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.status-message {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.08);
+  border-left: 3px solid rgba(96, 165, 250, 0.3);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 1200px) {
+  .lesson-detail-main {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-detail-sidebar {
+    position: relative;
+    top: 0;
+  }
+
+  .ai-feature-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .ai-feature-btn {
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .ai-feature-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .lesson-detail-sidebar-card {
+    padding: 1rem;
+  }
+
+  .ai-feature-nav {
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+
+  .ai-feature-btn {
+    flex: 1;
+    padding: 0.6rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .ai-feature-btn span {
+    display: none;
+  }
+
+  .ai-feature-btn.is-active span {
+    display: inline;
+  }
+}
+
 .lesson-detail-sidebar {
   display: flex;
   flex-direction: column;

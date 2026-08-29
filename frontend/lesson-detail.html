@@ -29,54 +29,61 @@
       </nav>
     </header>
 
-    <main class="app-main">
-      <section class="content-section lesson-detail-section">
+    <main class="app-main lesson-detail-main">
+      <!-- Sidebar -->
+      <aside class="lesson-detail-sidebar">
+        <div class="lesson-detail-sidebar-card">
+          <div class="lesson-detail-info">
+            <h3 id="sidebar-lesson-title" class="lesson-title-sidebar">Lesson</h3>
+            <p id="sidebar-lesson-teacher" class="lesson-teacher-sidebar">—</p>
+          </div>
+          <div class="lesson-detail-divider"></div>
+          <div class="lesson-detail-ai-section">
+            <h4 class="ai-section-title">
+              <i class="fa-solid fa-sparkles"></i> AI Assistant
+            </h4>
+            <p class="ai-section-desc">Generate study materials from this lesson</p>
+            <nav class="ai-feature-nav" role="tablist" aria-label="AI Features">
+              <button type="button" class="ai-feature-btn is-active" data-ai-feature="reviewer" role="tab" aria-selected="true">
+                <i class="fa-solid fa-file-lines"></i>
+                <span>Reviewer</span>
+              </button>
+              <button type="button" class="ai-feature-btn" data-ai-feature="quiz" role="tab" aria-selected="false">
+                <i class="fa-solid fa-list-check"></i>
+                <span>Quiz</span>
+              </button>
+              <button type="button" class="ai-feature-btn" data-ai-feature="activity" role="tab" aria-selected="false">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Activity</span>
+              </button>
+              <button type="button" class="ai-feature-btn" data-ai-feature="flashcards" role="tab" aria-selected="false">
+                <i class="fa-solid fa-clone"></i>
+                <span>Flashcards</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <section class="lesson-detail-content-section">
         <article class="content-card lesson-detail-card">
-          <!-- Tab Navigation -->
-          <div class="lesson-detail-nav" role="tablist" aria-label="Lesson options">
-            <button type="button" class="lesson-detail-nav-btn is-active" data-tab="view" role="tab" aria-selected="true" aria-controls="tab-view">
-              <i class="fa-solid fa-file-pdf"></i>
-              <span>View</span>
-            </button>
-            <button type="button" class="lesson-detail-nav-btn" data-tab="reviewer" role="tab" aria-selected="false" aria-controls="tab-reviewer">
-              <i class="fa-solid fa-file-lines"></i>
-              <span>Reviewer</span>
-            </button>
-            <button type="button" class="lesson-detail-nav-btn" data-tab="quiz" role="tab" aria-selected="false" aria-controls="tab-quiz">
-              <i class="fa-solid fa-list-check"></i>
-              <span>Quiz</span>
-            </button>
-            <button type="button" class="lesson-detail-nav-btn" data-tab="activity" role="tab" aria-selected="false" aria-controls="tab-activity">
-              <i class="fa-solid fa-gamepad"></i>
-              <span>Activity</span>
-            </button>
-            <button type="button" class="lesson-detail-nav-btn" data-tab="flashcards" role="tab" aria-selected="false" aria-controls="tab-flashcards">
-              <i class="fa-solid fa-clone"></i>
-              <span>Flashcards</span>
-            </button>
-          </div>
-
-          <!-- View Tab -->
-          <div id="tab-view" class="lesson-detail-tab-panel is-active" role="tabpanel" aria-labelledby="tab-view">
-            <div class="file-viewer-container">
-              <div id="pdf-viewer" class="pdf-viewer"></div>
-              <p id="file-viewer-loading" class="small-note">Loading file...</p>
-              <p id="file-viewer-error" class="small-note error" hidden></p>
+          <!-- Reviewer Feature -->
+          <div id="ai-feature-reviewer" class="ai-feature-panel is-active" role="tabpanel" aria-labelledby="ai-feature-reviewer-tab" data-feature="reviewer">
+            <div class="ai-feature-header">
+              <h2><i class="fa-solid fa-file-lines"></i> Reviewer</h2>
+              <p class="feature-description">Study summary and key concepts from this lesson</p>
             </div>
-          </div>
-
-          <!-- Reviewer Tab -->
-          <div id="tab-reviewer" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-reviewer" hidden>
-            <div class="lesson-detail-content">
+            <div class="ai-feature-body">
               <div class="action-controls">
-                <button id="reviewer-generate-btn" type="button" class="btn btn-primary">
+                <button id="reviewer-generate-btn" type="button" class="btn btn-primary btn-lg">
                   <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Reviewer
                 </button>
                 <button id="reviewer-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
                   <i class="fa-solid fa-xmark"></i> Cancel
                 </button>
               </div>
-              <p id="reviewer-status" class="small-note">Click the button to generate a study reviewer from this lesson.</p>
+              <p id="reviewer-status" class="status-message">Click the button to generate a study reviewer from this lesson.</p>
               
               <div id="reviewer-container" hidden>
                 <div class="reviewer-card-head">
@@ -90,18 +97,22 @@
             </div>
           </div>
 
-          <!-- Quiz Tab -->
-          <div id="tab-quiz" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-quiz" hidden>
-            <div class="lesson-detail-content">
+          <!-- Quiz Feature -->
+          <div id="ai-feature-quiz" class="ai-feature-panel" role="tabpanel" aria-labelledby="ai-feature-quiz-tab" data-feature="quiz" hidden>
+            <div class="ai-feature-header">
+              <h2><i class="fa-solid fa-list-check"></i> Quiz</h2>
+              <p class="feature-description">Test your knowledge with AI-generated questions</p>
+            </div>
+            <div class="ai-feature-body">
               <div class="action-controls">
-                <button id="quiz-generate-btn" type="button" class="btn btn-primary">
+                <button id="quiz-generate-btn" type="button" class="btn btn-primary btn-lg">
                   <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Quiz
                 </button>
                 <button id="quiz-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
                   <i class="fa-solid fa-xmark"></i> Cancel
                 </button>
               </div>
-              <p id="quiz-status" class="small-note">Click the button to generate quiz questions from this lesson.</p>
+              <p id="quiz-status" class="status-message">Click the button to generate quiz questions from this lesson.</p>
               
               <div id="quiz-container" hidden>
                 <p class="small-note" id="quiz-progress"></p>
@@ -111,18 +122,22 @@
             </div>
           </div>
 
-          <!-- Activity Tab -->
-          <div id="tab-activity" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
-            <div class="lesson-detail-content">
+          <!-- Activity Feature -->
+          <div id="ai-feature-activity" class="ai-feature-panel" role="tabpanel" aria-labelledby="ai-feature-activity-tab" data-feature="activity" hidden>
+            <div class="ai-feature-header">
+              <h2><i class="fa-solid fa-lightbulb"></i> Activity</h2>
+              <p class="feature-description">Essay and short-answer activities for deeper learning</p>
+            </div>
+            <div class="ai-feature-body">
               <div class="action-controls">
-                <button id="activity-generate-btn" type="button" class="btn btn-primary">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Activity (Essays)
+                <button id="activity-generate-btn" type="button" class="btn btn-primary btn-lg">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Activities
                 </button>
                 <button id="activity-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
                   <i class="fa-solid fa-xmark"></i> Cancel
                 </button>
               </div>
-              <p id="activity-status" class="small-note">Click the button to generate essay activities from this lesson.</p>
+              <p id="activity-status" class="status-message">Click the button to generate essay activities from this lesson.</p>
               
               <div id="activity-container" hidden>
                 <div id="activity-list" class="activity-list"></div>
@@ -130,18 +145,22 @@
             </div>
           </div>
 
-          <!-- Flashcards Tab -->
-          <div id="tab-flashcards" class="lesson-detail-tab-panel" role="tabpanel" aria-labelledby="tab-flashcards" hidden>
-            <div class="lesson-detail-content">
+          <!-- Flashcards Feature -->
+          <div id="ai-feature-flashcards" class="ai-feature-panel" role="tabpanel" aria-labelledby="ai-feature-flashcards-tab" data-feature="flashcards" hidden>
+            <div class="ai-feature-header">
+              <h2><i class="fa-solid fa-clone"></i> Flashcards</h2>
+              <p class="feature-description">Interactive flashcards for memorization and practice</p>
+            </div>
+            <div class="ai-feature-body">
               <div class="action-controls">
-                <button id="flashcards-generate-btn" type="button" class="btn btn-primary">
+                <button id="flashcards-generate-btn" type="button" class="btn btn-primary btn-lg">
                   <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Flashcards
                 </button>
                 <button id="flashcards-ai-cancel-btn" type="button" class="btn btn-ghost" hidden>
                   <i class="fa-solid fa-xmark"></i> Cancel
                 </button>
               </div>
-              <p id="flashcards-status" class="small-note">Click the button to generate flashcards from this lesson.</p>
+              <p id="flashcards-status" class="status-message">Click the button to generate flashcards from this lesson.</p>
               
               <div id="flashcards-container" hidden>
                 <div id="flashcards-list" class="activity-list"></div>

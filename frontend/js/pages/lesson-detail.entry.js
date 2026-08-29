@@ -1,6 +1,6 @@
 /**
- * Lesson Detail Page Entry Point
- * Handles file viewing and AI generation features (Reviewer, Quiz, Activity, Flashcards)
+ * Lesson Detail Page Entry Point (Refactored)
+ * Sidebar-based navigation with AI Assistant features (Reviewer, Quiz, Activity, Flashcards)
  */
 
 (function () {
@@ -28,28 +28,25 @@
       window.history.back();
     });
 
-    // Setup tab navigation
-    setupTabNavigation();
+    // Setup AI feature navigation
+    setupAIFeatureNavigation();
 
     // Setup event listeners
     setupEventListeners();
 
     // Load lesson data
     await loadLesson();
-
-    // Load file viewer
-    await loadFileViewer();
   }
 
-  function setupTabNavigation() {
-    const navButtons = document.querySelectorAll(".lesson-detail-nav-btn");
-    const panels = document.querySelectorAll(".lesson-detail-tab-panel");
+  function setupAIFeatureNavigation() {
+    const navButtons = document.querySelectorAll(".ai-feature-btn");
+    const panels = document.querySelectorAll(".ai-feature-panel");
 
     navButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
-        const tabName = btn.dataset.tab;
+        const feature = btn.dataset.aiFeature;
 
-        // Update active button
+        // Update active button in sidebar
         navButtons.forEach((b) => {
           b.classList.remove("is-active");
           b.setAttribute("aria-selected", "false");
@@ -59,7 +56,7 @@
 
         // Update active panel
         panels.forEach((panel) => {
-          if (panel.id === `tab-${tabName}`) {
+          if (panel.dataset.feature === feature) {
             panel.classList.add("is-active");
             panel.removeAttribute("hidden");
           } else {
@@ -90,34 +87,21 @@
       const lesson = await window.LearnIQAPI.call(`/lessons/${currentFileId}`, { method: "GET" });
       currentLesson = lesson;
 
+      // Update header
       document.getElementById("lesson-detail-title").textContent = lesson.filename || "Lesson";
       document.getElementById("lesson-detail-subtitle").textContent = lesson.teacher_name || "—";
+
+      // Update sidebar
+      document.getElementById("sidebar-lesson-title").textContent = lesson.filename || "Lesson";
+      document.getElementById("sidebar-lesson-teacher").textContent = lesson.teacher_name || "—";
     } catch (err) {
       console.error("Failed to load lesson:", err);
+      showError("Could not load lesson details");
     }
   }
 
   async function loadFileViewer() {
-    try {
-      const container = document.getElementById("pdf-viewer");
-      const loading = document.getElementById("file-viewer-loading");
-      const error = document.getElementById("file-viewer-error");
-
-      // For now, show a message that file viewing is available
-      // In production, integrate with PDF.js or similar
-      loading.hidden = true;
-      container.innerHTML = `
-        <div class="file-viewer-placeholder">
-          <i class="fa-solid fa-file-pdf"></i>
-          <p>${currentLesson?.filename || "File"}</p>
-          <small>File viewer integration coming soon. Use "Generate" buttons to create study materials.</small>
-        </div>
-      `;
-    } catch (err) {
-      console.error("Failed to load file:", err);
-      document.getElementById("file-viewer-error").textContent = "Could not load file";
-      document.getElementById("file-viewer-error").hidden = false;
-    }
+    // File viewer removed - focusing on AI features instead
   }
 
   async function generateReviewer() {
