@@ -4790,22 +4790,6 @@ html:not([data-theme="dark"]) .subjects-page .student-join-hero-icon {
   margin-top: 0.85rem;
 }
 
-/* Class stream: centered feed column (composer + posts), not full-bleed. */
-.teacher-subject-lessons-page #teacher-subject-panel-stream {
-  width: 100%;
-  max-width: 42rem;
-  margin-inline: auto;
-}
-
-.teacher-subject-lessons-page #teacher-subject-panel-stream .subject-announcements-feed {
-  gap: 1.25rem;
-}
-
-.teacher-subject-lessons-page #teacher-subject-panel-stream .subject-announcement-item {
-  padding: 1.25rem 1.4rem;
-  border-radius: 18px;
-}
-
 .teacher-subject-lessons-page .teacher-subject-panel-intro {
   margin: 0 0 0.9rem;
 }
@@ -5276,21 +5260,6 @@ html[data-theme="dark"] .subject-class-tab.is-active {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-}
-
-#subject-tab-panel-stream {
-  width: 100%;
-  max-width: 42rem;
-  margin-inline: auto;
-}
-
-#subject-tab-panel-stream .subject-announcements-feed {
-  gap: 1.25rem;
-}
-
-#subject-tab-panel-stream .subject-announcement-item {
-  padding: 1.25rem 1.4rem;
-  border-radius: 18px;
 }
 
 .subject-stream-card .subject-stream-stats {
