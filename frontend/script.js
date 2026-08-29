@@ -4506,6 +4506,28 @@ function getTeacherSubjectYourLessons(allLessons, subjectFilter) {
   return allLessons.filter((l) => teacherLessonMatchesSubject(l, subjectFilter));
 }
 
+/** Download a lesson file with Authorization header (same tab). */
+async function downloadLessonFileWithAuth(fileUrl) {
+  try {
+    const user = getCurrentUserSession();
+    const headers = {};
+    if (user && user.access_token) {
+      headers.Authorization = `Bearer ${user.access_token}`;
+    }
+    const response = await fetch(fileUrl, { headers });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    window.location.href = blobUrl;
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+  } catch (e) {
+    showToast(`Could not download file: ${e.message}`, "error");
+  }
+}
+
 function teacherLessonFileViewUrl(lessonId) {
   const u = getCurrentUserSession();
   const lid = encodeURIComponent(String(lessonId || "").trim());
@@ -4524,7 +4546,7 @@ function viewTeacherLessonFile(lessonId) {
     showToast("Missing lesson id.", "error");
     return;
   }
-  window.open(teacherLessonFileViewUrl(id), "_blank", "noopener,noreferrer");
+  downloadLessonFileWithAuth(teacherLessonFileViewUrl(id));
 }
 
 function studentLessonFileViewUrl(lessonId) {
@@ -4545,7 +4567,7 @@ function viewStudentLessonFile(lessonId) {
     showToast("Missing lesson id.", "error");
     return;
   }
-  window.open(studentLessonFileViewUrl(id), "_blank", "noopener,noreferrer");
+  downloadLessonFileWithAuth(studentLessonFileViewUrl(id));
 }
 
 function teacherSubjectYourLessonActionsHtml(lesson) {
