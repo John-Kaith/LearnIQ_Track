@@ -622,6 +622,12 @@
     renderWordPreview();
   }
 
+  function onNextClick() {
+    if (!fight || !fight.questions.length) return;
+    fight.selected = [];
+    advanceToQuestion(fight.questionIndex + 1);
+  }
+
   function onScrambleClick() {
     if (!fight) return;
     fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
@@ -946,6 +952,7 @@
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
     document.getElementById("battle-scramble-btn")?.addEventListener("click", onScrambleClick);
     document.getElementById("battle-attack-btn")?.addEventListener("click", onAttackClick);
+    document.getElementById("next-btn")?.addEventListener("click", onNextClick);
     document.getElementById("battle-exit-btn")?.addEventListener("click", function () {
       void onExitBattleClick();
     });

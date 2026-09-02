@@ -702,12 +702,20 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   color: rgba(244, 241, 255, 0.5);
 }
 
-.battle-word-actions {
+.battle-word-actions,
+.battle-word-actions.action-buttons {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.6rem;
+  align-items: stretch;
+  gap: 0.5rem;
   margin: 0.9rem 0;
+}
+
+.battle-word-actions .btn {
+  flex: 1 1 6.5rem;
+  max-width: 11rem;
+  min-width: 0;
 }
 
 .battle-fight-screen .btn {

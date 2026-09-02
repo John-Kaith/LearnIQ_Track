@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=2026082708" />
-  <link rel="stylesheet" href="css/battle-arena.css" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026090201" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026082707" defer></script>
-  <script src="js/pages/battle-arena.entry.js" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026090201" defer></script>
 </head>
 <body class="battle-arena-page" data-sidebar-active="battle-arena">
   <div class="dashboard-shell container">
@@ -227,13 +227,16 @@
           <div class="battle-word-preview" id="battle-word-preview" aria-live="polite">
             <span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to spell the answer…</span>
           </div>
-          <div class="battle-word-actions">
+          <div class="battle-word-actions action-buttons">
             <button type="button" class="btn btn-secondary btn-small" id="battle-clear-btn">Clear</button>
             <button type="button" class="btn btn-secondary btn-small" id="battle-scramble-btn">
               <i class="fa-solid fa-shuffle" aria-hidden="true"></i> Scramble
             </button>
-            <button type="button" class="btn btn-primary" id="battle-attack-btn" disabled>
+            <button type="button" class="btn btn-primary btn-small" id="battle-attack-btn" disabled>
               <i class="fa-solid fa-bolt" aria-hidden="true"></i> Attack
+            </button>
+            <button type="button" class="btn btn-secondary btn-small" id="next-btn">
+              NEXT <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
             </button>
           </div>
           <div class="battle-letter-grid" id="battle-letter-grid" role="group" aria-label="Letter tiles"></div>

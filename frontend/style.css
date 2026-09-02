@@ -5998,6 +5998,22 @@ html:not([data-theme="dark"]) .history-quiz-choice.is-student:not(.is-correct) {
   grid-template-columns: 1.3fr 0.95fr;
 }
 
+.my-lesson-page .dashboard-grid {
+  grid-template-columns: 1fr;
+}
+
+.my-lesson-page #student-learning-block,
+.my-lesson-page #student-learning-block > .content-stack,
+.my-lesson-page #subject-tab-panel-stream,
+.my-lesson-page #subject-tab-panel-stream .subject-stream-card,
+.my-lesson-page #subject-tab-panel-stream .subject-announcements-feed,
+.my-lesson-page #subject-tab-panel-stream .subject-announcement-item {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  box-sizing: border-box;
+}
+
 @media (max-width: 1080px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
