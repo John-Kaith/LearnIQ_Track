@@ -178,6 +178,43 @@
   color: var(--lq-text-primary);
 }
 
+.dashboard-shell > .sidebar .sidebar-join-btn {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--lq-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  box-shadow: 0 1px 3px rgba(120, 53, 15, 0.06);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dashboard-shell > .sidebar .sidebar-join-btn:hover,
+.dashboard-shell > .sidebar .sidebar-join-btn:focus-visible {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: var(--lq-border-accent-soft);
+  box-shadow: var(--lq-glow-purple-sm);
+  color: var(--lq-text-primary);
+  transform: translateY(-1px);
+}
+
+.dashboard-shell > .sidebar .sidebar-join-btn:focus-visible {
+  outline: 3px solid rgba(251, 191, 36, 0.28);
+  outline-offset: 2px;
+}
+
 /* ── Navigation links ── */
 .dashboard-shell > .sidebar .side-links {
   flex: 1 1 auto;
