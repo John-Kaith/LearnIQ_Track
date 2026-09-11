@@ -6690,7 +6690,11 @@ function renderAnnouncementLessonCardHtml(lesson) {
 function renderAnnouncementFeedHtml(announcements) {
   const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
   const canManage = String(user?.role || "").trim().toLowerCase() === "teacher";
-  return (announcements || [])
+  const visibleAnnouncements = (announcements || []).filter((announcement) => {
+    const isStudent = String(user?.role || "").trim().toLowerCase() === "student";
+    return !isStudent || !announcement?.lesson || announcement.lesson.is_published;
+  });
+  return visibleAnnouncements
     .map((a) => {
       const name = (a.teacher_name || "Teacher").trim();
       const initials = getUserInitials(name);

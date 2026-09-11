@@ -3418,11 +3418,12 @@ def list_subject_announcements(
                 }
             )
         lesson_row = lesson_cache.get(str(r.get("lesson_id") or "")) if r.get("lesson_id") else None
-        # Draft lesson attachments are visible to the owning teacher while
-        # composing/managing the stream, but must stay hidden from students
-        # until the lesson is explicitly published.
-        if viewer_role == "student" and lesson_row and not lesson_row.get("is_published"):
-            lesson_row = None
+        # A stream post and its attached lesson are one student-visible item.
+        # Hide the whole post while the attached lesson is still a draft so
+        # its caption cannot leak before the teacher publishes the lesson.
+        if viewer_role == "student" and r.get("lesson_id"):
+            if not lesson_row or not lesson_row.get("is_published"):
+                continue
         out.append(
             {
                 "id": r.get("id"),
