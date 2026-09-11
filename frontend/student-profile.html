@@ -100,8 +100,8 @@
               <strong id="profile-full-name">—</strong>
             </div>
             <div class="profile-kv">
-              <span class="small-note">Role</span>
-              <strong id="profile-role">—</strong>
+              <span class="small-note">Strand</span>
+              <strong id="profile-strand">—</strong>
             </div>
             <div class="profile-kv">
               <span class="small-note">ID number</span>
@@ -112,8 +112,8 @@
               <strong id="profile-email">—</strong>
             </div>
             <div class="profile-kv">
-              <span class="small-note">Strand</span>
-              <strong id="profile-strand">—</strong>
+              <span class="small-note">Role</span>
+              <strong id="profile-role">—</strong>
             </div>
           </div>
 
@@ -199,139 +199,6 @@
         </article>
       </section>
 
-      <article class="glass-card content-card profile-details-card" id="profile-details-card">
-        <div class="profile-details-head">
-          <div>
-            <h3>Personal details</h3>
-            <p class="small-note">Add your bio, contact info, and more. Saved on this device.</p>
-          </div>
-          <div class="profile-details-actions">
-            <button type="button" class="btn btn-secondary" id="profile-details-edit-btn">
-              <i class="fa-solid fa-pen" aria-hidden="true"></i> Edit
-            </button>
-          </div>
-        </div>
-
-        <div class="profile-details-grid" id="profile-details-grid" data-mode="view">
-          <div class="profile-detail-field profile-detail-bio" data-field="bio">
-            <span class="small-note">About me</span>
-            <strong class="profile-detail-display" id="profile-detail-bio-display">—</strong>
-            <textarea
-              class="profile-detail-input"
-              id="profile-detail-bio-input"
-              rows="3"
-              placeholder="A short bio about yourself"
-              maxlength="500"
-              hidden
-            ></textarea>
-          </div>
-
-          <div class="profile-detail-field" data-field="phone">
-            <span class="small-note">Phone number</span>
-            <strong class="profile-detail-display" id="profile-detail-phone-display">—</strong>
-            <input
-              type="tel"
-              class="profile-detail-input"
-              id="profile-detail-phone-input"
-              placeholder="+63 912 345 6789"
-              maxlength="40"
-              hidden
-            />
-          </div>
-
-          <div class="profile-detail-field" data-field="section">
-            <span class="small-note">Section / Year level</span>
-            <strong class="profile-detail-display" id="profile-detail-section-display">—</strong>
-            <input
-              type="text"
-              class="profile-detail-input"
-              id="profile-detail-section-input"
-              placeholder="e.g. STEM 12-A"
-              maxlength="80"
-              hidden
-            />
-          </div>
-
-          <div class="profile-detail-field" data-field="strand">
-            <span class="small-note">Strand</span>
-            <strong class="profile-detail-display" id="profile-detail-strand-display">—</strong>
-            <select class="profile-detail-input" id="profile-detail-strand-input" hidden>
-              <option value="">Select strand</option>
-              <option value="ABM">ABM</option>
-              <option value="HUMSS">HUMSS</option>
-              <option value="STEM">STEM</option>
-              <option value="TVL-HE">TVL-HE</option>
-            </select>
-          </div>
-
-          <div class="profile-detail-field" data-field="dob">
-            <span class="small-note">Date of birth</span>
-            <strong class="profile-detail-display" id="profile-detail-dob-display">—</strong>
-            <input
-              type="date"
-              class="profile-detail-input"
-              id="profile-detail-dob-input"
-              hidden
-            />
-          </div>
-
-          <div class="profile-detail-field profile-detail-address" data-field="address">
-            <span class="small-note">Address</span>
-            <strong class="profile-detail-display" id="profile-detail-address-display">—</strong>
-            <div class="profile-address-editor" id="profile-address-editor" hidden>
-              <div class="profile-address-grid">
-                <label class="profile-address-cell">
-                  <span class="small-note">Region</span>
-                  <select id="profile-address-region" class="profile-detail-input">
-                    <option value="">Loading regions…</option>
-                  </select>
-                </label>
-                <label class="profile-address-cell">
-                  <span class="small-note">Province</span>
-                  <select id="profile-address-province" class="profile-detail-input" disabled>
-                    <option value="">Select region first</option>
-                  </select>
-                </label>
-                <label class="profile-address-cell">
-                  <span class="small-note">City / Municipality</span>
-                  <select id="profile-address-city" class="profile-detail-input" disabled>
-                    <option value="">Select province first</option>
-                  </select>
-                </label>
-                <label class="profile-address-cell">
-                  <span class="small-note">Barangay</span>
-                  <select id="profile-address-barangay" class="profile-detail-input" disabled>
-                    <option value="">Select city first</option>
-                  </select>
-                </label>
-              </div>
-              <label class="profile-address-cell profile-address-cell-wide">
-                <span class="small-note">Street / House number (optional)</span>
-                <input
-                  type="text"
-                  class="profile-detail-input"
-                  id="profile-address-street"
-                  placeholder="e.g. Blk 5 Lot 3, Sampaguita St."
-                  maxlength="120"
-                />
-              </label>
-              <p class="small-note profile-address-preview" id="profile-address-preview"></p>
-            </div>
-            <input type="hidden" id="profile-detail-address-input" />
-          </div>
-        </div>
-
-        <div class="profile-details-footer" id="profile-details-footer" hidden>
-          <button type="button" class="btn btn-ghost" id="profile-details-cancel-btn-bottom">
-            Cancel
-          </button>
-          <button type="button" class="btn btn-primary" id="profile-details-save-btn-bottom">
-            <i class="fa-solid fa-check" aria-hidden="true"></i> Save changes
-          </button>
-        </div>
-
-        <p class="small-note profile-details-hint" id="profile-details-hint"></p>
-      </article>
     </main>
   </div>
 
