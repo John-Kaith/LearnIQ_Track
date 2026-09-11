@@ -8010,7 +8010,10 @@ async function adminDeleteSubject(subjectId) {
   if (!ok) return;
 
   try {
-    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}`), { method: "DELETE" });
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}`), {
+      method: "DELETE",
+      headers: adminAuthHeaders(),
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Delete failed (status ${res.status}).`);
