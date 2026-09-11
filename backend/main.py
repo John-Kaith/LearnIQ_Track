@@ -2763,13 +2763,15 @@ async def generate_activities(body: dict, authorization: str | None = Header(def
     if count not in (5, 10, 15):
         count = 5
 
-    allowed = {"essay", "flashcards"}
+    allowed = {"essay", "flashcards", "identification", "true_false"}
     if activity_type not in allowed:
         activity_type = "essay"
 
     schema_by_type = {
         "essay": '{ "activities": [ { "question": "Essay prompt...", "answer": "Sample answer or key points the response should cover (2-4 sentences)." } ] }',
         "flashcards": '{ "cards": [ { "front": "Term or question (short)", "back": "Definition or answer (concise)" } ] }',
+        "identification": '{ "activities": [ { "question": "Question asking the student to identify a term, person, place, or concept...", "answer": "Expected answer" } ] }',
+        "true_false": '{ "activities": [ { "question": "A factual statement from the lesson...", "answer": true } ] }',
     }
 
     type_instructions = {
@@ -2782,6 +2784,16 @@ async def generate_activities(body: dict, authorization: str | None = Header(def
             "Create study flashcards. The 'front' is a short term, concept, or question "
             "(max ~8 words). The 'back' is a concise definition or answer (1-2 sentences). "
             "Cover the most important concepts from the lesson."
+        ),
+        "identification": (
+            "Write identification questions that ask the student to name a specific term, "
+            "person, place, event, or concept from the lesson. Keep each question concise. "
+            "The 'answer' must be the exact expected term or short phrase."
+        ),
+        "true_false": (
+            "Write factual true-or-false statements based only on the lesson. Make each "
+            "statement clear and unambiguous. The 'answer' must be the JSON boolean true "
+            "or false, not a string."
         ),
     }
 
@@ -2840,6 +2852,13 @@ async def generate_activities(body: dict, authorization: str | None = Header(def
             ans = a.get("answer")
             if not q:
                 continue
+            if activity_type == "true_false":
+                if not isinstance(ans, bool):
+                    continue
+            elif activity_type == "identification":
+                ans = str(ans or "").strip()
+                if not ans:
+                    continue
             normalized_activities.append({"activity_type": activity_type, "question": q, "answer": ans})
         if not normalized_activities:
             return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)

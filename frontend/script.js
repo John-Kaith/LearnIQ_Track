@@ -352,6 +352,13 @@ function renderActivitiesInto(targetEl, activities) {
 
       // Legacy: generic question/answer (identification, true/false, fill_blank, short_answer)
       if (Object.prototype.hasOwnProperty.call(item, "question") && Object.prototype.hasOwnProperty.call(item, "answer")) {
+        const activityLabels = {
+          identification: "Identification",
+          true_false: "True or False",
+          fill_blank: "Fill in the Blank",
+          short_answer: "Short Answer"
+        };
+        const activityLabel = activityLabels[item.activity_type] || (item.activity_type || "activity");
         const ans =
           typeof item.answer === "boolean"
             ? item.answer
@@ -362,7 +369,7 @@ function renderActivitiesInto(targetEl, activities) {
             : String(item.answer);
         return `
           <div class="activity-item">
-            <strong>${escapeHtml((item.activity_type || "activity").replace("_", " "))} ${i + 1}</strong>
+            <strong>${escapeHtml(activityLabel)} ${i + 1}</strong>
             <p>${escapeHtml(item.question || "")}</p>
             <small>Answer: ${escapeHtml(ans)}</small>
           </div>`;
