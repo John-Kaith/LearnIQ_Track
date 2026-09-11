@@ -8081,13 +8081,13 @@ function setupAdminSubjectModal() {
       if (editId) {
         res = await fetch(apiUrl(`/subjects/${encodeURIComponent(editId)}`), {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
           body: JSON.stringify({ name, description, color }),
         });
       } else {
         res = await fetch(apiUrl("/subjects"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
           body: JSON.stringify({ name, description, color }),
         });
       }
@@ -8183,7 +8183,7 @@ function setupTeacherAddSubjectForm() {
       const teacherId = String(teacher?.id_number || "").trim();
       const res = await fetch(apiUrl("/subjects"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
         body: JSON.stringify({
           name,
           description,
