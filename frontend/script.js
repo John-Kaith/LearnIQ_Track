@@ -252,6 +252,10 @@ function renderActivitiesInto(targetEl, activities) {
   if (!targetEl) return;
   const acts = Array.isArray(activities) ? activities : activities == null ? [] : [activities];
   const flashcardDeckIds = [];
+  const isStudentActivityList = targetEl.id === "student-activities-list";
+  const interactiveActivityCount = acts.filter(
+    (item) => item && typeof item === "object" && ["identification", "true_false"].includes(item.activity_type)
+  ).length;
 
   const html = acts
     .map((item, i) => {
@@ -359,10 +363,27 @@ function renderActivitiesInto(targetEl, activities) {
           short_answer: "Short Answer"
         };
         const activityLabel = activityLabels[item.activity_type] || (item.activity_type || "activity");
+        const answerValue = encodeURIComponent(JSON.stringify(item.answer));
+        const answerControl = isStudentActivityList && item.activity_type === "true_false"
+          ? `
+            <fieldset class="activity-answer-options">
+              <legend>Your answer</legend>
+              <label><input type="radio" name="activity-answer-${i}" value="true" /> True</label>
+              <label><input type="radio" name="activity-answer-${i}" value="false" /> False</label>
+            </fieldset>`
+          : isStudentActivityList && item.activity_type === "identification"
+          ? `
+            <label class="activity-answer-input-label">
+              <span>Your answer</span>
+              <input type="text" class="activity-answer-input" autocomplete="off" placeholder="Type your answer" />
+            </label>`
+          : "";
         return `
-          <div class="activity-item">
+          <div class="activity-item activity-question-card" data-activity-index="${i}" data-activity-type="${escapeHtml(item.activity_type || "")}" data-activity-answer="${answerValue}">
             <strong>${escapeHtml(activityLabel)} ${i + 1}</strong>
             <p>${escapeHtml(item.question || "")}</p>
+            ${answerControl}
+            ${isStudentActivityList ? '<p class="activity-answer-feedback" aria-live="polite"></p>' : ""}
           </div>`;
       }
 
@@ -380,12 +401,90 @@ function renderActivitiesInto(targetEl, activities) {
 
   targetEl.innerHTML = html || '<p class="small-note">No activities yet.</p>';
 
+  const checkActions = document.getElementById("student-activities-check-actions");
+  if (checkActions && isStudentActivityList) {
+    checkActions.hidden = interactiveActivityCount === 0;
+    const summary = document.getElementById("student-activities-check-summary");
+    if (summary) summary.textContent = "";
+    const checkButton = document.getElementById("student-activities-check-btn");
+    if (checkButton && checkButton.dataset.bound !== "1") {
+      checkButton.dataset.bound = "1";
+      checkButton.addEventListener("click", () => void checkStudentActivities(targetEl));
+    }
+  }
+
   flashcardDeckIds.forEach((id) => {
     const launcherEl = document.getElementById(id);
     if (launcherEl && typeof wireFlashcardLauncher === "function") {
       wireFlashcardLauncher(launcherEl);
     }
   });
+}
+
+async function checkStudentActivities(targetEl) {
+  if (!targetEl) return;
+  let answered = 0;
+  let correct = 0;
+  const attempts = [];
+  targetEl.querySelectorAll(".activity-question-card").forEach((card) => {
+    const type = card.dataset.activityType || "";
+    const response = type === "true_false"
+      ? card.querySelector('input[type="radio"]:checked')?.value || ""
+      : card.querySelector(".activity-answer-input")?.value.trim() || "";
+    let expected = "";
+    try {
+      expected = JSON.parse(decodeURIComponent(card.dataset.activityAnswer || ""));
+    } catch (_) {}
+    const isCorrect = Boolean(response) && String(response).toLowerCase().replace(/\s+/g, " ").trim() ===
+      String(expected).toLowerCase().replace(/\s+/g, " ").trim();
+    if (response) answered += 1;
+    if (isCorrect) correct += 1;
+    attempts.push({
+      activity_index: Number(card.dataset.activityIndex || 0),
+      activity_type: type,
+      response: response || null,
+      score: isCorrect ? 1 : 0,
+    });
+    card.classList.toggle("activity-answer-correct", isCorrect);
+    card.classList.toggle("activity-answer-incorrect", Boolean(response) && !isCorrect);
+    const feedback = card.querySelector(".activity-answer-feedback");
+    if (feedback) {
+      feedback.textContent = !response ? "Please answer this question." : isCorrect ? "Correct" : "Incorrect";
+      feedback.className = `activity-answer-feedback ${!response ? "is-unanswered" : isCorrect ? "is-correct" : "is-incorrect"}`;
+    }
+  });
+  const summary = document.getElementById("student-activities-check-summary");
+  if (summary) summary.textContent = `${correct} correct${answered ? ` · ${answered} answered` : ""}`;
+
+  const lessonId = selectedLesson?.file_id || selectedLesson?.lesson_id;
+  const checkButton = document.getElementById("student-activities-check-btn");
+  if (!lessonId) {
+    showToast("Answers checked, but this lesson could not be identified for saving.", "error");
+    return;
+  }
+  if (checkButton) checkButton.disabled = true;
+  try {
+    const results = await Promise.all(
+      attempts.map((attempt) =>
+        fetch(apiUrl("/submit-activity"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...adminAuthHeaders() },
+          body: JSON.stringify({ lesson_id: lessonId, ...attempt }),
+        }).then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Could not save answer (HTTP ${res.status}).`);
+          return data;
+        })
+      )
+    );
+    if (results.length) {
+      showToast(`Score recorded: ${correct}/${attempts.length}.`, "success");
+    }
+  } catch (error) {
+    showToast(error?.message || "Answers checked, but the score could not be recorded.", "error");
+  } finally {
+    if (checkButton) checkButton.disabled = false;
+  }
 }
 
 /* readApiJson, getApiBase, apiUrl → js/core/api.js (load before this file) */

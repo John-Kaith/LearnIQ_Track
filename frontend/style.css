@@ -8291,6 +8291,68 @@ html:not([data-theme="dark"]) select option {
   color: var(--text);
 }
 
+.activity-check-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.activity-answer-options,
+.activity-answer-input-label {
+  margin: 0.85rem 0 0;
+}
+
+.activity-answer-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+}
+
+.activity-answer-options legend,
+.activity-answer-input-label span {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.activity-answer-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.activity-answer-input {
+  width: min(100%, 28rem);
+}
+
+.activity-answer-feedback {
+  font-weight: 700;
+}
+
+.activity-answer-feedback.is-correct {
+  color: #16a34a;
+}
+
+.activity-answer-feedback.is-incorrect {
+  color: #dc2626;
+}
+
+.activity-answer-feedback.is-unanswered {
+  color: var(--muted);
+}
+
+.activity-answer-correct {
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.activity-answer-incorrect {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
 /* ===================================================== */
 /*  Essay activity                                        */
 /* ===================================================== */

@@ -22,7 +22,7 @@
   <script src="js/pages/immersion-capture.js?v=2026052122" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082903" defer></script>
+  <script src="script.js?v=2026091102" defer></script>
   <script src="js/pages/class-attendance.js?v=2026082105" defer></script>
 </head>
 <body class="my-lesson-page">
@@ -258,6 +258,12 @@
               <article id="student-activities-card" class="content-card compact-card">
                 <h4>Activities</h4>
                 <div id="student-activities-list" class="activity-list"></div>
+                <div class="activity-check-actions" id="student-activities-check-actions" hidden>
+                  <button type="button" class="btn btn-primary" id="student-activities-check-btn">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> Check Answers
+                  </button>
+                  <span class="small-note" id="student-activities-check-summary" aria-live="polite"></span>
+                </div>
               </article>
             </div>
           </article>
