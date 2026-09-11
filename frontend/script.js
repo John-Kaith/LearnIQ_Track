@@ -359,19 +359,10 @@ function renderActivitiesInto(targetEl, activities) {
           short_answer: "Short Answer"
         };
         const activityLabel = activityLabels[item.activity_type] || (item.activity_type || "activity");
-        const ans =
-          typeof item.answer === "boolean"
-            ? item.answer
-              ? "True"
-              : "False"
-            : item.answer == null
-            ? "—"
-            : String(item.answer);
         return `
           <div class="activity-item">
             <strong>${escapeHtml(activityLabel)} ${i + 1}</strong>
             <p>${escapeHtml(item.question || "")}</p>
-            <small>Answer: ${escapeHtml(ans)}</small>
           </div>`;
       }
 
@@ -4423,9 +4414,9 @@ function setupAdminPage() {
 }
 
 // Teacher dashboard: lesson file selected in UI + server state
-const LESSON_UPLOAD_MAX_BYTES = 500 * 1024 * 1024;
+const LESSON_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 const LESSON_UPLOAD_TOO_LARGE_MSG =
-  "File too large (max 500 MB). Export a smaller PDF/PPTX or split the deck.";
+  "File too large (max 1 GB). Export a smaller PDF/PPTX or split the deck.";
 
 let currentFileId = null;
 let currentQuiz = [];
@@ -9642,15 +9633,7 @@ async function renderAiResultPage() {
             }</li>`;
           }
           if (item.question != null) {
-            const ans =
-              typeof item.answer === "boolean"
-                ? item.answer
-                  ? "True"
-                  : "False"
-                : item.answer == null
-                ? "—"
-                : String(item.answer);
-            return `<li><strong>${escapeHtml(item.question)}</strong><br /><small>Answer: ${escapeHtml(ans)}</small></li>`;
+            return `<li><strong>${escapeHtml(item.question)}</strong></li>`;
           }
           return `<li>${escapeHtml(JSON.stringify(item))}</li>`;
         }
