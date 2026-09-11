@@ -6295,7 +6295,10 @@ async function teacherDeleteSubject(subjectId, subjectName, lessonCount = 0) {
   if (!ok) return;
 
   try {
-    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(id)}`), { method: "DELETE" });
+    const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(id)}`), {
+      method: "DELETE",
+      headers: adminAuthHeaders(),
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Delete failed (status ${res.status}).`);
