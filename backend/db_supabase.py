@@ -3364,6 +3364,8 @@ def list_subject_announcements(
     ann_ids = [str(r.get("id")) for r in rows if r.get("id")]
     comments_by_ann = _list_comments_for_announcements(ann_ids)
     reaction_counts, reacted_ids = _reaction_summary_for_announcements(ann_ids, viewer_id_number)
+    viewer_profile = get_profile_by_id_number(viewer_id_number) if viewer_id_number else None
+    viewer_role = str((viewer_profile or {}).get("role") or "").strip().lower()
 
     # Attach lesson file-card info for posts that reference one.
     lesson_ids = list({str(r.get("lesson_id")) for r in rows if r.get("lesson_id")})
@@ -3416,6 +3418,11 @@ def list_subject_announcements(
                 }
             )
         lesson_row = lesson_cache.get(str(r.get("lesson_id") or "")) if r.get("lesson_id") else None
+        # Draft lesson attachments are visible to the owning teacher while
+        # composing/managing the stream, but must stay hidden from students
+        # until the lesson is explicitly published.
+        if viewer_role == "student" and lesson_row and not lesson_row.get("is_published"):
+            lesson_row = None
         out.append(
             {
                 "id": r.get("id"),
