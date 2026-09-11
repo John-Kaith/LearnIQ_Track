@@ -25,7 +25,7 @@ def approve_users():
                 user_id = None
                 
                 for user in users:
-                    user_email = user.get('email') if isinstance(user, dict) else user.email
+                    user_email = user.get('email') if isinstance(user, dict) else user.emails
                     if user_email == email:
                         user_id = user.get('id') if isinstance(user, dict) else user.id
                         break
