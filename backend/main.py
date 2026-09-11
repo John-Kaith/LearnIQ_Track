@@ -1060,8 +1060,8 @@ async def patch_my_profile(
 ):
     """Signed-in user updates their own editable profile fields.
 
-    Accepts any subset of: bio, phone, section, dob (YYYY-MM-DD), address,
-    avatar_data (data URL string). Other keys are ignored. Empty strings
+    Accepts any subset of: bio, phone, dob (YYYY-MM-DD), address,
+    avatar_data (data URL string), strand. Other keys are ignored. Empty strings
     clear the column (stored as NULL).
     """
     err = require_supabase()
@@ -1076,6 +1076,16 @@ async def patch_my_profile(
         for f in db_supabase.PROFILE_EXTRA_FIELDS:
             if f in payload:
                 editable[f] = payload[f]
+        if "strand" in editable:
+            strand_raw = str(editable["strand"] or "").strip().upper().replace(" ", "-")
+            strand_aliases = {"HUMMS": "HUMSS", "TVLHE": "TVL-HE"}
+            normalized_strand = strand_aliases.get(strand_raw, strand_raw)
+            if normalized_strand and normalized_strand not in _STUDENT_STRANDS:
+                return JSONResponse(
+                    {"error": "strand must be one of: ABM, HUMSS, STEM, TVL-HE."},
+                    status_code=400,
+                )
+            editable["strand"] = normalized_strand
         if not editable:
             return JSONResponse({"error": "No editable fields provided."}, status_code=400)
         # Basic guard: keep avatar payload reasonable (~2 MB of base64 ≈ 1.5 MB image).

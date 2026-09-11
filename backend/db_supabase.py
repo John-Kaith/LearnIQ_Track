@@ -233,7 +233,7 @@ def get_all_profiles() -> list[dict[str, Any]]:
 # Fields the signed-in user can edit on their own profile page. "section" is
 # deliberately excluded — it's a fixed, admin-managed value (see sections.sql
 # / admin_set_student_section), not something a student can self-report.
-PROFILE_EXTRA_FIELDS = ("bio", "phone", "dob", "address", "avatar_data")
+PROFILE_EXTRA_FIELDS = ("bio", "phone", "dob", "address", "avatar_data", "strand")
 
 
 def update_profile_extras(id_number: str, fields: dict[str, Any]) -> dict[str, Any] | None:

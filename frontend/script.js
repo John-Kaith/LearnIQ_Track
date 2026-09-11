@@ -500,7 +500,7 @@ function getCurrentUserSession() {
   const AVATAR_PREFIX = "lq_avatar_";
   const DETAILS_PREFIX = "lq_profile_details_";
   const MAX_INPUT_BYTES = 8 * 1024 * 1024;
-  const DETAIL_FIELDS = ["bio", "phone", "section", "dob", "address"];
+  const DETAIL_FIELDS = ["bio", "phone", "section", "dob", "address", "strand"];
 
   const avatarCache = new Map(); // key -> dataUrl
   const detailsCache = new Map(); // key -> { bio, phone, ... }
@@ -613,6 +613,14 @@ function getCurrentUserSession() {
     if (!payload || typeof payload !== "object") return;
     const k = accountKey(user);
     if (!k) return;
+    if (Object.prototype.hasOwnProperty.call(payload, "strand")) {
+      try {
+        const current = getCurrentUserSession();
+        if (current) {
+          sessionStorage.setItem(authSessionKey, JSON.stringify({ ...current, strand: payload.strand || "" }));
+        }
+      } catch (_) {}
+    }
     if (typeof payload.avatar_data === "string") {
       const av = payload.avatar_data;
       if (av) {
@@ -10994,7 +11002,7 @@ function setupProfileDetailsEditor(user) {
   if (card.dataset.lqWired === "1") return;
   card.dataset.lqWired = "1";
 
-  const FIELDS = ["bio", "phone", "section", "dob", "address"];
+  const FIELDS = ["bio", "phone", "section", "dob", "address", "strand"];
 
   const addressPicker = setupAddressPicker();
 
@@ -11064,7 +11072,10 @@ function setupProfileDetailsEditor(user) {
     return;
   }
 
-  let current = (window.LearnIQProfileDetails && window.LearnIQProfileDetails.get(user)) || {};
+  let current = {
+    ...((window.LearnIQProfileDetails && window.LearnIQProfileDetails.get(user)) || {}),
+    strand: user.strand || "",
+  };
   renderView(current);
 
   function enterEditMode() {
@@ -11166,6 +11177,7 @@ function setupProfilePage() {
     setText("profile-role", role || "—");
     setText("profile-id-number", String(u.id_number || "").trim() || "—");
     setText("profile-email", String(u.email || "").trim() || "—");
+    setText("profile-strand", String(u.strand || "").trim() || "—");
     if (hint) hint.textContent = "";
     return;
   }
@@ -11184,6 +11196,7 @@ function setupProfilePage() {
     setText("profile-role", "—");
     setText("profile-id-number", "—");
     setText("profile-email", "—");
+    setText("profile-strand", "—");
     if (roleBadge) roleBadge.textContent = "Signed out";
     if (brandSub) brandSub.textContent = "Sign in required";
     if (hint) hint.textContent = "Sign in first, then open this page again.";
@@ -11197,6 +11210,7 @@ function setupProfilePage() {
   setText("profile-role", role || "—");
   setText("profile-id-number", String(u.id_number || "").trim() || "—");
   setText("profile-email", String(u.email || "").trim() || "—");
+  setText("profile-strand", String(u.strand || "").trim() || "—");
   if (roleBadge) roleBadge.textContent = role ? role : "Signed in";
   if (brandSub) brandSub.textContent = role ? `${role} account` : "Account";
 
@@ -11223,6 +11237,7 @@ function setupProfilePage() {
     window.LearnIQProfile.loadFromServer(u)
       .then((payload) => {
         if (!payload) return;
+        setText("profile-strand", String(payload.strand || "").trim() || "—");
         refreshAvatarsAcrossPage(u);
         const card = document.getElementById("profile-details-card");
         if (card && typeof card._lqRefresh === "function") card._lqRefresh();
