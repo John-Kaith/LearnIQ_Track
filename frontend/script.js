@@ -5421,6 +5421,13 @@ function setupTeacherDashboard() {
       if (clearBtn) clearBtn.hidden = true;
       return;
     }
+    if (selectedFile.size > LESSON_UPLOAD_MAX_BYTES) {
+      fileInput.value = "";
+      if (clearBtn) clearBtn.hidden = true;
+      fileMeta.textContent = "File is too large. Please choose a file smaller than 1024 MB.";
+      showToast("File is too large. Please upload a file smaller than 1024 MB.", "error");
+      return;
+    }
     fileMeta.textContent = `Selected file: ${selectedFile.name}`;
     if (clearBtn) clearBtn.hidden = false;
   });
@@ -5442,6 +5449,11 @@ function setupTeacherDashboard() {
       const selectedFile = fileInput?.files?.[0];
       if (!selectedFile) {
         if (fileMeta) fileMeta.textContent = "No file selected yet";
+        return;
+      }
+      if (selectedFile.size > LESSON_UPLOAD_MAX_BYTES) {
+        if (fileMeta) fileMeta.textContent = "File is too large. Please choose a file smaller than 1024 MB.";
+        showToast("File is too large. Please upload a file smaller than 1024 MB.", "error");
         return;
       }
 
@@ -7013,6 +7025,11 @@ function bindTeacherAnnouncementForm() {
       const f = fileInput.files?.[0];
       if (!f) {
         clearAttachedFile();
+        return;
+      }
+      if (f.size > LESSON_UPLOAD_MAX_BYTES) {
+        clearAttachedFile();
+        showToast("File is too large. Please upload a file smaller than 1024 MB.", "error");
         return;
       }
       if (fileNameEl) {
