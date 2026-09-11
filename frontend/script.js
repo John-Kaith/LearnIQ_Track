@@ -6383,10 +6383,10 @@ async function teacherDeleteSubject(subjectId, subjectName, lessonCount = 0) {
   let ok = false;
   if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
     ok = await window.LearnIQConfirm.show({
-      title: `Delete "${name}"?`,
+      title: "Are you sure you want to delete this subject?",
       message: total > 0
-        ? `${total} of your lesson${total === 1 ? "" : "s"} will no longer be linked to this subject. Continue?`
-        : "This subject has no lessons tagged to it. Continue?",
+        ? `This will delete "${name}". ${total} of your lesson${total === 1 ? "" : "s"} will no longer be linked to this subject.`
+        : `This will permanently delete "${name}". This subject has no lessons tagged to it.`,
       confirmText: "Delete",
       cancelText: "Cancel",
       danger: true,
