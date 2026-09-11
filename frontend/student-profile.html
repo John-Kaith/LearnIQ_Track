@@ -64,47 +64,62 @@
         </div>
       </section>
 
-      <section class="glass-card profile-hero" aria-labelledby="profile-full-name">
-        <div class="profile-hero-left" id="profile-photo-card">
-          <div class="avatar profile-photo-avatar" id="profile-photo-avatar" aria-hidden="true">ST</div>
-          <div class="profile-photo-actions">
-            <input
-              type="file"
-              id="profile-photo-input"
-              accept="image/png,image/jpeg,image/jpg,image/webp"
-              class="file-input-sr-only"
-            />
-            <div class="button-group">
-              <button type="button" class="btn btn-primary" id="profile-photo-choose-btn">
-                <i class="fa-solid fa-camera" aria-hidden="true"></i>
-                <span id="profile-photo-choose-label">Add photo</span>
-              </button>
-              <button type="button" class="btn btn-ghost" id="profile-photo-remove-btn" hidden>
-                <i class="fa-solid fa-trash" aria-hidden="true"></i> Remove
-              </button>
+      <div class="profile-top-grid">
+        <article class="glass-card content-card profile-photo-card" id="profile-photo-card">
+          <h3>Profile photo</h3>
+          <div class="profile-photo-row">
+            <div class="avatar profile-photo-avatar" id="profile-photo-avatar" aria-hidden="true">ST</div>
+            <div class="profile-photo-actions">
+              <input
+                type="file"
+                id="profile-photo-input"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                class="file-input-sr-only"
+              />
+              <div class="button-group">
+                <button type="button" class="btn btn-primary" id="profile-photo-choose-btn">
+                  <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                  <span id="profile-photo-choose-label">Add photo</span>
+                </button>
+                <button type="button" class="btn btn-ghost" id="profile-photo-remove-btn" hidden>
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i> Remove
+                </button>
+              </div>
+              <p class="small-note" id="profile-photo-hint">
+                PNG, JPG, or WEBP. Saved on this device for your profile.
+              </p>
             </div>
-            <p class="small-note" id="profile-photo-hint">
-              PNG, JPG, or WEBP. Saved on this device for your profile.
-            </p>
           </div>
-        </div>
+        </article>
 
-        <div class="profile-hero-right">
-          <h2 id="profile-full-name">—</h2>
-          <span class="profile-strand-badge" id="profile-strand">—</span>
-          <div class="profile-contact-row">
-            <span class="profile-contact-item">
-              <i class="fa-solid fa-id-card" aria-hidden="true"></i>
-              <span id="profile-id-number">—</span>
-            </span>
-            <span class="profile-contact-item">
-              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-              <span id="profile-email">—</span>
-            </span>
+        <article class="glass-card content-card">
+          <h3>Account details</h3>
+          <div class="profile-kv-grid profile-kv-grid--stack" id="profile-kv-grid">
+            <div class="profile-kv">
+              <span class="small-note">Full name</span>
+              <strong id="profile-full-name">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Role</span>
+              <strong id="profile-role">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">ID number</span>
+              <strong id="profile-id-number">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Email</span>
+              <strong id="profile-email">—</strong>
+            </div>
+            <div class="profile-kv">
+              <span class="small-note">Strand</span>
+              <strong id="profile-strand">—</strong>
+            </div>
           </div>
-          <p class="small-note" id="profile-hint"></p>
-        </div>
-      </section>
+
+          <p class="small-note" id="profile-hint" style="margin-top: 0.9rem;"></p>
+        </article>
+      </div>
 
       <section class="learning-iq-section" id="learning-iq-section" aria-labelledby="learning-iq-heading">
         <article class="learning-iq-card lq-surface-premium" id="learning-iq-card">
