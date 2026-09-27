@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=2026092717" />
-  <link rel="stylesheet" href="css/battle-arena.css?v=2026092802" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026092804" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026092801" defer></script>
-  <script src="js/pages/battle-arena.entry.js?v=2026092804" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026092806" defer></script>
 </head>
 <body class="battle-arena-page" data-sidebar-active="battle-arena">
   <div class="dashboard-shell container">
@@ -100,10 +100,11 @@
                 <span class="battle-mode-card-body">
                   <span class="battle-mode-icon" aria-hidden="true"><i class="fa-solid fa-robot"></i></span>
                   <strong>Battle AI</strong>
-                  <span class="small-note">Challenge an AI opponent using this lesson.</span>
+                  <span class="small-note">Fight monsters using this lesson. Each win unlocks a stronger one.</span>
                 </span>
               </label>
             </div>
+            <p class="battle-next-opponent" id="battle-next-opponent" aria-live="polite"></p>
           </article>
 
           <!-- Step 3 -->
@@ -214,7 +215,7 @@
 
   <section class="battle-loading-screen" id="battle-loading-screen" hidden>
     <div class="battle-loading-inner">
-      <div class="battle-loading-sprite" aria-hidden="true">🧑‍🎓</div>
+      <div class="battle-loading-sprite" id="battle-loading-sprite" aria-hidden="true">🧑‍🎓</div>
       <p class="battle-loading-title">LOADING<span class="battle-loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></p>
       <div class="battle-loading-bar" role="status" aria-label="Loading">
         <span></span><span></span><span></span><span></span>
@@ -223,6 +224,18 @@
       <p class="battle-loading-hint" id="battle-loading-hint">Preparing your battle…</p>
     </div>
   </section>
+
+  <div class="battle-character-dialog" id="battle-character-dialog" hidden>
+    <div class="battle-character-panel" role="dialog" aria-modal="true" aria-labelledby="battle-character-title">
+      <div class="battle-character-head">
+        <h3 id="battle-character-title">Choose Your Fighter</h3>
+        <button type="button" class="battle-character-close" id="battle-character-close" aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="battle-character-grid" id="battle-character-grid" role="radiogroup" aria-label="Choose your character"></div>
+    </div>
+  </div>
 
   <section class="battle-fight-screen" id="battle-fight-screen" hidden>
     <div class="battle-fight-inner">
@@ -246,7 +259,15 @@
         </div>
 
         <div class="battle-fighter battle-fighter-player" id="battle-player-fighter">
-          <div class="battle-fighter-sprite" id="battle-player-sprite" aria-hidden="true">🧑‍🎓</div>
+          <div
+            class="battle-fighter-sprite battle-player-sprite-btn"
+            id="battle-player-sprite"
+            role="button"
+            tabindex="0"
+            aria-label="Change your character"
+            title="Change character"
+            aria-haspopup="dialog"
+          >🧑‍🎓</div>
           <div class="battle-fighter-panel">
             <strong id="battle-fight-player-name">You</strong>
             <div class="battle-hp-row">
@@ -260,7 +281,7 @@
         <div class="battle-fighter battle-fighter-ai" id="battle-ai-fighter">
           <div class="battle-fighter-sprite" id="battle-ai-sprite" aria-hidden="true">🤖</div>
           <div class="battle-fighter-panel battle-fighter-panel-right">
-            <strong>AI Rival</strong>
+            <strong><span id="battle-ai-name">AI Rival</span> <span class="battle-monster-level" id="battle-ai-level"></span></strong>
             <div class="battle-hp-row">
               <span class="battle-hp-value" id="battle-ai-hp-value">100/100</span>
               <div class="battle-hp-bar"><div class="battle-hp-bar-fill" id="battle-ai-hp-fill"></div></div>

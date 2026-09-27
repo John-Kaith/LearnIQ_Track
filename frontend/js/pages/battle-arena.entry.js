@@ -72,6 +72,7 @@
       );
       if (!res.ok) return battleStats;
       battleStats = await res.json();
+      if (typeof renderNextOpponent === "function") renderNextOpponent();
       try {
         sessionStorage.setItem("learniq-battle-stats", JSON.stringify(battleStats));
       } catch (e) {
@@ -1223,6 +1224,247 @@
     }
   }
 
+  /* ----------------------------------------------------------
+   * Characters: pixel-art fighters (DiceBear "Pixel Art" avatars,
+   * generated from a fixed seed). The choice is saved per browser.
+   * ---------------------------------------------------------- */
+  var CHARACTER_SEEDS = [
+    "Aiden", "Bella", "Carlo", "Dana", "Elio", "Faye", "Gabe", "Hana", "Ivan", "Jade",
+    "Kai", "Luna", "Milo", "Nina", "Omar", "Pia", "Quinn", "Rico", "Sofia", "Theo",
+    "Uma", "Vince", "Wren", "Xian", "Yuri", "Zara", "Axel", "Bea", "Cruz", "Dom",
+  ];
+  var CHARACTER_STORAGE_KEY = "learniq-battle-character";
+  var selectedCharacter = (function () {
+    try {
+      var saved = localStorage.getItem(CHARACTER_STORAGE_KEY);
+      return CHARACTER_SEEDS.indexOf(saved) !== -1 ? saved : CHARACTER_SEEDS[0];
+    } catch (e) {
+      return CHARACTER_SEEDS[0];
+    }
+  })();
+
+  function characterAvatarUrl(seed) {
+    return "https://api.dicebear.com/9.x/pixel-art/svg?seed=" + encodeURIComponent(seed);
+  }
+
+  /** Puts the chosen fighter into a sprite box; falls back to 🧑‍🎓 if the image can't load. */
+  function renderCharacterInto(el, seed) {
+    if (!el) return;
+    el.innerHTML = "";
+    var img = document.createElement("img");
+    img.className = "battle-avatar-img";
+    img.alt = "";
+    img.src = characterAvatarUrl(seed || selectedCharacter);
+    img.addEventListener("error", function () {
+      el.textContent = "🧑‍🎓";
+    });
+    el.appendChild(img);
+  }
+
+  function renderCharacterPicker() {
+    var grid = document.getElementById("battle-character-grid");
+    if (!grid) return;
+    if (!grid.childElementCount) {
+      grid.innerHTML = CHARACTER_SEEDS.map(function (seed) {
+        return (
+          '<button type="button" class="battle-character-option" role="radio" data-character="' +
+          esc(seed) +
+          '" aria-label="Fighter ' +
+          esc(seed) +
+          '"><img src="' +
+          characterAvatarUrl(seed) +
+          '" alt="" loading="lazy" /></button>'
+        );
+      }).join("");
+    }
+    grid.querySelectorAll(".battle-character-option").forEach(function (btn) {
+      var on = btn.getAttribute("data-character") === selectedCharacter;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+    });
+  }
+
+  function setCharacterDialogOpen(open) {
+    var dialog = document.getElementById("battle-character-dialog");
+    var sprite = document.getElementById("battle-player-sprite");
+    if (!dialog) return;
+    if (open) renderCharacterPicker();
+    dialog.hidden = !open;
+    // Don't let the clock run while choosing mid-battle.
+    if (fight && fight.started && !fight.ended) {
+      fight.paused = open;
+      if (!open) battleTimerLastTick = Date.now();
+    }
+    if (sprite) sprite.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      dialog.querySelector(".battle-character-option.is-active")?.focus();
+    } else if (sprite) {
+      sprite.focus();
+    }
+  }
+
+  /** Click your fighter in the arena to open the picker; picking one swaps it right away. */
+  function setupCharacterPicker() {
+    var grid = document.getElementById("battle-character-grid");
+    var dialog = document.getElementById("battle-character-dialog");
+    var sprite = document.getElementById("battle-player-sprite");
+    if (!grid || !dialog) return;
+
+    sprite?.addEventListener("click", function () {
+      setCharacterDialogOpen(true);
+    });
+    sprite?.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setCharacterDialogOpen(true);
+      }
+    });
+    document.getElementById("battle-character-close")?.addEventListener("click", function () {
+      setCharacterDialogOpen(false);
+    });
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) setCharacterDialogOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !dialog.hidden) setCharacterDialogOpen(false);
+    });
+
+    grid.addEventListener("click", function (e) {
+      var btn = e.target.closest(".battle-character-option");
+      var seed = btn && btn.getAttribute("data-character");
+      if (!seed) return;
+      selectedCharacter = seed;
+      try {
+        localStorage.setItem(CHARACTER_STORAGE_KEY, seed);
+      } catch (err) {
+        /* ignore */
+      }
+      renderCharacterPicker();
+      renderCharacterInto(document.getElementById("battle-player-sprite"), seed);
+      playClickSound();
+      setCharacterDialogOpen(false);
+    });
+  }
+
+  /* ----------------------------------------------------------
+   * Monster ladder: every win moves to the next monster. After the
+   * 20th (the Three-Headed Dragon) it keeps coming back at a higher
+   * level with no cap. Stronger monsters hit back harder.
+   * ---------------------------------------------------------- */
+  var MONSTERS = [
+    { name: "Green Slime", sprite: "🦠" },
+    { name: "Giant Rat", sprite: "🐀" },
+    { name: "Cave Bat", sprite: "🦇" },
+    { name: "Goblin", sprite: "👺" },
+    { name: "Venom Spider", sprite: "🕷️" },
+    { name: "Dire Wolf", sprite: "🐺" },
+    { name: "Skeleton Warrior", sprite: "💀" },
+    { name: "Swamp Zombie", sprite: "🧟" },
+    { name: "Phantom", sprite: "👻" },
+    { name: "Sand Scorpion", sprite: "🦂" },
+    { name: "War Boar", sprite: "🐗" },
+    { name: "Ogre", sprite: "👹" },
+    { name: "Stone Golem", sprite: "🗿" },
+    { name: "Vampire Lord", sprite: "🧛" },
+    { name: "Kraken", sprite: "🦑" },
+    { name: "Fire Elemental", sprite: "🔥" },
+    { name: "Dark Sorcerer", sprite: "🧙" },
+    { name: "Chimera", sprite: "🦁" },
+    { name: "Wyvern", sprite: "🐉" },
+    { name: "Three-Headed Dragon", sprite: "🐲🐲🐲", boss: true },
+  ];
+
+  /** stage = AI defeated so far (0 = first battle). */
+  function monsterForStage(stage) {
+    var n = Math.max(0, Math.floor(Number(stage) || 0));
+    var idx = Math.min(n, MONSTERS.length - 1);
+    var m = MONSTERS[idx];
+    return {
+      name: m.name,
+      sprite: m.sprite,
+      boss: !!m.boss,
+      level: n + 1,
+      // Extra counter-attack damage: +1 every 2 monsters, then +1 every 5 levels past the dragon.
+      power: Math.floor(idx / 2) + (n > MONSTERS.length - 1 ? Math.floor((n - (MONSTERS.length - 1)) / 5) : 0),
+    };
+  }
+
+  function currentStage() {
+    return typeof menuStats === "function" ? menuStats().wins : 0;
+  }
+
+  function renderMonster(monster) {
+    var sprite = document.getElementById("battle-ai-sprite");
+    var nameEl = document.getElementById("battle-ai-name");
+    var levelEl = document.getElementById("battle-ai-level");
+    if (sprite) {
+      sprite.classList.toggle("is-boss", monster.boss);
+      sprite.innerHTML = monster.boss
+        ? '<span class="battle-monster-heads"><span>🐲</span><span>🐲</span><span>🐲</span></span>'
+        : esc(monster.sprite);
+    }
+    if (nameEl) nameEl.textContent = monster.name;
+    if (levelEl) levelEl.textContent = "Lv " + monster.level;
+  }
+
+  function renderNextOpponent() {
+    var el = document.getElementById("battle-next-opponent");
+    if (!el) return;
+    var m = monsterForStage(currentStage());
+    el.innerHTML =
+      '<span class="battle-next-opponent-label">Next opponent</span> ' +
+      '<span class="battle-next-opponent-sprite" aria-hidden="true">' +
+      (m.boss ? "🐲" : esc(m.sprite)) +
+      "</span> <strong>" +
+      esc(m.name) +
+      "</strong> · Lv " +
+      m.level;
+  }
+
+  /* ----------------------------------------------------------
+   * Energy-beam attack (charge ball + beam from the player to the
+   * monster), drawn inside the battle stage.
+   * ---------------------------------------------------------- */
+  function fireEnergyBeam() {
+    var stage = document.querySelector(".battle-stage");
+    var from = document.getElementById("battle-player-sprite");
+    var to = document.getElementById("battle-ai-sprite");
+    if (!stage || !from || !to) return;
+    var sRect = stage.getBoundingClientRect();
+    var a = from.getBoundingClientRect();
+    var b = to.getBoundingClientRect();
+    var startX = a.right - sRect.left - a.width * 0.15;
+    var endX = b.left - sRect.left + b.width * 0.4;
+    var y = a.top - sRect.top + a.height * 0.55;
+    if (endX <= startX) return;
+
+    var charge = document.createElement("div");
+    charge.className = "battle-beam-charge";
+    charge.style.left = startX + "px";
+    charge.style.top = y + "px";
+
+    var beam = document.createElement("div");
+    beam.className = "battle-beam";
+    beam.style.left = startX + "px";
+    beam.style.top = y + "px";
+    beam.style.width = endX - startX + "px";
+
+    var impact = document.createElement("div");
+    impact.className = "battle-beam-impact";
+    impact.style.left = endX + "px";
+    impact.style.top = y + "px";
+
+    stage.appendChild(charge);
+    stage.appendChild(beam);
+    stage.appendChild(impact);
+    setTimeout(function () {
+      charge.remove();
+      beam.remove();
+      impact.remove();
+    }, 1100);
+  }
+
   function showHealPopup(amount) {
     var fighterEl = document.getElementById("battle-player-fighter");
     if (!fighterEl) return;
@@ -1261,13 +1503,14 @@
       renderWordsUsed();
       playTrack(streakHit ? sfxWinStreak : sfxCorrect);
       triggerAttackAnim("player");
+      fireEnergyBeam();
       setTimeout(function () {
         playTrack(sfxAttack);
-      }, 150);
+      }, 250);
       setTimeout(function () {
         triggerHitAnim("ai", dmg);
         playHitSound();
-      }, 350);
+      }, 600);
 
       if (typeof showToast === "function") {
         showToast(
@@ -1291,7 +1534,7 @@
     }
 
     playTrack(sfxWrong);
-    var counterDmg = 6 + Math.floor(Math.random() * 9);
+    var counterDmg = 6 + Math.floor(Math.random() * 9) + (fight.monster ? fight.monster.power : 0);
     fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
     fight.selected = [];
     fight.streak = 0;
@@ -1309,7 +1552,10 @@
     }, 200);
 
     if (typeof showToast === "function") {
-      showToast("Not quite — the AI hits back for " + counterDmg + "! -" + TIME_PENALTY_WRONG + "s", "error");
+      showToast(
+        "Not quite — the " + (fight.monster ? fight.monster.name : "AI") + " hits back for " + counterDmg + "! -" + TIME_PENALTY_WRONG + "s",
+        "error"
+      );
     }
 
     if (fight.playerHp <= 0) {
@@ -1337,10 +1583,10 @@
     if (bodyEl) {
       bodyEl.textContent =
         (outcome === "win"
-          ? "You defeated the AI opponent! "
+          ? "You defeated the " + (fight && fight.monster ? fight.monster.name : "AI opponent") + "! "
           : fight && fight.endReason === "time"
           ? "Time's up! "
-          : "The AI opponent defeated you. ") +
+          : "The " + (fight && fight.monster ? fight.monster.name : "AI opponent") + " defeated you. ") +
         battleResultSummary();
     }
     if (primaryBtn) primaryBtn.textContent = outcome === "win" ? "Battle Again" : "Try Again";
@@ -1462,6 +1708,8 @@
 
   function resetFightForRebattle() {
     if (!fight) return;
+    fight.monster = monsterForStage(currentStage());
+    renderMonster(fight.monster);
     fight.playerHp = PLAYER_MAX_HP;
     fight.aiHp = AI_MAX_HP;
     fight.wordsUsed = [];
@@ -1477,6 +1725,7 @@
   function exitToLobby() {
     stopBattleTimer();
     stopAllMusic();
+    renderNextOpponent();
     setBattleWaiting(false);
     fight = null;
     closeResultModal();
@@ -1489,6 +1738,7 @@
     var fileId = selectedLessonId;
     closeBattleModal();
     playIntroMusic();
+    renderCharacterInto(document.getElementById("battle-loading-sprite"), selectedCharacter);
     showLoadingScreen();
     setLoadingHint("Preparing your battle…");
 
@@ -1534,7 +1784,10 @@
         usingFallback: usingFallback,
         hintsLeft: HINTS_PER_BATTLE,
         difficulty: difficulty,
+        monster: monsterForStage(currentStage()),
       };
+      renderMonster(fight.monster);
+      renderCharacterInto(document.getElementById("battle-player-sprite"), selectedCharacter);
       renderHintButton();
 
       var playerNameEl = document.getElementById("battle-fight-player-name");
@@ -1622,6 +1875,8 @@
 
   function setupBattleArenaPage() {
     setupBattleMenu();
+    setupCharacterPicker();
+    renderNextOpponent();
     setupDifficultyPicker();
     void loadBattleStats();
     if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
