@@ -1241,13 +1241,12 @@ html.reduce-motion .battle-timer.is-low {
   color: #07210a;
 }
 
-/* Volume control: speaker icon top-right (loading + battle screens only);
-   clicking it opens a small panel with the volume slider (0 = mute). */
-.battle-volume {
+/* Game menu (☰): top-right on the loading + battle screens only */
+.battle-menu {
   display: none;
 }
 
-.battle-arena-page.battle-fullscreen-active .battle-volume {
+.battle-arena-page.battle-fullscreen-active .battle-menu {
   position: fixed;
   top: 0.75rem;
   right: 0.75rem;
@@ -1255,12 +1254,12 @@ html.reduce-motion .battle-timer.is-low {
   display: block;
 }
 
-/* Room for the icon above the arena, so it never covers Exit */
+/* Room for the menu above the arena, so it never covers Exit */
 .battle-arena-page.battle-fullscreen-active .battle-fight-screen {
   padding-top: 4rem;
 }
 
-.battle-volume-toggle {
+.battle-menu-toggle {
   display: grid;
   place-items: center;
   width: 2.5rem;
@@ -1274,32 +1273,131 @@ html.reduce-motion .battle-timer.is-low {
   cursor: pointer;
 }
 
-.battle-volume-toggle:hover,
-.battle-volume-toggle:focus-visible,
-.battle-volume-toggle[aria-expanded="true"] {
+.battle-menu-toggle:hover,
+.battle-menu-toggle:focus-visible,
+.battle-menu-toggle[aria-expanded="true"] {
   background: var(--arcade-panel);
 }
 
-.battle-volume-panel {
+.battle-menu-panel {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0.65rem;
+  display: grid;
+  gap: 1rem;
+  width: min(20rem, calc(100vw - 1.5rem));
+  padding: 0.9rem;
   background: var(--arcade-bg-mid);
   border: 3px solid var(--arcade-ink);
-  box-shadow: 3px 3px 0 #000;
+  box-shadow: 4px 4px 0 #000;
   color: var(--arcade-ink);
+  font-family: "Inter", system-ui, sans-serif;
 }
 
-.battle-volume-panel[hidden] {
+.battle-menu-panel[hidden] {
   display: none;
 }
 
-.battle-volume-slider {
-  width: 8rem;
+.battle-menu-section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.battle-menu-heading {
+  margin: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.6rem;
+  color: var(--arcade-yellow);
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.battle-menu-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.battle-menu-stat {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.5rem 0.3rem;
+  text-align: center;
+  background: var(--arcade-panel);
+  border: 2px solid var(--arcade-ink);
+}
+
+.battle-menu-stat span {
+  font-size: 0.68rem;
+  color: rgba(244, 241, 255, 0.75);
+}
+
+.battle-menu-stat strong {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--arcade-yellow);
+}
+
+.battle-menu-exp {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.battle-menu-exp-bar {
+  height: 10px;
+  background: var(--arcade-bg-deep);
+  border: 2px solid var(--arcade-ink);
+}
+
+.battle-menu-exp-fill {
+  width: 0;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--arcade-green) 0 6px, #1fae0a 6px 8px);
+  transition: width 0.4s ease;
+}
+
+.battle-menu-exp-text {
+  font-size: 0.72rem;
+  color: rgba(244, 241, 255, 0.8);
+}
+
+.battle-sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 7rem);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.battle-sound-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.battle-sound-mute {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-panel);
+  color: var(--arcade-yellow);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.battle-sound-mute:hover,
+.battle-sound-mute:focus-visible {
+  background: var(--arcade-bg-deep);
+}
+
+.battle-sound-mute[aria-pressed="true"] {
+  color: var(--arcade-red);
+  border-color: var(--arcade-red);
+}
+
+.battle-sound-slider {
+  width: 100%;
   height: 1rem;
   padding: 0;
   margin: 0;

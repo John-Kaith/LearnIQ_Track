@@ -91,78 +91,159 @@
    * ---------------------------------------------------------- */
 
   /* ----------------------------------------------------------
-   * Volume (top-right control on the loading / battle screens).
-   * One setting for the intro music and the sound effects,
-   * remembered in localStorage. 50% = the original loudness.
+   * Game menu (☰, top-right on the loading / battle screens):
+   * arena level, AI defeated, best score, and separate volume +
+   * mute for music and for sound effects (saved in localStorage).
+   * 50% = the original loudness.
    * ---------------------------------------------------------- */
-  var VOLUME_STORAGE_KEY = "learniq-battle-volume";
-  var gameVolume = 0.5;
-  var gameMuted = false;
+  var AUDIO_STORAGE_KEY = "learniq-battle-audio";
+  var OLD_VOLUME_STORAGE_KEY = "learniq-battle-volume";
+  var audioSettings = {
+    music: { volume: 0.5, muted: false },
+    sfx: { volume: 0.5, muted: false },
+  };
 
-  (function loadVolumeSetting() {
+  (function loadAudioSettings() {
     try {
-      var saved = JSON.parse(localStorage.getItem(VOLUME_STORAGE_KEY) || "null");
-      if (saved && typeof saved.volume === "number") gameVolume = Math.max(0, Math.min(1, saved.volume));
-      if (saved && typeof saved.muted === "boolean") gameMuted = saved.muted;
+      var saved = JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY) || "null");
+      if (!saved) {
+        // Carry over the earlier single volume setting to both channels.
+        var old = JSON.parse(localStorage.getItem(OLD_VOLUME_STORAGE_KEY) || "null");
+        if (old && typeof old.volume === "number") {
+          saved = {
+            music: { volume: old.volume, muted: !!old.muted },
+            sfx: { volume: old.volume, muted: !!old.muted },
+          };
+        }
+      }
+      ["music", "sfx"].forEach(function (kind) {
+        var ch = saved && saved[kind];
+        if (ch && typeof ch.volume === "number") audioSettings[kind].volume = Math.max(0, Math.min(1, ch.volume));
+        if (ch && typeof ch.muted === "boolean") audioSettings[kind].muted = ch.muted;
+      });
     } catch (e) {
       /* keep defaults */
     }
   })();
 
-  function effectiveVolume() {
-    return gameMuted ? 0 : gameVolume;
+  function effectiveVolume(kind) {
+    var ch = audioSettings[kind === "music" ? "music" : "sfx"];
+    return ch.muted ? 0 : ch.volume;
   }
 
-  function saveVolumeSetting() {
+  function saveAudioSettings() {
     try {
-      localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify({ volume: gameVolume, muted: gameMuted }));
+      localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(audioSettings));
     } catch (e) {
       /* ignore */
     }
   }
 
   function applyVolume() {
-    var vol = effectiveVolume();
     ALL_TRACKS.forEach(function (t) {
-      if (t && t.el) t.el.volume = vol;
+      if (t && t.el) t.el.volume = effectiveVolume(t.kind);
     });
-    var icon = document.getElementById("battle-volume-icon");
-    var slider = document.getElementById("battle-volume-slider");
-    if (icon) {
-      icon.className =
-        "fa-solid " + (vol === 0 ? "fa-volume-xmark" : vol < 0.5 ? "fa-volume-low" : "fa-volume-high");
-    }
-    if (slider) slider.value = String(Math.round(vol * 100));
+    ["music", "sfx"].forEach(function (kind) {
+      var vol = effectiveVolume(kind);
+      var name = kind === "music" ? "music" : "sound effects";
+      document.querySelectorAll('.battle-sound-mute[data-sound-kind="' + kind + '"]').forEach(function (btn) {
+        var icon = btn.querySelector("i");
+        if (icon) {
+          icon.className =
+            "fa-solid " + (vol === 0 ? "fa-volume-xmark" : vol < 0.5 ? "fa-volume-low" : "fa-volume-high");
+        }
+        var label = audioSettings[kind].muted ? "Unmute " + name : "Mute " + name;
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
+        btn.setAttribute("aria-pressed", audioSettings[kind].muted ? "true" : "false");
+      });
+      document.querySelectorAll('.battle-sound-slider[data-sound-kind="' + kind + '"]').forEach(function (slider) {
+        slider.value = String(Math.round(vol * 100));
+      });
+    });
   }
 
-  function setVolumePanelOpen(open) {
-    var panel = document.getElementById("battle-volume-panel");
-    var toggle = document.getElementById("battle-volume-toggle");
+  /** Stats for the menu: server numbers when available, else this browser's battle history. */
+  function menuStats() {
+    if (battleStats && typeof battleStats.wins === "number") {
+      return {
+        level: Number(battleStats.level || 0),
+        totalExp: Number(battleStats.total_exp || 0),
+        wins: Number(battleStats.wins || 0),
+        best: Number(battleStats.best_score || 0),
+      };
+    }
+    var list = typeof readStudentHistoryListLocal === "function" ? readStudentHistoryListLocal("battle") : [];
+    var totalExp = 0;
+    var wins = 0;
+    var best = 0;
+    list.forEach(function (b) {
+      var won = String(b.outcome || "").toLowerCase() === "win";
+      totalExp += battleExpForResult(won ? "win" : "lose", b.correct_answers);
+      if (won) wins += 1;
+      best = Math.max(best, Number(b.score != null ? b.score : b.total_damage) || 0);
+    });
+    return { level: Math.floor(totalExp / EXP_PER_LEVEL), totalExp: totalExp, wins: wins, best: best };
+  }
+
+  function renderBattleMenuStats() {
+    var st = menuStats();
+    var into = st.totalExp % EXP_PER_LEVEL;
+    var set = function (id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+    set("battle-menu-level", String(st.level));
+    set("battle-menu-wins", String(st.wins));
+    set("battle-menu-best", String(st.best));
+    set("battle-menu-exp-text", into + " / " + EXP_PER_LEVEL + " EXP to Level " + (st.level + 1));
+    var fill = document.getElementById("battle-menu-exp-fill");
+    if (fill) fill.style.width = Math.round((into / EXP_PER_LEVEL) * 100) + "%";
+  }
+
+  function setBattleMenuOpen(open) {
+    var panel = document.getElementById("battle-menu-panel");
+    var toggle = document.getElementById("battle-menu-toggle");
+    if (open) renderBattleMenuStats();
     if (panel) panel.hidden = !open;
     if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
-  function setupVolumeControl() {
-    var slider = document.getElementById("battle-volume-slider");
-    var toggle = document.getElementById("battle-volume-toggle");
-    var wrap = document.getElementById("battle-volume");
-
-    // Only the speaker icon shows; clicking it opens the volume slider (0 = mute).
+  function setupBattleMenu() {
+    var toggle = document.getElementById("battle-menu-toggle");
+    var wrap = document.getElementById("battle-menu");
     toggle?.addEventListener("click", function () {
-      var panel = document.getElementById("battle-volume-panel");
-      setVolumePanelOpen(!!(panel && panel.hidden));
+      var panel = document.getElementById("battle-menu-panel");
+      setBattleMenuOpen(!!(panel && panel.hidden));
     });
     document.addEventListener("click", function (e) {
-      if (wrap && !wrap.contains(e.target)) setVolumePanelOpen(false);
+      if (wrap && !wrap.contains(e.target)) setBattleMenuOpen(false);
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") setVolumePanelOpen(false);
+      if (e.key === "Escape") setBattleMenuOpen(false);
     });
-    slider?.addEventListener("input", function () {
-      gameVolume = Math.max(0, Math.min(1, Number(slider.value) / 100));
-      gameMuted = false; // the slider alone decides: 0 is silent
-      applyVolume();
-      saveVolumeSetting();
+    document.querySelectorAll(".battle-sound-slider").forEach(function (slider) {
+      slider.addEventListener("input", function () {
+        var kind = slider.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
+        audioSettings[kind].volume = Math.max(0, Math.min(1, Number(slider.value) / 100));
+        audioSettings[kind].muted = false;
+        applyVolume();
+        saveAudioSettings();
+      });
+    });
+    document.querySelectorAll(".battle-sound-mute").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var kind = btn.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
+        var ch = audioSettings[kind];
+        if (ch.muted || ch.volume === 0) {
+          ch.muted = false;
+          if (ch.volume === 0) ch.volume = 0.5;
+        } else {
+          ch.muted = true;
+        }
+        applyVolume();
+        saveAudioSettings();
+      });
     });
     applyVolume();
   }
@@ -176,7 +257,7 @@
   }
 
   function playTone(freq, duration, type, delay) {
-    var vol = effectiveVolume();
+    var vol = effectiveVolume("sfx");
     if (vol <= 0) return;
     var ctx = getAudioCtx();
     if (!ctx) return;
@@ -829,9 +910,9 @@
   /* Music: intro.mp3 loops from "Start Battle" (lobby) through loading and the
      Ready screen; "game start.mp3" loops once the in-game Start is pressed and
      stops when the battle ends; gameover.mp3 plays once on a loss. */
-  var introMusic = createTrack("audio/intro.mp3", true);
-  var battleMusic = createTrack("audio/game%20start.mp3", true);
-  var gameOverSound = createTrack("audio/gameover.mp3", false);
+  var introMusic = createTrack("audio/intro.mp3", true, "music");
+  var battleMusic = createTrack("audio/game%20start.mp3", true, "music");
+  var gameOverSound = createTrack("audio/gameover.mp3", false, "sfx");
 
   // One-shot sound effects (frontend/audio).
   var sfxTimerRunsOut = createTrack("audio/timer%20runsout.mp3", false);
@@ -852,8 +933,8 @@
     sfxWinStreak,
   ];
 
-  function createTrack(src, loop) {
-    return { src: src, loop: loop, el: null };
+  function createTrack(src, loop, kind) {
+    return { src: src, loop: loop, kind: kind || "sfx", el: null };
   }
 
   function playTrack(track) {
@@ -862,7 +943,7 @@
         track.el = new Audio(track.src);
         track.el.loop = track.loop;
       }
-      track.el.volume = effectiveVolume();
+      track.el.volume = effectiveVolume(track.kind);
       track.el.currentTime = 0;
       var playing = track.el.play();
       if (playing && typeof playing.catch === "function") {
@@ -1346,12 +1427,17 @@
     saveBattleResultToHistory(outcome, progress);
 
     // Update locally right away; the server copy is refreshed once history is saved.
-    battleStats = Object.assign({}, battleStats || {}, {
+    var prevStats = battleStats || {};
+    battleStats = Object.assign({}, prevStats, {
       level: progress.levelAfter,
       total_exp: progress.totalExp,
       exp_into_level: progress.expIntoLevel,
       best_score: progress.bestScore,
     });
+    if (typeof prevStats.wins === "number") {
+      battleStats.wins = prevStats.wins + (outcome === "win" ? 1 : 0);
+      battleStats.battles = Number(prevStats.battles || 0) + 1;
+    }
     setTimeout(loadBattleStats, 1500);
   }
 
@@ -1535,7 +1621,7 @@
   }
 
   function setupBattleArenaPage() {
-    setupVolumeControl();
+    setupBattleMenu();
     setupDifficultyPicker();
     void loadBattleStats();
     if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();

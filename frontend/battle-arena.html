@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=2026092717" />
-  <link rel="stylesheet" href="css/battle-arena.css?v=2026092801" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026092802" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026092801" defer></script>
-  <script src="js/pages/battle-arena.entry.js?v=2026092803" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026092804" defer></script>
 </head>
 <body class="battle-arena-page" data-sidebar-active="battle-arena">
   <div class="dashboard-shell container">
@@ -157,29 +157,58 @@
     </main>
   </div>
 
-  <div class="battle-volume" id="battle-volume">
+  <div class="battle-menu" id="battle-menu">
     <button
       type="button"
-      class="battle-volume-toggle"
-      id="battle-volume-toggle"
-      aria-label="Volume"
-      title="Volume"
+      class="battle-menu-toggle"
+      id="battle-menu-toggle"
+      aria-label="Game menu"
+      title="Menu"
       aria-expanded="false"
-      aria-controls="battle-volume-panel"
+      aria-controls="battle-menu-panel"
     >
-      <i class="fa-solid fa-volume-low" id="battle-volume-icon" aria-hidden="true"></i>
+      <i class="fa-solid fa-bars" aria-hidden="true"></i>
     </button>
-    <div class="battle-volume-panel" id="battle-volume-panel" role="group" aria-label="Game volume" hidden>
-      <input
-        type="range"
-        class="battle-volume-slider"
-        id="battle-volume-slider"
-        min="0"
-        max="100"
-        step="5"
-        value="50"
-        aria-label="Volume"
-      />
+    <div class="battle-menu-panel" id="battle-menu-panel" hidden>
+      <section class="battle-menu-section" aria-labelledby="battle-menu-player-title">
+        <p class="battle-menu-heading" id="battle-menu-player-title">Player</p>
+        <div class="battle-menu-stats">
+          <div class="battle-menu-stat">
+            <span>Level</span>
+            <strong id="battle-menu-level">0</strong>
+          </div>
+          <div class="battle-menu-stat">
+            <span>AI defeated</span>
+            <strong id="battle-menu-wins">0</strong>
+          </div>
+          <div class="battle-menu-stat">
+            <span>Best score</span>
+            <strong id="battle-menu-best">0</strong>
+          </div>
+        </div>
+        <div class="battle-menu-exp">
+          <div class="battle-menu-exp-bar"><div class="battle-menu-exp-fill" id="battle-menu-exp-fill"></div></div>
+          <span class="battle-menu-exp-text" id="battle-menu-exp-text">0 / 100 EXP to Level 1</span>
+        </div>
+      </section>
+
+      <section class="battle-menu-section" aria-labelledby="battle-menu-sound-title">
+        <p class="battle-menu-heading" id="battle-menu-sound-title">Sound</p>
+        <div class="battle-sound-row">
+          <span class="battle-sound-label">Music</span>
+          <button type="button" class="battle-sound-mute" data-sound-kind="music" aria-label="Mute music" title="Mute music">
+            <i class="fa-solid fa-volume-high" aria-hidden="true"></i>
+          </button>
+          <input type="range" class="battle-sound-slider" data-sound-kind="music" min="0" max="100" step="5" value="50" aria-label="Music volume" />
+        </div>
+        <div class="battle-sound-row">
+          <span class="battle-sound-label">Sound effects</span>
+          <button type="button" class="battle-sound-mute" data-sound-kind="sfx" aria-label="Mute sound effects" title="Mute sound effects">
+            <i class="fa-solid fa-volume-high" aria-hidden="true"></i>
+          </button>
+          <input type="range" class="battle-sound-slider" data-sound-kind="sfx" min="0" max="100" step="5" value="50" aria-label="Sound effects volume" />
+        </div>
+      </section>
     </div>
   </div>
 
