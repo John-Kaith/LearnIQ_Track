@@ -164,6 +164,43 @@
     remount();
   });
 
+  // Clicking the LearnIQ logo goes to the signed-in user's own dashboard (student /
+  // teacher / admin). With no session (e.g. the login page) it just refreshes.
+  // It used to link to login.html, which signed the user out.
+  function dashboardForCurrentUser() {
+    var user = null;
+    try {
+      user = JSON.parse(sessionStorage.getItem("learniq-current-user") || "null");
+    } catch (_) {
+      user = null;
+    }
+    if (!user || !user.access_token) return null;
+    var role = String(user.role || "").trim().toLowerCase();
+    if (role === "admin") return "admin-approval.html";
+    if (role === "teacher") return "teacher-learniq-dashboard.html";
+    if (role === "student") {
+      var page = (window.location.pathname.split("/").pop() || "").toLowerCase();
+      return page.indexOf("immersion") !== -1 ? "immersion-dashboard.html" : "learniq-dashboard.html";
+    }
+    return null;
+  }
+
+  document.addEventListener(
+    "click",
+    function (ev) {
+      var brand = ev.target.closest && ev.target.closest(".brand");
+      if (!brand || ev.target.closest("button, input, select, textarea")) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      // Login and Module Selection: the logo only refreshes the page.
+      var refreshOnly = /(^|\/)(login|module-selection)\.html$/i.test(window.location.pathname);
+      var target = refreshOnly ? null : dashboardForCurrentUser();
+      if (target) window.location.href = target;
+      else window.location.reload();
+    },
+    true
+  );
+
   window.LearnIQTheme = {
     get: getTheme,
     readStored: readStoredTheme,

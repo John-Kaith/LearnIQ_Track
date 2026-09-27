@@ -9,14 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
-  <link rel="stylesheet" href="style.css?v=2026082708" />
-  <link rel="stylesheet" href="css/battle-arena.css?v=2026090201" />
+  <link rel="stylesheet" href="style.css?v=2026092717" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026092801" />
   <script src="js/shared/theme-toggle.js"></script>
-  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082707" defer></script>
-  <script src="js/pages/battle-arena.entry.js?v=2026090201" defer></script>
+  <script src="script.js?v=2026092801" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026092803" defer></script>
 </head>
 <body class="battle-arena-page" data-sidebar-active="battle-arena">
   <div class="dashboard-shell container">
@@ -94,7 +94,6 @@
           <article class="glass-card content-card">
             <p class="battle-step-label small-note">Step 2</p>
             <h3>Battle Mode</h3>
-            <p class="content-subtitle">Choose how you want to compete.</p>
             <div class="battle-mode-grid" role="radiogroup" aria-label="Battle mode">
               <label class="battle-mode-card is-selected">
                 <input type="radio" name="battle-mode" value="ai" checked />
@@ -102,14 +101,6 @@
                   <span class="battle-mode-icon" aria-hidden="true"><i class="fa-solid fa-robot"></i></span>
                   <strong>Battle AI</strong>
                   <span class="small-note">Challenge an AI opponent using this lesson.</span>
-                </span>
-              </label>
-              <label class="battle-mode-card is-disabled" aria-disabled="true">
-                <input type="radio" name="battle-mode" value="player" disabled />
-                <span class="battle-mode-card-body">
-                  <span class="battle-mode-icon" aria-hidden="true"><i class="fa-solid fa-users"></i></span>
-                  <strong>Battle Player</strong>
-                  <span class="small-note">Coming Soon</span>
                 </span>
               </label>
             </div>
@@ -138,17 +129,15 @@
                   <dt>Status</dt>
                   <dd>Ready for Battle</dd>
                 </div>
-                <div class="battle-info-row">
-                  <dt>Estimated Battle</dt>
-                  <dd>5-10 minutes</dd>
-                </div>
-                <div class="battle-info-row">
-                  <dt>Question Count</dt>
-                  <dd>Coming Soon</dd>
-                </div>
-                <div class="battle-info-row">
-                  <dt>AI Difficulty</dt>
-                  <dd>Normal</dd>
+                <div class="battle-info-row battle-difficulty-row">
+                  <dt id="battle-difficulty-label">AI Difficulty</dt>
+                  <dd>
+                    <div class="battle-difficulty-picker" role="radiogroup" aria-labelledby="battle-difficulty-label">
+                      <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="normal" aria-checked="true">Normal</button>
+                      <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="medium" aria-checked="false">Medium</button>
+                      <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="hard" aria-checked="false">Hard</button>
+                    </div>
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -166,6 +155,32 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div class="battle-volume" id="battle-volume">
+    <button
+      type="button"
+      class="battle-volume-toggle"
+      id="battle-volume-toggle"
+      aria-label="Volume"
+      title="Volume"
+      aria-expanded="false"
+      aria-controls="battle-volume-panel"
+    >
+      <i class="fa-solid fa-volume-low" id="battle-volume-icon" aria-hidden="true"></i>
+    </button>
+    <div class="battle-volume-panel" id="battle-volume-panel" role="group" aria-label="Game volume" hidden>
+      <input
+        type="range"
+        class="battle-volume-slider"
+        id="battle-volume-slider"
+        min="0"
+        max="100"
+        step="5"
+        value="50"
+        aria-label="Volume"
+      />
+    </div>
   </div>
 
   <section class="battle-loading-screen" id="battle-loading-screen" hidden>
@@ -192,7 +207,14 @@
           <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Exit
         </button>
 
-        <div class="battle-vs-badge">VS</div>
+        <div class="battle-vs-badge">
+          <div class="battle-timer" id="battle-timer" role="timer" aria-live="off" aria-label="Time left">
+            <i class="fa-solid fa-stopwatch" aria-hidden="true"></i>
+            <span id="battle-timer-value">15:00</span>
+          </div>
+          VS
+          <div class="battle-streak" id="battle-streak" aria-live="polite">Streak 0/5</div>
+        </div>
 
         <div class="battle-fighter battle-fighter-player" id="battle-player-fighter">
           <div class="battle-fighter-sprite" id="battle-player-sprite" aria-hidden="true">🧑‍🎓</div>
@@ -222,6 +244,16 @@
       <div class="battle-fight-board">
         <div class="battle-board-main">
           <p class="small-note" id="battle-vocab-note" hidden></p>
+          <div class="battle-ready-panel" id="battle-ready-panel" hidden>
+            <p class="battle-ready-title">Ready?</p>
+            <p class="battle-ready-text">
+              You have <strong id="battle-ready-time">15:00</strong>. Correct answers add <strong>+3s</strong>, wrong answers cost
+              <strong>-5s</strong>, and 5 correct in a row heals <strong>+5 HP</strong>.
+            </p>
+            <button type="button" class="btn btn-primary battle-start-btn" id="battle-start-btn">
+              <i class="fa-solid fa-play" aria-hidden="true"></i> Start
+            </button>
+          </div>
           <div class="battle-question-panel">
             <p class="battle-question-label">Question</p>
             <p class="battle-question-text" id="battle-question-text" aria-live="polite">Loading question…</p>
@@ -233,6 +265,9 @@
             <button type="button" class="btn btn-secondary btn-small" id="battle-clear-btn">Clear</button>
             <button type="button" class="btn btn-secondary btn-small" id="battle-scramble-btn">
               <i class="fa-solid fa-shuffle" aria-hidden="true"></i> Scramble
+            </button>
+            <button type="button" class="btn btn-secondary btn-small" id="battle-hint-btn" title="Reveal the next correct letter">
+              <i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Hint <span id="battle-hint-count">3</span>
             </button>
             <button type="button" class="btn btn-primary btn-small" id="battle-attack-btn" disabled>
               <i class="fa-solid fa-bolt" aria-hidden="true"></i> Attack
@@ -278,6 +313,10 @@
           <dt>Mode</dt>
           <dd id="battle-modal-mode">Battle AI</dd>
         </div>
+        <div class="battle-info-row">
+          <dt>Difficulty</dt>
+          <dd id="battle-modal-difficulty">Normal</dd>
+        </div>
       </dl>
       <p class="small-note" style="margin-top: 0.85rem;">Ready to battle using this lesson's key words?</p>
       <div class="action-modal-actions">
@@ -299,6 +338,7 @@
         <h3 id="battle-result-modal-title">Battle Result</h3>
       </div>
       <p class="small-note" id="battle-result-modal-body">—</p>
+      <div class="battle-result-progress" id="battle-result-progress" hidden></div>
       <div class="action-modal-actions">
         <button type="button" class="btn btn-secondary" id="battle-result-secondary-btn">Back to Lobby</button>
         <button type="button" class="btn btn-primary" id="battle-result-primary-btn">Battle Again</button>

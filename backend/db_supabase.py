@@ -805,6 +805,23 @@ def set_battle_questions(lesson_id: str, questions: list[Any]) -> None:
     _sb().table("lesson_content").update({"battle_questions": questions}).eq("lesson_id", lesson_id).execute()
 
 
+def _battle_question_difficulty(entry: Any) -> str:
+    """Questions saved before difficulties existed have no tag and count as "normal"."""
+    if isinstance(entry, dict):
+        d = str(entry.get("difficulty") or "normal").strip().lower()
+        if d in ("normal", "medium", "hard"):
+            return d
+    return "normal"
+
+
+def replace_battle_questions_for_difficulty(lesson_id: str, difficulty: str, questions: list[Any]) -> None:
+    """Swap one difficulty's questions in lesson_content.battle_questions, keeping the others."""
+    row = get_content_row(lesson_id) or {}
+    existing = row.get("battle_questions") if isinstance(row.get("battle_questions"), list) else []
+    kept = [q for q in existing if _battle_question_difficulty(q) != difficulty]
+    set_battle_questions(lesson_id, kept + list(questions))
+
+
 def append_quiz_question(lesson_id: str, question: dict[str, Any]) -> list[Any]:
     row = get_content_row(lesson_id)
     quiz = []
@@ -1364,6 +1381,10 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
         if ts and ts > a["last_ts"]:
             a["last_ts"] = ts
 
+    battle_stats = get_all_battle_stats()
+    for sid in battle_stats:
+        agg[sid]  # students who only played the AI Battle Arena still appear
+
     if not agg:
         return {"updated_at": now_iso, "entries": []}
 
@@ -1395,6 +1416,7 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
             continue
         tq = int(v["total_questions"])
         pct = round(100.0 * float(v["total_score"]) / tq, 1) if tq > 0 else 0.0
+        bstats = battle_stats.get(sid) or {}
         entries.append(
             {
                 "student_id": sid,
@@ -1405,6 +1427,9 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
                 "quiz_attempts": int(v["attempts"]),
                 "progress_pct": pct,
                 "last_activity": v["last_ts"] or None,
+                "battle_level": int(bstats.get("level") or 0),
+                "battle_best_score": int(bstats.get("best_score") or 0),
+                "battle_total_exp": int(bstats.get("total_exp") or 0),
             }
         )
 
@@ -2169,6 +2194,25 @@ def list_journals_for_student(student_id_number: str) -> list[dict[str, Any]]:
         reverse=True,
     )
     return rows
+
+
+def delete_journal_for_student(journal_id: str, student_id_number: str) -> None:
+    """Student removes (unsubmits) one of their own journal entries."""
+    jid = str(journal_id or "").strip()
+    idn = str(student_id_number or "").strip()
+    if not jid:
+        raise ValueError("Journal entry not found.")
+    res = _sb().table("journals").select("*").eq("id", jid).limit(1).execute()
+    row = res.data[0] if res.data else None
+    if not row:
+        raise ValueError("Journal entry not found.")
+    pid = profile_uuid_for_id_number(idn)
+    owns = (pid and str(row.get("student_id") or "") == pid) or (
+        str(row.get("student_id_number") or "").strip() == idn
+    )
+    if not owns:
+        raise PermissionError("You can only remove your own journal entries.")
+    _sb().table("journals").delete().eq("id", jid).execute()
 
 
 def get_active_attendance(student_id_number: str) -> dict[str, Any] | None:
@@ -2988,6 +3032,8 @@ def join_subject_by_code(student_uuid: str, join_code: str) -> dict[str, Any]:
     existing = get_student_enrollment_row(student_uuid, subject_id, period_id)
     if existing:
         prior = enrollment_status_from_row(existing)
+        if prior == ENROLLMENT_STATUS_ARCHIVED:
+            raise ValueError("This subject is in your Archived list. Unarchive it there to bring it back.")
         if prior in _MY_SUBJECTS_STATUSES:
             raise ValueError("You are already enrolled in this subject")
         if prior == ENROLLMENT_STATUS_UNENROLLED:
@@ -4535,6 +4581,118 @@ def backfill_student_history_from_lessons(student_id_number: str) -> dict[str, l
         "reviewer": reviewer_out,
         "activity": activity_out,
     }
+
+
+# ---------- AI Battle Arena progression (level / EXP / best score) ----------
+# Derived from saved "battle" learning events, so no extra table is needed.
+# Keep the formula in sync with battleExpForResult() in
+# frontend/js/pages/battle-arena.entry.js.
+
+BATTLE_EXP_PER_LEVEL = 100
+BATTLE_EXP_MIN = 5
+BATTLE_EXP_MAX = 15
+
+
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def battle_exp_for_result(outcome: Any, correct_answers: Any) -> int:
+    """5 EXP for playing, +5 for a win, +1 per correct answer (max +5). Range 5–15."""
+    exp = BATTLE_EXP_MIN
+    if str(outcome or "").strip().lower() == "win":
+        exp += 5
+    exp += min(5, max(0, _int_or_zero(correct_answers)))
+    return max(BATTLE_EXP_MIN, min(BATTLE_EXP_MAX, exp))
+
+
+def battle_points_for_result(meta: dict[str, Any]) -> int:
+    if meta.get("score") is not None:
+        return max(0, _int_or_zero(meta.get("score")))
+    return max(0, _int_or_zero(meta.get("total_damage")))
+
+
+def summarize_battle_events(metas: list[dict[str, Any]]) -> dict[str, Any]:
+    total_exp = 0
+    best_score = 0
+    wins = 0
+    for meta in metas:
+        total_exp += battle_exp_for_result(meta.get("outcome"), meta.get("correct_answers"))
+        best_score = max(best_score, battle_points_for_result(meta))
+        if str(meta.get("outcome") or "").strip().lower() == "win":
+            wins += 1
+    level = total_exp // BATTLE_EXP_PER_LEVEL
+    return {
+        "level": level,
+        "total_exp": total_exp,
+        "exp_into_level": total_exp % BATTLE_EXP_PER_LEVEL,
+        "exp_per_level": BATTLE_EXP_PER_LEVEL,
+        "best_score": best_score,
+        "battles": len(metas),
+        "wins": wins,
+    }
+
+
+def _battle_event_rows(student_uuid: str | None = None, student_id_number: str | None = None) -> list[dict[str, Any]]:
+    """All battle events (optionally for one student), paged past Supabase's 1000-row cap."""
+    rows: list[dict[str, Any]] = []
+    page = 1000
+    start = 0
+    while True:
+        q = (
+            _sb()
+            .table("student_learning_events")
+            .select("student_id, student_id_number, metadata")
+            .eq("event_type", "battle")
+        )
+        if student_uuid:
+            q = q.eq("student_id", student_uuid)
+        elif student_id_number:
+            q = q.eq("student_id_number", student_id_number)
+        res = q.order("created_at").range(start, start + page - 1).execute()
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            return rows
+        start += page
+
+
+def _event_meta(row: dict[str, Any]) -> dict[str, Any]:
+    return row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+
+
+def get_student_battle_stats(student_id_number: str) -> dict[str, Any]:
+    idn = (student_id_number or "").strip()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid and not idn:
+        return summarize_battle_events([])
+    try:
+        rows = _battle_event_rows(student_uuid=student_uuid, student_id_number=idn)
+    except Exception as e:
+        print(f"get_student_battle_stats: {e}")
+        rows = []
+    return summarize_battle_events([_event_meta(r) for r in rows])
+
+
+def get_all_battle_stats() -> dict[str, dict[str, Any]]:
+    """Battle stats for every student, keyed by profile uuid."""
+    try:
+        rows = _battle_event_rows()
+    except Exception as e:
+        print(f"get_all_battle_stats: {e}")
+        return {}
+    by_student: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        sid = str(r.get("student_id") or "").strip()
+        if not sid or sid == ZERO_UUID:
+            sid = profile_uuid_for_id_number(str(r.get("student_id_number") or "").strip()) or ""
+        if not sid:
+            continue
+        by_student[sid].append(_event_meta(r))
+    return {sid: summarize_battle_events(metas) for sid, metas in by_student.items()}
 
 
 def get_student_learning_history(student_id_number: str) -> dict[str, list[dict[str, Any]]]:

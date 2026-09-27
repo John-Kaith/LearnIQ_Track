@@ -1,0 +1,10 @@
+{
+  "liveServer.settings.root": "/frontend",
+  "liveServer.settings.file": "index.html",
+  "liveServer.settings.ignoreFiles": [
+    ".vscode/**",
+    "backend/**",
+    "mobile-app/**",
+    "**/*.py"
+  ]
+}

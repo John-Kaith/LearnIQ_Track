@@ -85,6 +85,12 @@
               <h3>Full rankings</h3>
               <p class="table-note" id="leaderboard-table-note">Sorted by total quiz points, then accuracy.</p>
             </div>
+            <div class="leaderboard-sort-toggle" role="group" aria-label="Rank by">
+              <button type="button" class="is-active" data-rank-mode="quiz" aria-pressed="true">Quiz points</button>
+              <button type="button" data-rank-mode="arena" aria-pressed="false">
+                <i class="fa-solid fa-bolt" aria-hidden="true"></i> Arena level
+              </button>
+            </div>
           </div>
           <div class="leaderboard-table-wrap">
             <table class="data-table">
@@ -95,6 +101,8 @@
                   <th>Total points</th>
                   <th>Quizzes</th>
                   <th>Accuracy</th>
+                  <th>Arena level</th>
+                  <th>Arena best</th>
                 </tr>
               </thead>
               <tbody id="leaderboard-table-body"></tbody>

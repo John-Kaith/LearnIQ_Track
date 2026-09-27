@@ -9,13 +9,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026082708" />
+<link rel="stylesheet" href="style.css?v=2026092717" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026082707" defer></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" />
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/turndown@7.2.0/dist/turndown.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="script.js?v=2026092801" defer></script>
 </head>
 <body>
   <div class="dashboard-shell container">
@@ -230,8 +235,25 @@
                 <input type="date" id="journal-date" required>
               </div>
               <div class="form-group">
-                <label for="journal-body">Today's Activities</label>
-                <textarea id="journal-body" rows="6" placeholder="Describe what you did today, what you learned, challenges faced, etc."></textarea>
+                <label id="journal-body-label">Today's Activities</label>
+                <div class="journal-editor">
+                  <div id="journal-toolbar" class="journal-toolbar" role="toolbar" aria-label="Formatting">
+                    <span class="ql-formats">
+                      <button type="button" class="ql-bold" title="Bold" aria-label="Bold"></button>
+                      <button type="button" class="ql-italic" title="Italic" aria-label="Italic"></button>
+                      <button type="button" class="ql-underline" title="Underline" aria-label="Underline"></button>
+                    </span>
+                    <span class="ql-formats">
+                      <button type="button" class="ql-list" value="ordered" title="Numbered list" aria-label="Numbered list"></button>
+                      <button type="button" class="ql-list" value="bullet" title="Bulleted list" aria-label="Bulleted list"></button>
+                    </span>
+                    <span class="ql-formats">
+                      <button type="button" class="ql-link" title="Insert link" aria-label="Insert link"></button>
+                      <button type="button" class="ql-clean" title="Clear formatting" aria-label="Clear formatting"></button>
+                    </span>
+                  </div>
+                  <div id="journal-body" aria-labelledby="journal-body-label"></div>
+                </div>
               </div>
               <button type="submit" class="btn btn-primary">
                 <i class="fa-solid fa-save"></i> Save Entry

@@ -13,6 +13,8 @@
     const confirmText = o.confirmText != null ? String(o.confirmText) : "OK";
     const cancelText = o.cancelText != null ? String(o.cancelText) : "Cancel";
     const variant = o.variant === "danger" ? "danger" : "default";
+    // Optional middle button (e.g. "Restart"); resolves to the string "extra" when clicked.
+    const extraText = o.extraText != null ? String(o.extraText) : "";
 
     return new Promise(function (resolve) {
       const backdrop = document.createElement("div");
@@ -55,7 +57,7 @@
         try {
           backdrop.remove();
         } catch (_) {}
-        resolve(!!val);
+        resolve(val === "extra" ? "extra" : !!val);
       }
 
       function onKey(e) {
@@ -76,6 +78,16 @@
       });
 
       actions.appendChild(btnCancel);
+      if (extraText) {
+        const btnExtra = document.createElement("button");
+        btnExtra.type = "button";
+        btnExtra.className = "btn btn-secondary";
+        btnExtra.textContent = extraText;
+        btnExtra.addEventListener("click", function () {
+          finish("extra");
+        });
+        actions.appendChild(btnExtra);
+      }
       actions.appendChild(btnOk);
       panel.appendChild(head);
       panel.appendChild(msg);

@@ -40,11 +40,132 @@
   var audioCtx = null;
 
   /* ----------------------------------------------------------
+   * Arena progression: every finished battle earns 5–15 EXP;
+   * 100 EXP = 1 level (starts at level 0). Keep in sync with
+   * battle_exp_for_result() in backend/db_supabase.py, which
+   * recomputes level / EXP / best score from saved history.
+   * ---------------------------------------------------------- */
+  var EXP_PER_LEVEL = 100;
+  var battleStats = (function () {
+    try {
+      return JSON.parse(sessionStorage.getItem("learniq-battle-stats") || "null");
+    } catch (e) {
+      return null;
+    }
+  })(); // { level, total_exp, best_score, ... } from /student/battle-stats
+
+  function battleExpForResult(outcome, correctAnswers) {
+    var exp = 5;
+    if (outcome === "win") exp += 5;
+    exp += Math.min(5, Math.max(0, Number(correctAnswers) || 0));
+    return Math.max(5, Math.min(15, exp));
+  }
+
+  async function loadBattleStats() {
+    var sid = studentId();
+    if (!sid || typeof apiUrl !== "function") return null;
+    try {
+      var headers = typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {};
+      var res = await fetch(
+        apiUrl("/student/battle-stats?student_id_number=" + encodeURIComponent(sid)),
+        { headers: headers }
+      );
+      if (!res.ok) return battleStats;
+      battleStats = await res.json();
+      try {
+        sessionStorage.setItem("learniq-battle-stats", JSON.stringify(battleStats));
+      } catch (e) {
+        /* ignore */
+      }
+    } catch (e) {
+      console.warn("loadBattleStats failed:", e);
+    }
+    return battleStats;
+  }
+
+  /* ----------------------------------------------------------
    * Retro sound effects — synthesized with Web Audio, no audio
    * files needed. Lazily created on first use (autoplay policies
    * require a user gesture, and every caller here fires from a
    * click handler already).
    * ---------------------------------------------------------- */
+
+  /* ----------------------------------------------------------
+   * Volume (top-right control on the loading / battle screens).
+   * One setting for the intro music and the sound effects,
+   * remembered in localStorage. 50% = the original loudness.
+   * ---------------------------------------------------------- */
+  var VOLUME_STORAGE_KEY = "learniq-battle-volume";
+  var gameVolume = 0.5;
+  var gameMuted = false;
+
+  (function loadVolumeSetting() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(VOLUME_STORAGE_KEY) || "null");
+      if (saved && typeof saved.volume === "number") gameVolume = Math.max(0, Math.min(1, saved.volume));
+      if (saved && typeof saved.muted === "boolean") gameMuted = saved.muted;
+    } catch (e) {
+      /* keep defaults */
+    }
+  })();
+
+  function effectiveVolume() {
+    return gameMuted ? 0 : gameVolume;
+  }
+
+  function saveVolumeSetting() {
+    try {
+      localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify({ volume: gameVolume, muted: gameMuted }));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function applyVolume() {
+    var vol = effectiveVolume();
+    ALL_TRACKS.forEach(function (t) {
+      if (t && t.el) t.el.volume = vol;
+    });
+    var icon = document.getElementById("battle-volume-icon");
+    var slider = document.getElementById("battle-volume-slider");
+    if (icon) {
+      icon.className =
+        "fa-solid " + (vol === 0 ? "fa-volume-xmark" : vol < 0.5 ? "fa-volume-low" : "fa-volume-high");
+    }
+    if (slider) slider.value = String(Math.round(vol * 100));
+  }
+
+  function setVolumePanelOpen(open) {
+    var panel = document.getElementById("battle-volume-panel");
+    var toggle = document.getElementById("battle-volume-toggle");
+    if (panel) panel.hidden = !open;
+    if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function setupVolumeControl() {
+    var slider = document.getElementById("battle-volume-slider");
+    var toggle = document.getElementById("battle-volume-toggle");
+    var wrap = document.getElementById("battle-volume");
+
+    // Only the speaker icon shows; clicking it opens the volume slider (0 = mute).
+    toggle?.addEventListener("click", function () {
+      var panel = document.getElementById("battle-volume-panel");
+      setVolumePanelOpen(!!(panel && panel.hidden));
+    });
+    document.addEventListener("click", function (e) {
+      if (wrap && !wrap.contains(e.target)) setVolumePanelOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setVolumePanelOpen(false);
+    });
+    slider?.addEventListener("input", function () {
+      gameVolume = Math.max(0, Math.min(1, Number(slider.value) / 100));
+      gameMuted = false; // the slider alone decides: 0 is silent
+      applyVolume();
+      saveVolumeSetting();
+    });
+    applyVolume();
+  }
 
   function getAudioCtx() {
     var Ctx = window.AudioContext || window.webkitAudioContext;
@@ -55,6 +176,8 @@
   }
 
   function playTone(freq, duration, type, delay) {
+    var vol = effectiveVolume();
+    if (vol <= 0) return;
     var ctx = getAudioCtx();
     if (!ctx) return;
     var startAt = ctx.currentTime + (delay || 0) / 1000;
@@ -62,7 +185,7 @@
     var gain = ctx.createGain();
     osc.type = type || "square";
     osc.frequency.setValueAtTime(freq, startAt);
-    gain.gain.setValueAtTime(0.09, startAt);
+    gain.gain.setValueAtTime(0.18 * vol, startAt);
     gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -77,10 +200,6 @@
   function playScrambleSound() {
     playTone(500, 0.05, "square");
     playTone(650, 0.05, "square", 40);
-  }
-
-  function playErrorSound() {
-    playTone(140, 0.22, "sawtooth");
   }
 
   function playAttackSound(who) {
@@ -101,12 +220,6 @@
     playTone(523, 0.12, "square", 0);
     playTone(659, 0.12, "square", 120);
     playTone(784, 0.22, "square", 240);
-  }
-
-  function playDefeatSound() {
-    playTone(392, 0.16, "sawtooth", 0);
-    playTone(330, 0.16, "sawtooth", 140);
-    playTone(262, 0.3, "sawtooth", 280);
   }
 
   function esc(text) {
@@ -200,14 +313,11 @@
       var isOn = id && id === selectedLessonId;
       card.classList.toggle("selected", !!isOn);
       card.setAttribute("aria-pressed", isOn ? "true" : "false");
-      var badge = card.querySelector(".battle-selected-badge");
-      if (badge) badge.hidden = !isOn;
       var selectBtn = card.querySelector("[data-select-lesson]");
       if (selectBtn) {
-        selectBtn.textContent = isOn ? "Selected" : "Select Lesson";
+        selectBtn.textContent = isOn ? "Unselect" : "Select Lesson";
         selectBtn.classList.toggle("btn-primary", !isOn);
         selectBtn.classList.toggle("btn-secondary", !!isOn);
-        selectBtn.disabled = !!isOn;
       }
     });
     renderSelectedPanel();
@@ -217,8 +327,14 @@
   function selectLesson(lessonId) {
     var id = String(lessonId || "").trim();
     if (!id || !lessonsById[id]) return;
-    selectedLessonId = id;
-    selectedLesson = lessonsById[id];
+    // Clicking the already-selected lesson unselects it.
+    if (id === selectedLessonId) {
+      selectedLessonId = null;
+      selectedLesson = null;
+    } else {
+      selectedLessonId = id;
+      selectedLesson = lessonsById[id];
+    }
     syncSelectionUi();
   }
 
@@ -237,7 +353,6 @@
       '<article class="lesson-card battle-arena-lesson-card" data-lesson-id="' +
       esc(id) +
       '" aria-pressed="false">' +
-      '<span class="battle-selected-badge" hidden><i class="fa-solid fa-check" aria-hidden="true"></i> Selected</span>' +
       '<div class="lesson-card-icon"><i class="fa-solid fa-file-lines" aria-hidden="true"></i></div>' +
       '<div class="lesson-info">' +
       "<h4>" +
@@ -359,6 +474,7 @@
     var modeEl = document.getElementById("battle-modal-mode");
     if (lessonEl) lessonEl.textContent = lessonTitle(selectedLesson);
     if (modeEl) modeEl.textContent = modeLabel();
+    renderDifficultyPicker();
     if (modal) {
       modal.hidden = false;
       document.body.classList.add("lq-modal-open");
@@ -435,7 +551,7 @@
     };
   }
 
-  async function generateBattleQuestionsWithAi(fileId) {
+  async function generateBattleQuestionsWithAi(fileId, difficulty) {
     if (typeof apiUrl !== "function") {
       throw new Error("API helper missing. Check js/core/api.js.");
     }
@@ -445,7 +561,7 @@
         "Content-Type": "application/json",
         ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
       },
-      body: JSON.stringify({ file_id: fileId }),
+      body: JSON.stringify({ file_id: fileId, difficulty: difficulty || "normal" }),
     });
     var data = {};
     try {
@@ -468,11 +584,13 @@
         .trim()
         .toLowerCase()
         .replace(/[^a-z]/g, "");
-      if (!questionText || answer.length < 4 || answer.length > 10) return;
+      if (!questionText || answer.length < 4 || answer.length > 12) return;
+      var difficulty = String(entry.difficulty || "normal").toLowerCase();
       out.push({
         question: questionText,
         answer: answer,
         meaning: String(entry.meaning || "").trim(),
+        difficulty: BATTLE_DIFFICULTIES[difficulty] ? difficulty : "normal",
       });
     });
     return out;
@@ -628,6 +746,326 @@
     advanceToQuestion(fight.questionIndex + 1);
   }
 
+  var HINTS_PER_BATTLE = 3;
+
+  /* ----------------------------------------------------------
+   * Battle timer + streak: time set by difficulty, -5s per wrong answer,
+   * +3s per correct answer; every 5 correct answers in a row
+   * heals +5 HP. Time running out ends the battle as a defeat.
+   * ---------------------------------------------------------- */
+  /* Difficulty: sets the battle time (Normal 15 / Medium 10 / Hard 5 min) and which
+     AI questions are used (the backend writes recall / apply / analyze questions). */
+  var BATTLE_DIFFICULTIES = {
+    normal: { label: "Normal", seconds: 15 * 60 },
+    medium: { label: "Medium", seconds: 10 * 60 },
+    hard: { label: "Hard", seconds: 5 * 60 },
+  };
+  var DIFFICULTY_STORAGE_KEY = "learniq-battle-difficulty";
+  var selectedDifficulty = (function () {
+    try {
+      var saved = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
+      return BATTLE_DIFFICULTIES[saved] ? saved : "normal";
+    } catch (e) {
+      return "normal";
+    }
+  })();
+
+  function difficultyConfig(key) {
+    return BATTLE_DIFFICULTIES[key] || BATTLE_DIFFICULTIES.normal;
+  }
+
+  function battleStartSeconds() {
+    return difficultyConfig(fight ? fight.difficulty : selectedDifficulty).seconds;
+  }
+
+  function saveSelectedDifficulty(key) {
+    selectedDifficulty = key;
+    try {
+      localStorage.setItem(DIFFICULTY_STORAGE_KEY, key);
+    } catch (e) {
+      /* ignore */
+    }
+    renderDifficultyPicker();
+  }
+
+  function renderDifficultyPicker() {
+    document.querySelectorAll(".battle-difficulty-option").forEach(function (btn) {
+      var on = btn.getAttribute("data-difficulty") === selectedDifficulty;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+    });
+    var modalEl = document.getElementById("battle-modal-difficulty");
+    if (modalEl) modalEl.textContent = difficultyConfig(selectedDifficulty).label;
+  }
+
+  function setupDifficultyPicker() {
+    var picker = document.querySelector(".battle-difficulty-picker");
+    if (!picker) return;
+    picker.addEventListener("click", function (e) {
+      var btn = e.target.closest(".battle-difficulty-option");
+      var key = btn && btn.getAttribute("data-difficulty");
+      if (key && BATTLE_DIFFICULTIES[key]) saveSelectedDifficulty(key);
+    });
+    // Arrow keys move between options (radio group behaviour).
+    picker.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      var keys = Object.keys(BATTLE_DIFFICULTIES);
+      var idx = keys.indexOf(selectedDifficulty);
+      idx = (idx + (e.key === "ArrowRight" ? 1 : keys.length - 1)) % keys.length;
+      saveSelectedDifficulty(keys[idx]);
+      picker.querySelector('[data-difficulty="' + selectedDifficulty + '"]')?.focus();
+      e.preventDefault();
+    });
+    renderDifficultyPicker();
+  }
+  var TIME_PENALTY_WRONG = 5;
+  var TIME_BONUS_CORRECT = 3;
+  var STREAK_FOR_HEAL = 5;
+  var STREAK_HEAL_HP = 5;
+  var battleTimerId = null;
+  var battleTimerLastTick = 0;
+
+  /* Music: intro.mp3 loops from "Start Battle" (lobby) through loading and the
+     Ready screen; "game start.mp3" loops once the in-game Start is pressed and
+     stops when the battle ends; gameover.mp3 plays once on a loss. */
+  var introMusic = createTrack("audio/intro.mp3", true);
+  var battleMusic = createTrack("audio/game%20start.mp3", true);
+  var gameOverSound = createTrack("audio/gameover.mp3", false);
+
+  // One-shot sound effects (frontend/audio).
+  var sfxTimerRunsOut = createTrack("audio/timer%20runsout.mp3", false);
+  var sfxWrong = createTrack("audio/wrong.mp3", false);
+  var sfxTryAgain = createTrack("audio/try%20again.mp3", false);
+  var sfxAttack = createTrack("audio/attack.mp3", false);
+  var sfxCorrect = createTrack("audio/correct%20answer.mp3", false);
+  var sfxWinStreak = createTrack("audio/5%20win%20streak.mp3", false);
+  var ALL_TRACKS = [
+    introMusic,
+    battleMusic,
+    gameOverSound,
+    sfxTimerRunsOut,
+    sfxWrong,
+    sfxTryAgain,
+    sfxAttack,
+    sfxCorrect,
+    sfxWinStreak,
+  ];
+
+  function createTrack(src, loop) {
+    return { src: src, loop: loop, el: null };
+  }
+
+  function playTrack(track) {
+    try {
+      if (!track.el) {
+        track.el = new Audio(track.src);
+        track.el.loop = track.loop;
+      }
+      track.el.volume = effectiveVolume();
+      track.el.currentTime = 0;
+      var playing = track.el.play();
+      if (playing && typeof playing.catch === "function") {
+        playing.catch(function (e) {
+          console.warn("Could not play " + track.src + ":", e);
+        });
+      }
+    } catch (e) {
+      console.warn("Audio unavailable (" + track.src + "):", e);
+    }
+  }
+
+  function stopTrack(track) {
+    if (!track.el) return;
+    track.el.pause();
+    track.el.currentTime = 0;
+  }
+
+  function playIntroMusic() {
+    stopTrack(battleMusic);
+    stopTrack(gameOverSound);
+    playTrack(introMusic);
+  }
+
+  function stopIntroMusic() {
+    stopTrack(introMusic);
+  }
+
+  function stopAllMusic() {
+    ALL_TRACKS.forEach(stopTrack);
+  }
+
+  /* Plays timer runsout.mp3 once when the clock reaches 3 seconds. If a +3s bonus
+     lifts it back above 3s, the warning stops and can play again later. */
+  var LOW_TIME_WARNING_SECONDS = 3;
+
+  function checkLowTimeWarning() {
+    if (!fight || fight.ended) return;
+    if (fight.timeLeft > LOW_TIME_WARNING_SECONDS) {
+      if (fight.lowTimeWarned) stopTrack(sfxTimerRunsOut);
+      fight.lowTimeWarned = false;
+    } else if (fight.timeLeft > 0 && !fight.lowTimeWarned) {
+      fight.lowTimeWarned = true;
+      playTrack(sfxTimerRunsOut);
+    }
+  }
+
+  function formatBattleTime(seconds) {
+    var s = Math.max(0, Math.ceil(seconds));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function renderBattleTimer() {
+    var el = document.getElementById("battle-timer");
+    var valueEl = document.getElementById("battle-timer-value");
+    if (!el || !valueEl || !fight) return;
+    valueEl.textContent = formatBattleTime(fight.timeLeft);
+    el.classList.toggle("is-low", fight.timeLeft <= 10);
+  }
+
+  function renderStreak() {
+    var el = document.getElementById("battle-streak");
+    if (!el || !fight) return;
+    el.textContent = "Streak " + (fight.streak % STREAK_FOR_HEAL) + "/" + STREAK_FOR_HEAL;
+  }
+
+  function showTimerPopup(text, kind) {
+    var el = document.getElementById("battle-timer");
+    if (!el) return;
+    var pop = document.createElement("span");
+    pop.className = "battle-timer-popup is-" + kind;
+    pop.textContent = text;
+    el.appendChild(pop);
+    setTimeout(function () {
+      pop.remove();
+    }, 900);
+  }
+
+  function adjustBattleTime(delta) {
+    if (!fight) return;
+    fight.timeLeft = Math.max(0, fight.timeLeft + delta);
+    showTimerPopup((delta > 0 ? "+" : "") + delta + "s", delta > 0 ? "up" : "down");
+    renderBattleTimer();
+    checkLowTimeWarning();
+  }
+
+  function stopBattleTimer() {
+    if (battleTimerId) clearInterval(battleTimerId);
+    battleTimerId = null;
+  }
+
+  function startBattleTimer() {
+    stopBattleTimer();
+    battleTimerLastTick = Date.now();
+    renderBattleTimer();
+    battleTimerId = setInterval(function () {
+      var now = Date.now();
+      var elapsed = (now - battleTimerLastTick) / 1000;
+      battleTimerLastTick = now;
+      if (!fight || fight.ended) {
+        stopBattleTimer();
+        return;
+      }
+      if (fight.paused) return;
+      fight.timeLeft = Math.max(0, fight.timeLeft - elapsed);
+      renderBattleTimer();
+      checkLowTimeWarning();
+      if (fight.timeLeft <= 0) {
+        fight.endReason = "time";
+        if (typeof showToast === "function") showToast("Time's up!", "error");
+        endBattle("lose");
+      }
+    }, 250);
+  }
+
+  /** Resets the clock and waits on the Start button: question and letters stay hidden until then. */
+  function resetBattleClock() {
+    if (!fight) return;
+    stopBattleTimer();
+    fight.timeLeft = battleStartSeconds();
+    fight.streak = 0;
+    fight.ended = false;
+    fight.paused = false;
+    fight.started = false;
+    fight.endReason = "";
+    fight.lowTimeWarned = false;
+    renderStreak();
+    renderBattleTimer();
+    var readyTime = document.getElementById("battle-ready-time");
+    if (readyTime) readyTime.textContent = formatBattleTime(battleStartSeconds());
+    setBattleWaiting(true);
+  }
+
+  function setBattleWaiting(waiting) {
+    var screen = document.getElementById("battle-fight-screen");
+    var panel = document.getElementById("battle-ready-panel");
+    if (screen) screen.classList.toggle("is-waiting", waiting);
+    if (panel) panel.hidden = !waiting;
+    if (waiting) document.getElementById("battle-start-btn")?.focus();
+  }
+
+  function onStartRoundClick() {
+    if (!fight || fight.started || fight.ended) return;
+    fight.started = true;
+    setBattleWaiting(false);
+    stopIntroMusic();
+    playClickSound();
+    playTrack(battleMusic);
+    startBattleTimer();
+  }
+
+  function renderHintButton() {
+    var btn = document.getElementById("battle-hint-btn");
+    var countEl = document.getElementById("battle-hint-count");
+    var left = fight ? fight.hintsLeft : HINTS_PER_BATTLE;
+    if (countEl) countEl.textContent = String(left);
+    if (btn) btn.disabled = !fight || left <= 0;
+  }
+
+  /** Keeps the correctly spelled start of the word and taps the next correct letter. */
+  function onHintClick() {
+    if (!fight || fight.hintsLeft <= 0) return;
+    var answer = String(fight.currentAnswer || "").toLowerCase();
+    if (!answer) return;
+
+    var keep = 0;
+    while (
+      keep < fight.selected.length &&
+      keep < answer.length &&
+      String(fight.grid[fight.selected[keep]].letter).toLowerCase() === answer[keep]
+    ) {
+      keep++;
+    }
+    if (keep >= answer.length) {
+      if (typeof showToast === "function") showToast("The answer is already spelled — hit Attack!", "info");
+      return;
+    }
+    fight.selected = fight.selected.slice(0, keep);
+
+    var next = answer[keep];
+    var tileIdx = -1;
+    for (var i = 0; i < fight.grid.length; i++) {
+      if (fight.selected.indexOf(i) === -1 && String(fight.grid[i].letter).toLowerCase() === next) {
+        tileIdx = i;
+        break;
+      }
+    }
+    if (tileIdx === -1) return;
+
+    fight.selected.push(tileIdx);
+    fight.hintsLeft -= 1;
+    playClickSound();
+    renderGrid();
+    renderWordPreview();
+    renderHintButton();
+    if (typeof showToast === "function") {
+      showToast(
+        "Hint: letter " + (keep + 1) + " of " + answer.length + " is \"" + next.toUpperCase() + "\"",
+        "info"
+      );
+    }
+  }
+
   function onScrambleClick() {
     if (!fight) return;
     fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
@@ -704,6 +1142,18 @@
     }
   }
 
+  function showHealPopup(amount) {
+    var fighterEl = document.getElementById("battle-player-fighter");
+    if (!fighterEl) return;
+    var popup = document.createElement("span");
+    popup.className = "battle-damage-popup battle-heal-popup";
+    popup.textContent = "+" + amount + " HP";
+    fighterEl.appendChild(popup);
+    setTimeout(function () {
+      popup.remove();
+    }, 900);
+  }
+
   function onAttackClick() {
     if (!fight || !fight.selected.length) return;
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
@@ -714,17 +1164,39 @@
       fight.aiHp = Math.max(0, fight.aiHp - dmg);
       fight.wordsUsed.unshift({ word: word, damage: dmg, meaning: meaning });
 
+      adjustBattleTime(TIME_BONUS_CORRECT);
+      fight.streak += 1;
+      var streakHit = fight.streak % STREAK_FOR_HEAL === 0;
+      var healed = 0;
+      if (streakHit) {
+        var hpBefore = fight.playerHp;
+        fight.playerHp = Math.min(PLAYER_MAX_HP, fight.playerHp + STREAK_HEAL_HP);
+        healed = fight.playerHp - hpBefore;
+        showHealPopup(STREAK_HEAL_HP);
+      }
+      renderStreak();
+
       renderHp();
       renderWordsUsed();
+      playTrack(streakHit ? sfxWinStreak : sfxCorrect);
       triggerAttackAnim("player");
-      playAttackSound("player");
+      setTimeout(function () {
+        playTrack(sfxAttack);
+      }, 150);
       setTimeout(function () {
         triggerHitAnim("ai", dmg);
         playHitSound();
-      }, 200);
+      }, 350);
 
       if (typeof showToast === "function") {
-        showToast("Correct! " + dmg + " damage dealt." + (meaning ? " " + meaning : ""), "success");
+        showToast(
+          "Correct! " + dmg + " damage dealt, +" + TIME_BONUS_CORRECT + "s." +
+            (streakHit
+              ? " " + STREAK_FOR_HEAL + " in a row: +" + STREAK_HEAL_HP + " HP" + (healed < STREAK_HEAL_HP ? " (HP full)" : "") + "!"
+              : "") +
+            (meaning ? " " + meaning : ""),
+          "success"
+        );
       }
 
       if (fight.aiHp <= 0) {
@@ -737,10 +1209,13 @@
       return;
     }
 
-    playErrorSound();
+    playTrack(sfxWrong);
     var counterDmg = 6 + Math.floor(Math.random() * 9);
     fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
     fight.selected = [];
+    fight.streak = 0;
+    renderStreak();
+    adjustBattleTime(-TIME_PENALTY_WRONG);
 
     renderHp();
     renderGrid();
@@ -753,10 +1228,13 @@
     }, 200);
 
     if (typeof showToast === "function") {
-      showToast("Not quite — the AI hits back for " + counterDmg + "!", "error");
+      showToast("Not quite — the AI hits back for " + counterDmg + "! -" + TIME_PENALTY_WRONG + "s", "error");
     }
 
     if (fight.playerHp <= 0) {
+      endBattle("lose");
+    } else if (fight.timeLeft <= 0) {
+      fight.endReason = "time";
       endBattle("lose");
     }
   }
@@ -777,7 +1255,11 @@
     if (titleEl) titleEl.textContent = outcome === "win" ? "Victory!" : "Defeated";
     if (bodyEl) {
       bodyEl.textContent =
-        (outcome === "win" ? "You defeated the AI opponent! " : "The AI opponent defeated you. ") +
+        (outcome === "win"
+          ? "You defeated the AI opponent! "
+          : fight && fight.endReason === "time"
+          ? "Time's up! "
+          : "The AI opponent defeated you. ") +
         battleResultSummary();
     }
     if (primaryBtn) primaryBtn.textContent = outcome === "win" ? "Battle Again" : "Try Again";
@@ -789,28 +1271,106 @@
   function closeResultModal() {
     var modal = document.getElementById("battle-result-modal");
     if (modal) modal.hidden = true;
+    renderResultProgress(null);
     document.body.classList.remove("lq-modal-open");
   }
 
+  /** Points, EXP and level change for the battle that just ended. */
+  function computeBattleProgress(outcome) {
+    var correct = fight ? fight.wordsUsed.length : 0;
+    var points = fight ? fight.wordsUsed.reduce(function (sum, e) { return sum + e.damage; }, 0) : 0;
+    var exp = battleExpForResult(outcome, correct);
+    var prevExp = Number((battleStats && battleStats.total_exp) || 0);
+    var prevBest = Number((battleStats && battleStats.best_score) || 0);
+    var totalExp = prevExp + exp;
+    var levelBefore = Math.floor(prevExp / EXP_PER_LEVEL);
+    var levelAfter = Math.floor(totalExp / EXP_PER_LEVEL);
+    return {
+      points: points,
+      correct: correct,
+      exp: exp,
+      totalExp: totalExp,
+      expIntoLevel: totalExp % EXP_PER_LEVEL,
+      levelBefore: levelBefore,
+      levelAfter: levelAfter,
+      leveledUp: levelAfter > levelBefore,
+      bestScore: Math.max(prevBest, points),
+      newBest: points > prevBest,
+    };
+  }
+
+  function renderResultProgress(progress) {
+    var el = document.getElementById("battle-result-progress");
+    if (!el) return;
+    if (!progress) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    var pct = Math.round((progress.expIntoLevel / EXP_PER_LEVEL) * 100);
+    el.innerHTML =
+      '<div class="battle-result-stats">' +
+      '<div class="battle-result-stat"><span>Points</span><strong>' + progress.points + "</strong></div>" +
+      '<div class="battle-result-stat"><span>EXP</span><strong>+' + progress.exp + "</strong></div>" +
+      '<div class="battle-result-stat"><span>Level</span><strong>' + progress.levelAfter + "</strong></div>" +
+      '<div class="battle-result-stat"><span>Best</span><strong>' + progress.bestScore + "</strong></div>" +
+      "</div>" +
+      '<div class="battle-result-exp" aria-label="EXP to next level">' +
+      '<div class="battle-result-exp-bar"><div class="battle-result-exp-fill" style="width:' + pct + '%"></div></div>' +
+      '<span class="battle-result-exp-text">' + progress.expIntoLevel + " / " + EXP_PER_LEVEL + " EXP to Level " + (progress.levelAfter + 1) + "</span>" +
+      "</div>" +
+      (progress.leveledUp
+        ? '<p class="battle-result-flag is-levelup"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i> Level up! You reached Level ' + progress.levelAfter + "</p>"
+        : "") +
+      (progress.newBest
+        ? '<p class="battle-result-flag is-best"><i class="fa-solid fa-star" aria-hidden="true"></i> New personal best: ' + progress.points + " points</p>"
+        : "");
+    el.hidden = false;
+  }
+
   function endBattle(outcome) {
+    if (!fight || fight.ended) return;
+    fight.ended = true;
+    stopBattleTimer();
+    stopTrack(battleMusic);
+    stopTrack(sfxTimerRunsOut);
+    fight.lastOutcome = outcome;
     if (outcome === "win") {
       playVictorySound();
     } else {
-      playDefeatSound();
+      playTrack(gameOverSound);
     }
+    var progress = computeBattleProgress(outcome);
     openResultModal(outcome);
-    saveBattleResultToHistory(outcome);
+    renderResultProgress(progress);
+    saveBattleResultToHistory(outcome, progress);
+
+    // Update locally right away; the server copy is refreshed once history is saved.
+    battleStats = Object.assign({}, battleStats || {}, {
+      level: progress.levelAfter,
+      total_exp: progress.totalExp,
+      exp_into_level: progress.expIntoLevel,
+      best_score: progress.bestScore,
+    });
+    setTimeout(loadBattleStats, 1500);
   }
 
-  function saveBattleResultToHistory(outcome) {
+  function saveBattleResultToHistory(outcome, progress) {
     if (!fight || typeof recordStudentHistory !== "function") return;
-    var totalDamage = fight.wordsUsed.reduce(function (sum, e) { return sum + e.damage; }, 0);
+    var p = progress || computeBattleProgress(outcome);
     recordStudentHistory("battle", {
       lesson_id: fight.lessonId || null,
       lesson_title: selectedLesson ? lessonTitle(selectedLesson) : "Battle Arena",
       outcome: outcome,
-      correct_answers: fight.wordsUsed.length,
-      total_damage: totalDamage,
+      difficulty: fight.difficulty || "normal",
+      correct_answers: p.correct,
+      total_damage: p.points,
+      score: p.points,
+      exp_gained: p.exp,
+      level_after: p.levelAfter,
+      total_exp_after: p.totalExp,
+      leveled_up: p.leveledUp,
+      new_best: p.newBest,
     });
   }
 
@@ -819,13 +1379,19 @@
     fight.playerHp = PLAYER_MAX_HP;
     fight.aiHp = AI_MAX_HP;
     fight.wordsUsed = [];
+    fight.hintsLeft = HINTS_PER_BATTLE;
+    renderHintButton();
     fight.questions = shuffleArray(fight.questions);
     renderHp();
     renderWordsUsed();
     advanceToQuestion(0);
+    resetBattleClock();
   }
 
   function exitToLobby() {
+    stopBattleTimer();
+    stopAllMusic();
+    setBattleWaiting(false);
     fight = null;
     closeResultModal();
     showLobbyScreen();
@@ -836,19 +1402,23 @@
 
     var fileId = selectedLessonId;
     closeBattleModal();
+    playIntroMusic();
     showLoadingScreen();
     setLoadingHint("Preparing your battle…");
 
     try {
+      var difficulty = selectedDifficulty;
       var content = await loadLessonContentAndVocab(fileId);
-      var questions = normalizeQuestionEntries(content.battleQuestions);
+      var questions = normalizeQuestionEntries(content.battleQuestions).filter(function (q) {
+        return q.difficulty === difficulty;
+      });
       var usingAi = questions.length >= 5;
       var usingFallback = false;
 
       if (!usingAi) {
-        setLoadingHint("Generating battle questions with AI…");
+        setLoadingHint("Generating " + difficultyConfig(difficulty).label.toLowerCase() + " battle questions with AI…");
         try {
-          var aiQuestions = await generateBattleQuestionsWithAi(fileId);
+          var aiQuestions = await generateBattleQuestionsWithAi(fileId, difficulty);
           questions = normalizeQuestionEntries(aiQuestions);
           usingAi = questions.length >= 5;
         } catch (aiErr) {
@@ -876,7 +1446,10 @@
         aiHp: AI_MAX_HP,
         wordsUsed: [],
         usingFallback: usingFallback,
+        hintsLeft: HINTS_PER_BATTLE,
+        difficulty: difficulty,
       };
+      renderHintButton();
 
       var playerNameEl = document.getElementById("battle-fight-player-name");
       if (playerNameEl) {
@@ -888,8 +1461,10 @@
       renderHp();
       renderWordsUsed();
       advanceToQuestion(0);
+      resetBattleClock();
     } catch (err) {
       fight = null;
+      stopIntroMusic();
       showLobbyScreen();
       if (typeof showToast === "function") {
         showToast((err && err.message) || "Could not start battle.", "error");
@@ -897,23 +1472,62 @@
     }
   }
 
+  /** Exit dialog: Keep Battling / Restart (back to the Ready screen) / Exit Battle. */
   async function onExitBattleClick() {
-    var confirmed = true;
+    var choice = true;
+    // Restart only makes sense once the round has started (not on the Ready screen).
+    var inBattle = !!(fight && fight.started && !fight.ended);
+    if (fight) fight.paused = true; // don't let the clock run out while deciding
     if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
-      confirmed = await window.LearnIQConfirm.show({
+      choice = await window.LearnIQConfirm.show({
         title: "Exit Battle?",
-        message: "Your progress in this battle will be lost.",
+        message: inBattle
+          ? "Your progress in this battle will be lost. Restart to try again from the beginning."
+          : "You'll go back to the lesson list.",
         confirmText: "Exit Battle",
-        cancelText: "Keep Battling",
+        cancelText: inBattle ? "Keep Battling" : "Stay",
+        extraText: inBattle ? "Restart" : "",
         variant: "danger",
       });
     }
-    if (confirmed) exitToLobby();
+    if (choice === "extra") {
+      restartBattle();
+    } else if (choice) {
+      exitToLobby();
+    } else if (fight) {
+      fight.paused = false;
+      battleTimerLastTick = Date.now(); // don't count the time spent in the dialog
+    }
+  }
+
+  /** Same lesson and questions (reshuffled), full HP, fresh timer, back on the Ready screen. */
+  function restartBattle(options) {
+    if (!fight) return;
+    var opts = options || {};
+    stopBattleTimer();
+    closeResultModal();
+    ALL_TRACKS.forEach(stopTrack);
+    if (opts.tryAgain) {
+      // "Try Again" after a loss: play try again.mp3 first, then the intro music.
+      playTrack(sfxTryAgain);
+      var el = sfxTryAgain.el;
+      var started = false;
+      var startIntro = function () {
+        if (started || !fight || fight.started) return;
+        started = true;
+        playIntroMusic();
+      };
+      if (el) el.addEventListener("ended", startIntro, { once: true });
+      setTimeout(startIntro, 4000); // fallback if the clip can't play
+    } else {
+      playIntroMusic();
+    }
+    resetFightForRebattle();
   }
 
   function onResultPrimaryClick() {
-    closeResultModal();
-    resetFightForRebattle();
+    // The button reads "Try Again" after a loss and "Battle Again" after a win.
+    restartBattle({ tryAgain: !!fight && fight.lastOutcome !== "win" });
   }
 
   function onResultSecondaryClick() {
@@ -921,6 +1535,9 @@
   }
 
   function setupBattleArenaPage() {
+    setupVolumeControl();
+    setupDifficultyPicker();
+    void loadBattleStats();
     if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
     if (typeof initRoleAwareDashboardSidebar === "function") initRoleAwareDashboardSidebar();
     if (typeof hydrateSidebarProfileFromDatabase === "function") {
@@ -951,6 +1568,8 @@
     document.getElementById("battle-letter-grid")?.addEventListener("click", onTileClick);
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
     document.getElementById("battle-scramble-btn")?.addEventListener("click", onScrambleClick);
+    document.getElementById("battle-hint-btn")?.addEventListener("click", onHintClick);
+    document.getElementById("battle-start-btn")?.addEventListener("click", onStartRoundClick);
     document.getElementById("battle-attack-btn")?.addEventListener("click", onAttackClick);
     document.getElementById("next-btn")?.addEventListener("click", onNextClick);
     document.getElementById("battle-exit-btn")?.addEventListener("click", function () {
