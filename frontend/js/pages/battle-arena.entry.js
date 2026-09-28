@@ -771,8 +771,9 @@
   }
 
   function renderWordPreview() {
-    var previewEl = document.getElementById("battle-word-preview");
+    var previewEl = document.getElementById("battle-word-preview-text");
     var attackBtn = document.getElementById("battle-attack-btn");
+    var backspaceBtn = document.getElementById("battle-backspace-btn");
     if (!previewEl || !fight) return;
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("");
     if (!word) {
@@ -781,6 +782,7 @@
       previewEl.textContent = word;
     }
     if (attackBtn) attackBtn.disabled = fight.selected.length === 0;
+    if (backspaceBtn) backspaceBtn.disabled = fight.selected.length === 0;
   }
 
   function renderGrid() {
@@ -820,6 +822,28 @@
     fight.selected = [];
     renderGrid();
     renderWordPreview();
+  }
+
+  /** Remove the last picked letter; its tile becomes tappable again. */
+  function onBackspaceClick() {
+    if (!fight || !fight.selected.length) return;
+    fight.selected.pop();
+    playClickSound();
+    renderGrid();
+    renderWordPreview();
+  }
+
+  /** Physical Backspace key does the same, but only mid-round with nothing else open. */
+  function onBackspaceKey(e) {
+    if (e.key !== "Backspace") return;
+    if (!fight || !fight.started || fight.ended || fight.paused) return;
+    var screen = document.getElementById("battle-fight-screen");
+    if (!screen || screen.hidden) return;
+    var target = e.target;
+    if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (document.querySelector(".action-modal-backdrop:not([hidden]), #battle-character-dialog:not([hidden])")) return;
+    e.preventDefault();
+    onBackspaceClick();
   }
 
   function onNextClick() {
@@ -1908,6 +1932,8 @@
 
     document.getElementById("battle-letter-grid")?.addEventListener("click", onTileClick);
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
+    document.getElementById("battle-backspace-btn")?.addEventListener("click", onBackspaceClick);
+    document.addEventListener("keydown", onBackspaceKey);
     document.getElementById("battle-scramble-btn")?.addEventListener("click", onScrambleClick);
     document.getElementById("battle-hint-btn")?.addEventListener("click", onHintClick);
     document.getElementById("battle-start-btn")?.addEventListener("click", onStartRoundClick);

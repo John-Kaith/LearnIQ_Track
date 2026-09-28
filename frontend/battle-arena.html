@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=2026092717" />
-  <link rel="stylesheet" href="css/battle-arena.css?v=2026092804" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026092806" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026092801" defer></script>
-  <script src="js/pages/battle-arena.entry.js?v=2026092806" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026092807" defer></script>
 </head>
 <body class="battle-arena-page" data-sidebar-active="battle-arena">
   <div class="dashboard-shell container">
@@ -308,8 +308,20 @@
             <p class="battle-question-label">Question</p>
             <p class="battle-question-text" id="battle-question-text" aria-live="polite">Loading question…</p>
           </div>
-          <div class="battle-word-preview" id="battle-word-preview" aria-live="polite">
-            <span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to spell the answer…</span>
+          <div class="battle-word-preview" id="battle-word-preview">
+            <span class="battle-word-preview-text" id="battle-word-preview-text" aria-live="polite">
+              <span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to spell the answer…</span>
+            </span>
+            <button
+              type="button"
+              class="battle-backspace-btn"
+              id="battle-backspace-btn"
+              aria-label="Delete last letter"
+              title="Delete last letter (Backspace)"
+              disabled
+            >
+              <i class="fa-solid fa-delete-left" aria-hidden="true"></i>
+            </button>
           </div>
           <div class="battle-word-actions action-buttons">
             <button type="button" class="btn btn-secondary btn-small" id="battle-clear-btn">Clear</button>

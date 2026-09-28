@@ -702,6 +702,45 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   color: rgba(244, 241, 255, 0.5);
 }
 
+.battle-word-preview-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Backspace: removes the last picked letter */
+.battle-backspace-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-panel);
+  box-shadow: 2px 2px 0 #000;
+  color: #fff;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.08s ease;
+}
+
+.battle-backspace-btn:hover:not(:disabled) {
+  background: #2c2160;
+}
+
+.battle-backspace-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #000;
+}
+
+.battle-backspace-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .battle-word-actions,
 .battle-word-actions.action-buttons {
   display: flex;
@@ -716,6 +755,25 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   flex: 1 1 6.5rem;
   max-width: 11rem;
   min-width: 0;
+}
+
+/* Desktop: compact buttons sized to their label. Phones keep the larger
+   tap size set in the max-width: 720px block below. */
+@media (min-width: 721px) {
+  .battle-word-actions .btn {
+    flex: 0 1 auto;
+    min-width: 6rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .battle-fight-screen .battle-word-actions .btn {
+    box-shadow: 3px 3px 0 #000;
+  }
+}
+
+/* style.css gives light-theme .btn-secondary amber text; keep these white. */
+.battle-fight-screen .battle-word-actions .btn-secondary {
+  color: #fff;
 }
 
 .battle-fight-screen .btn {
@@ -1776,4 +1834,225 @@ html.reduce-motion .battle-beam,
 html.reduce-motion .battle-beam-charge,
 html.reduce-motion .battle-beam-impact {
   animation-duration: 0.01s;
+}
+
+/* ---- Phones: battle screen layout ----
+   Kept last so it wins over the earlier max-width: 720px tweaks. Goal: arena,
+   question, answer box, buttons and the whole letter grid fit on one screen;
+   Correct Answers sits below the fold. */
+@media (max-width: 720px) {
+  /* Top strip holds Exit (left) and the ☰ menu (right) */
+  .battle-arena-page.battle-fullscreen-active .battle-fight-screen {
+    padding: 3.75rem 0.5rem 0.75rem;
+  }
+
+  .battle-fight-inner {
+    gap: 0.6rem;
+  }
+
+  /* Out of the arena so it never covers the monster. The stage is its own
+     stacking context, so this still paints above the board when scrolled. */
+  .battle-stage .battle-exit-btn {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    right: auto;
+    z-index: 10;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    font-size: 0.62rem;
+  }
+
+  /* Light theme's .btn-secondary is see-through; the arena scrolls under Exit */
+  html:not([data-theme="dark"]) .battle-stage .battle-exit-btn {
+    background: linear-gradient(rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0.18)), var(--arcade-bg-deep);
+  }
+
+  /* Top-aligned, so the arena doesn't jump up when Start reveals the board */
+  .battle-fight-screen > .battle-fight-inner {
+    margin-block: 0 auto;
+  }
+
+  /* Arena: each fighter gets exactly half the width */
+  .battle-stage {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.5rem;
+    min-height: 0;
+    padding: 0.75rem 0.5rem 0.6rem;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .battle-fighter {
+    min-width: 0;
+    gap: 0.5rem;
+  }
+
+  /* Fixed-height sprite row leaves room for the timer badge between the sprites */
+  .battle-fighter-sprite {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 3.5rem;
+  }
+
+  .battle-fighter-sprite .battle-avatar-img {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  /* Both cards stay the same height even when a long monster name wraps */
+  .battle-fighter-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0.4rem 0.45rem;
+    gap: 0.35rem;
+    border-width: 2px;
+  }
+
+  /* margin-bottom: auto keeps both HP bars and heart rows lined up at the bottom */
+  .battle-fighter-panel strong {
+    margin-bottom: auto;
+    font-size: 0.62rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .battle-monster-level {
+    white-space: nowrap;
+  }
+
+  .battle-fighter-panel .battle-hp-row {
+    align-self: stretch;
+    gap: 0.35rem;
+  }
+
+  .battle-hp-bar {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 0.8rem;
+    border-width: 2px;
+  }
+
+  .battle-hp-value {
+    font-size: 0.6rem;
+  }
+
+  .battle-hearts {
+    gap: 0.2rem;
+    font-size: 0.8rem;
+  }
+
+  /* Timer / VS / streak: centered in the gap between the two sprites */
+  .battle-stage .battle-vs-badge {
+    top: 0.6rem;
+    transform: translateX(-50%);
+    gap: 0.3rem;
+    font-size: 0.75rem;
+  }
+
+  .battle-timer {
+    gap: 0.3rem;
+    padding: 0.3rem 0.45rem;
+    font-size: 0.7rem;
+    border-width: 2px;
+  }
+
+  /* Board */
+  .battle-fight-board {
+    gap: 0.85rem;
+    padding: 0.65rem;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  #battle-vocab-note {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .battle-question-panel {
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .battle-question-label {
+    margin-bottom: 0.3rem;
+    font-size: 0.62rem;
+  }
+
+  .battle-question-text {
+    font-size: 0.9rem;
+  }
+
+  .battle-word-preview {
+    min-height: 2.75rem;
+    padding: 0.35rem 0.4rem 0.35rem 0.65rem;
+  }
+
+  /* Buttons: Clear / Scramble / Hint on top, Attack / Next below */
+  .battle-word-actions,
+  .battle-word-actions.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin: 0.6rem 0;
+  }
+
+  .battle-word-actions .btn {
+    grid-column: span 2;
+    min-width: 0;
+    max-width: none;
+    gap: 0.35rem;
+    padding: 0.7rem 0.35rem;
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+
+  .battle-word-actions #battle-attack-btn,
+  .battle-word-actions #next-btn {
+    grid-column: span 3;
+  }
+
+  /* Letters: 5 x 4 uses the phone's width; shrinks with height so it all fits
+     (never below ~44px tiles) */
+  .battle-letter-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.55rem;
+    width: min(100%, 26rem, max(17rem, calc((100vh - 560px) * 1.25)));
+    width: min(100%, 26rem, max(17rem, calc((100dvh - 560px) * 1.25)));
+    border-width: 3px;
+  }
+
+  .battle-tile {
+    font-size: 1rem;
+    border-width: 2px;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  /* Correct Answers drops below the board */
+  .battle-words-used {
+    padding: 0.75rem 0 0;
+    border-left: 0;
+    border-top: 3px solid var(--arcade-ink);
+  }
+
+  .battle-words-used-list {
+    max-height: 14rem;
+  }
+}
+
+/* Small phones: keep "Scramble" on one line */
+@media (max-width: 380px) {
+  .battle-word-actions .btn {
+    font-size: 0.55rem;
+    letter-spacing: 0;
+  }
 }
