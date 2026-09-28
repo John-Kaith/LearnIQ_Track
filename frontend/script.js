@@ -11635,3 +11635,4 @@ function setupProfilePage() {
 
 // Class Stream comments/reactions — delegated listeners, safe on every page.
 bindAnnouncementFeedInteractions();
+// .

@@ -6,3 +6,4 @@
 
 alter table if exists public.class_attendance_records
   add column if not exists time_out timestamptz;
+-- .

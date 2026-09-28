@@ -4,3 +4,4 @@ export function getTimeGreeting(): string {
   if (hour < 17) return 'Good afternoon,';
   return 'Good evening,';
 }
+// .

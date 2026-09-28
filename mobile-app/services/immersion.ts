@@ -164,3 +164,4 @@ export function getCaptureReadyHint(mode: CaptureMode): string {
     ? 'Photo, location, and time captured. You can now tap Time In.'
     : 'Photo, location, and time captured. You can now tap Time Out.';
 }
+// .

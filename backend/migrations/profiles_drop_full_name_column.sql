@@ -68,3 +68,4 @@ group by
 having count(qa.id) > 0;
 
 NOTIFY pgrst, 'reload schema';
+-- .

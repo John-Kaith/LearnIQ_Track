@@ -171,3 +171,4 @@ export const quizByLesson: Record<string, QuizQuestion[]> = {
 // USE_MOCK is always false in services/lessons.ts (real backend only) — this
 // stays empty rather than out of sync with the real ActivityItem shape.
 export const activitiesByLesson: Record<string, ActivityItem[]> = {};
+// .

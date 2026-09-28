@@ -152,3 +152,4 @@
 
   warnIfApiBaseMissing();
 })(typeof window !== "undefined" ? window : globalThis);
+// .

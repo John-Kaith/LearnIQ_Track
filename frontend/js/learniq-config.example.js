@@ -8,3 +8,4 @@ window.LEARNIQ_CONFIG = {
   /** Example: http://192.168.1.50:8000 — leave empty to use localStorage only */
   apiBase: "",
 };
+// .

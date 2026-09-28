@@ -77,3 +77,4 @@ The system uses AI to generate:
 ```bash
 git clone https://github.com/your-username/learniq-track.git
 cd learniq-track
+<!-- . -->

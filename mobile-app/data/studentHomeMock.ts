@@ -30,3 +30,4 @@ export const studentHomeMock = {
     xp: '2,450 XP',
   },
 };
+// .

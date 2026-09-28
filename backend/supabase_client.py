@@ -25,3 +25,4 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 def is_configured() -> bool:
     return supabase is not None
+# .

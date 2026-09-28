@@ -3,3 +3,4 @@
 
 ALTER TABLE IF EXISTS public.profiles
   DROP COLUMN IF EXISTS approval_status;
+-- .

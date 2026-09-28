@@ -8,3 +8,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof showToast === "function") showToast("Journals refreshed.", "success");
   });
 });
+// .

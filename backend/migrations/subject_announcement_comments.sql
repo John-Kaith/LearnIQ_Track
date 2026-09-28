@@ -27,3 +27,4 @@ create table if not exists public.subject_announcement_reactions (
 
 create index if not exists subject_announcement_reactions_announcement_id_idx
   on public.subject_announcement_reactions (announcement_id);
+-- .

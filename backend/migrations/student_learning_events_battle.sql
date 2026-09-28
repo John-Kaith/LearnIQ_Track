@@ -9,3 +9,4 @@ alter table if exists public.student_learning_events
 alter table if exists public.student_learning_events
   add constraint student_learning_events_event_type_check
   check (event_type in ('reviewer', 'activity', 'battle'));
+-- .

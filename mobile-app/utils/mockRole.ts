@@ -8,3 +8,4 @@ export function detectMockRole(identifier: string): MockRole {
   if (id.includes('pending')) return 'pending';
   return 'student';
 }
+// .

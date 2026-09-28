@@ -17,3 +17,4 @@ create index if not exists activity_attempts_student_id_idx
 
 create index if not exists activity_attempts_lesson_id_idx
   on public.activity_attempts(lesson_id, submitted_at desc);
+-- .

@@ -29,3 +29,4 @@ ALTER TABLE public.student_grades
   ADD COLUMN IF NOT EXISTS performance_task_score numeric,
   ADD COLUMN IF NOT EXISTS quarterly_assessment_score numeric,
   ADD COLUMN IF NOT EXISTS final_is_manual boolean NOT NULL DEFAULT false;
+-- .

@@ -27,3 +27,4 @@ if __name__ == "__main__":
     print("Fixing admin user role...")
     fix_admin_role()
     print("Done!")
+# .

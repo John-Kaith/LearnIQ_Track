@@ -64,3 +64,4 @@ def photo_public_url(relative_path: str | None) -> str | None:
     if p.startswith("uploads/"):
         return f"/{p}"
     return f"/uploads/{p}"
+# .

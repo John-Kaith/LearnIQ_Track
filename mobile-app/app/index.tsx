@@ -32,3 +32,4 @@ export default function Index() {
 
   return <Redirect href="/(student-tabs)/home" />;
 }
+// .

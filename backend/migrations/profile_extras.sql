@@ -17,3 +17,4 @@ alter table if exists public.profiles
 -- Optional: ensure long base64 avatar strings are allowed by API.
 -- (Supabase's default `text` column has no length limit, so nothing else
 -- needs to change.)
+-- .
