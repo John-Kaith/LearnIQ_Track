@@ -702,6 +702,45 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   color: rgba(244, 241, 255, 0.5);
 }
 
+.battle-word-preview-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Backspace: removes the last picked letter */
+.battle-backspace-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-panel);
+  box-shadow: 2px 2px 0 #000;
+  color: #fff;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.08s ease;
+}
+
+.battle-backspace-btn:hover:not(:disabled) {
+  background: #2c2160;
+}
+
+.battle-backspace-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #000;
+}
+
+.battle-backspace-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .battle-word-actions,
 .battle-word-actions.action-buttons {
   display: flex;
@@ -716,6 +755,25 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   flex: 1 1 6.5rem;
   max-width: 11rem;
   min-width: 0;
+}
+
+/* Desktop: compact buttons sized to their label. Phones keep the larger
+   tap size set in the max-width: 720px block below. */
+@media (min-width: 721px) {
+  .battle-word-actions .btn {
+    flex: 0 1 auto;
+    min-width: 6rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .battle-fight-screen .battle-word-actions .btn {
+    box-shadow: 3px 3px 0 #000;
+  }
+}
+
+/* style.css gives light-theme .btn-secondary amber text; keep these white. */
+.battle-fight-screen .battle-word-actions .btn-secondary {
+  color: #fff;
 }
 
 .battle-fight-screen .btn {
@@ -890,8 +948,94 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   color: var(--arcade-bg-deep);
 }
 
-/* Shared confirm dialog (window.LearnIQConfirm.show), pixel-arcade styled to match */
-.battle-arena-page .learniq-confirm-panel {
+/* Result modal: points / EXP / level / personal best */
+.battle-result-progress {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.25rem 0 1rem;
+}
+
+.battle-result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.battle-result-stat {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  background: var(--arcade-panel);
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 3px 3px 0 #000;
+}
+
+.battle-result-stat span {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: rgba(244, 241, 255, 0.7);
+}
+
+.battle-result-stat strong {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.9rem;
+  color: var(--arcade-yellow);
+}
+
+.battle-result-exp {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.battle-result-exp-bar {
+  height: 14px;
+  background: var(--arcade-bg-deep);
+  border: 3px solid var(--arcade-ink);
+}
+
+.battle-result-exp-fill {
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--arcade-green) 0 6px, #1fae0a 6px 8px);
+  transition: width 0.6s ease;
+}
+
+.battle-result-exp-text {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: rgba(244, 241, 255, 0.8);
+}
+
+.battle-result-flag {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.55rem;
+  line-height: 1.6;
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 3px 3px 0 #000;
+}
+
+.battle-result-flag.is-levelup {
+  background: var(--arcade-green);
+  color: #07210a;
+}
+
+.battle-result-flag.is-best {
+  background: var(--arcade-yellow);
+  color: var(--arcade-bg-deep);
+}
+
+@media (max-width: 480px) {
+  .battle-result-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Shared confirm dialog, pixel-arcade styled only during a battle (e.g. "Exit Battle?").
+   In the lobby (e.g. Log out) it keeps the normal site look. */
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-panel {
   background: var(--arcade-bg-mid);
   border: 4px solid var(--arcade-ink);
   border-radius: 0;
@@ -900,19 +1044,19 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   backdrop-filter: none;
 }
 
-.battle-arena-page .learniq-confirm-panel h3 {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-panel h3 {
   font-family: "Press Start 2P", system-ui, sans-serif;
   font-size: 0.95rem;
   color: var(--arcade-yellow);
   text-shadow: 2px 2px 0 #000;
 }
 
-.battle-arena-page .learniq-confirm-message {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-message {
   font-family: "Inter", system-ui, sans-serif;
   color: rgba(244, 241, 255, 0.85);
 }
 
-.battle-arena-page .learniq-confirm-actions .btn {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn {
   border-radius: 0;
   border: 3px solid var(--arcade-ink);
   box-shadow: 4px 4px 0 #000;
@@ -921,22 +1065,27 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   text-transform: uppercase;
 }
 
-.battle-arena-page .learniq-confirm-actions .btn:active {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn:active {
   transform: translate(3px, 3px);
   box-shadow: 1px 1px 0 #000;
 }
 
-.battle-arena-page .learniq-confirm-actions .btn-ghost {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn-ghost {
   background: var(--arcade-panel);
   color: var(--arcade-ink);
 }
 
-.battle-arena-page .learniq-confirm-actions .btn-danger {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn-danger {
   background: var(--arcade-red);
   color: #fff;
 }
 
-.battle-arena-page .learniq-confirm-actions .btn-primary {
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn-secondary {
+  background: var(--arcade-yellow);
+  color: var(--arcade-bg-deep);
+}
+
+.battle-arena-page.battle-fullscreen-active .learniq-confirm-actions .btn-primary {
   background: var(--arcade-magenta);
   color: #fff;
 }
@@ -1005,5 +1154,905 @@ html[data-theme="dark"] .battle-arena-page .battle-selected-badge {
   .battle-loading-title {
     font-size: clamp(0.95rem, 5vw, 1.4rem);
     letter-spacing: 0.08em;
+  }
+}
+
+/* Keep "Hint 3" on one line */
+#battle-hint-btn {
+  white-space: nowrap;
+}
+
+/* Battle timer + streak (under the VS badge) */
+.battle-stage .battle-vs-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.battle-timer {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: var(--arcade-ink);
+  text-shadow: none;
+  background: var(--arcade-bg-deep);
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 3px 3px 0 #000;
+}
+
+.battle-timer i {
+  color: var(--arcade-yellow);
+}
+
+.battle-timer.is-low {
+  color: var(--arcade-red);
+  border-color: var(--arcade-red);
+  animation: battle-timer-blink 0.8s steps(2, start) infinite;
+}
+
+@keyframes battle-timer-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+html.reduce-motion .battle-timer.is-low {
+  animation: none;
+}
+
+.battle-timer-popup {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 0.4rem;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  text-shadow: 2px 2px 0 #000;
+  animation: battle-timer-pop 0.9s ease-out forwards;
+  pointer-events: none;
+}
+
+.battle-timer-popup.is-up {
+  color: var(--arcade-green);
+}
+
+.battle-timer-popup.is-down {
+  color: var(--arcade-red);
+}
+
+@keyframes battle-timer-pop {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+.battle-streak {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.5rem;
+  color: rgba(244, 241, 255, 0.8);
+  text-shadow: 1px 1px 0 #000;
+}
+
+.battle-heal-popup {
+  color: var(--arcade-green) !important;
+}
+
+/* Start gate: question, answer box, buttons and letters stay hidden until Start */
+.battle-fight-screen.is-waiting .battle-question-panel,
+.battle-fight-screen.is-waiting .battle-word-preview,
+.battle-fight-screen.is-waiting .battle-word-actions,
+.battle-fight-screen.is-waiting .battle-letter-grid {
+  display: none;
+}
+
+.battle-ready-panel {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  margin: 0.5rem 0 1rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  background: var(--arcade-bg-deep);
+  border: 4px solid var(--arcade-ink);
+  box-shadow: 6px 6px 0 #000;
+}
+
+.battle-ready-panel[hidden] {
+  display: none;
+}
+
+.battle-ready-title {
+  margin: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 1.1rem;
+  color: var(--arcade-yellow);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.battle-ready-text {
+  max-width: 34rem;
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  line-height: 1.6;
+  color: rgba(244, 241, 255, 0.85);
+}
+
+.battle-ready-text strong {
+  color: var(--arcade-ink);
+}
+
+.battle-fight-screen .battle-start-btn {
+  min-width: 11rem;
+  padding: 0.9rem 1.5rem;
+  font-size: 0.8rem;
+  background: var(--arcade-green);
+  color: #07210a;
+}
+
+/* Game menu (☰): top-right on the loading + battle screens only */
+.battle-menu {
+  display: none;
+}
+
+.battle-arena-page.battle-fullscreen-active .battle-menu {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5600; /* above loading (5500) + fight (5000), below dialogs (6000) */
+  display: block;
+}
+
+/* Room for the menu above the arena, so it never covers Exit */
+.battle-arena-page.battle-fullscreen-active .battle-fight-screen {
+  padding-top: 4rem;
+}
+
+.battle-menu-toggle {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 3px solid var(--arcade-ink);
+  background: var(--arcade-bg-mid);
+  box-shadow: 3px 3px 0 #000;
+  color: var(--arcade-yellow);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.battle-menu-toggle:hover,
+.battle-menu-toggle:focus-visible,
+.battle-menu-toggle[aria-expanded="true"] {
+  background: var(--arcade-panel);
+}
+
+.battle-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  display: grid;
+  gap: 1rem;
+  width: min(20rem, calc(100vw - 1.5rem));
+  padding: 0.9rem;
+  background: var(--arcade-bg-mid);
+  border: 3px solid var(--arcade-ink);
+  box-shadow: 4px 4px 0 #000;
+  color: var(--arcade-ink);
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.battle-menu-panel[hidden] {
+  display: none;
+}
+
+.battle-menu-section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.battle-menu-heading {
+  margin: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.6rem;
+  color: var(--arcade-yellow);
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.battle-menu-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.battle-menu-stat {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.5rem 0.3rem;
+  text-align: center;
+  background: var(--arcade-panel);
+  border: 2px solid var(--arcade-ink);
+}
+
+.battle-menu-stat span {
+  font-size: 0.68rem;
+  color: rgba(244, 241, 255, 0.75);
+}
+
+.battle-menu-stat strong {
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--arcade-yellow);
+}
+
+.battle-menu-exp {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.battle-menu-exp-bar {
+  height: 10px;
+  background: var(--arcade-bg-deep);
+  border: 2px solid var(--arcade-ink);
+}
+
+.battle-menu-exp-fill {
+  width: 0;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--arcade-green) 0 6px, #1fae0a 6px 8px);
+  transition: width 0.4s ease;
+}
+
+.battle-menu-exp-text {
+  font-size: 0.72rem;
+  color: rgba(244, 241, 255, 0.8);
+}
+
+.battle-sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 7rem);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.battle-sound-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.battle-sound-mute {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-panel);
+  color: var(--arcade-yellow);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.battle-sound-mute:hover,
+.battle-sound-mute:focus-visible {
+  background: var(--arcade-bg-deep);
+}
+
+.battle-sound-mute[aria-pressed="true"] {
+  color: var(--arcade-red);
+  border-color: var(--arcade-red);
+}
+
+.battle-sound-slider {
+  width: 100%;
+  height: 1rem;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  accent-color: var(--arcade-yellow);
+  cursor: pointer;
+}
+
+/* ---- Fit the battle to the window: centered, no scrollbars ---- */
+html:has(body.battle-fullscreen-active),
+body.battle-fullscreen-active {
+  overflow: hidden;
+}
+
+.battle-fight-screen {
+  scrollbar-width: none; /* only scrolls on very short windows, without a visible bar */
+}
+
+.battle-fight-screen::-webkit-scrollbar {
+  display: none;
+}
+
+/* Vertically centered when there's room; margin auto never clips the top like
+   justify-content: center would. */
+.battle-fight-screen > .battle-fight-inner {
+  margin-block: auto;
+}
+
+/* The volume icon sits outside the centered arena on wide screens, so the extra
+   top room is only needed where they could overlap. */
+.battle-arena-page.battle-fullscreen-active .battle-fight-screen {
+  padding-top: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .battle-arena-page.battle-fullscreen-active .battle-fight-screen {
+    padding-top: 4rem;
+  }
+}
+
+/* Letter grid shrinks with the window height so the whole battle fits on screen. */
+.battle-letter-grid {
+  width: min(22rem, 100%, max(13rem, calc((100vh - 600px) * 0.8)));
+  max-width: none;
+}
+
+/* Lobby: AI difficulty picker (Normal / Medium / Hard; time is set per level in JS) */
+.battle-arena-page .battle-difficulty-row {
+  align-items: center;
+}
+
+.battle-difficulty-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.battle-difficulty-option {
+  display: grid;
+  place-items: center;
+  padding: 0.6rem;
+  font-weight: 600;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.battle-difficulty-option:hover {
+  border-color: var(--lq-border-accent);
+}
+
+.battle-difficulty-option.is-active {
+  border-color: #ca8a04;
+  background: rgba(234, 179, 8, 0.16);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25);
+}
+
+.battle-difficulty-option[data-difficulty="medium"].is-active {
+  border-color: #ea580c;
+  background: rgba(249, 115, 22, 0.14);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.22);
+}
+
+.battle-difficulty-option[data-difficulty="hard"].is-active {
+  border-color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22);
+}
+
+html[data-theme="dark"] .battle-difficulty-option {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+@media (max-width: 480px) {
+  .battle-difficulty-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Character picker: opened by clicking your fighter in the arena ---- */
+.battle-player-sprite-btn {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.battle-player-sprite-btn::after {
+  content: "\f303"; /* Font Awesome pen */
+  position: absolute;
+  right: -0.35rem;
+  bottom: 0.15rem;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-size: 0.6rem;
+  color: var(--arcade-bg-deep);
+  background: var(--arcade-yellow);
+  border: 2px solid #000;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.battle-player-sprite-btn:hover::after,
+.battle-player-sprite-btn:focus-visible::after {
+  opacity: 1;
+}
+
+.battle-player-sprite-btn:focus-visible {
+  outline: 3px solid var(--arcade-yellow);
+  outline-offset: 3px;
+}
+
+.battle-character-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 5800; /* over the battle screen + menu, under confirm dialogs (6000) */
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 3, 15, 0.7);
+}
+
+.battle-character-dialog[hidden] {
+  display: none;
+}
+
+.battle-character-panel {
+  width: min(40rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1rem 1.1rem 1.2rem;
+  background: var(--arcade-bg-mid);
+  border: 4px solid var(--arcade-ink);
+  box-shadow: 6px 6px 0 #000;
+  color: var(--arcade-ink);
+}
+
+.battle-character-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.battle-character-head h3 {
+  margin: 0;
+  font-family: "Press Start 2P", system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--arcade-yellow);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.battle-character-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--arcade-ink);
+  background: var(--arcade-panel);
+  color: var(--arcade-ink);
+  cursor: pointer;
+}
+
+.battle-character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.6rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.battle-character-option {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  padding: 0.35rem;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: #1c1f2b;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.battle-character-option img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.battle-character-option:hover {
+  transform: translateY(-2px);
+}
+
+.battle-character-option.is-active {
+  border-color: var(--arcade-yellow);
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.35);
+}
+
+.battle-next-opponent {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.battle-next-opponent-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.battle-next-opponent-sprite {
+  font-size: 1.2rem;
+}
+
+/* ---- Pixel-art fighter in the arena / loading screen ---- */
+.battle-avatar-img {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  image-rendering: pixelated;
+}
+
+.battle-loading-sprite .battle-avatar-img {
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+@media (max-width: 720px) {
+  .battle-fighter-sprite .battle-avatar-img {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+/* ---- Monster name / level + three-headed boss ---- */
+.battle-monster-level {
+  margin-left: 0.3rem;
+  font-size: 0.6em;
+  color: var(--arcade-yellow);
+}
+
+.battle-monster-heads {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.battle-monster-heads span {
+  font-size: 0.75em;
+}
+
+.battle-monster-heads span:nth-child(2) {
+  font-size: 1em;
+  margin: 0 -0.2em 0.25em;
+}
+
+/* ---- Energy-beam attack ---- */
+.battle-beam-charge,
+.battle-beam,
+.battle-beam-impact {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.battle-beam-charge {
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0 25%, #7dd3fc 45%, rgba(56, 189, 248, 0) 72%);
+  box-shadow: 0 0 22px 10px rgba(56, 189, 248, 0.75);
+  animation: beam-charge 0.9s ease-out forwards;
+}
+
+.battle-beam {
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.2), #ffffff 40%, #ffffff 60%, rgba(125, 211, 252, 0.2));
+  box-shadow: 0 0 16px 6px rgba(56, 189, 248, 0.85), 0 0 34px 14px rgba(59, 130, 246, 0.45);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: beam-fire 0.85s ease-out 0.25s forwards;
+}
+
+.battle-beam-impact {
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0 20%, #7dd3fc 45%, rgba(56, 189, 248, 0) 70%);
+  opacity: 0;
+  animation: beam-impact 0.5s ease-out 0.5s forwards;
+}
+
+@keyframes beam-charge {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.4;
+  }
+  30% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes beam-fire {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  30% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  75% {
+    transform: scaleX(1) scaleY(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1) scaleY(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes beam-impact {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+html.reduce-motion .battle-beam,
+html.reduce-motion .battle-beam-charge,
+html.reduce-motion .battle-beam-impact {
+  animation-duration: 0.01s;
+}
+
+/* ---- Phones: battle screen layout ----
+   Kept last so it wins over the earlier max-width: 720px tweaks. Goal: arena,
+   question, answer box, buttons and the whole letter grid fit on one screen;
+   Correct Answers sits below the fold. */
+@media (max-width: 720px) {
+  /* Top strip holds Exit (left) and the ☰ menu (right) */
+  .battle-arena-page.battle-fullscreen-active .battle-fight-screen {
+    padding: 3.75rem 0.5rem 0.75rem;
+  }
+
+  .battle-fight-inner {
+    gap: 0.6rem;
+  }
+
+  /* Out of the arena so it never covers the monster. The stage is its own
+     stacking context, so this still paints above the board when scrolled. */
+  .battle-stage .battle-exit-btn {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    right: auto;
+    z-index: 10;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    font-size: 0.62rem;
+  }
+
+  /* Light theme's .btn-secondary is see-through; the arena scrolls under Exit */
+  html:not([data-theme="dark"]) .battle-stage .battle-exit-btn {
+    background: linear-gradient(rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0.18)), var(--arcade-bg-deep);
+  }
+
+  /* Top-aligned, so the arena doesn't jump up when Start reveals the board */
+  .battle-fight-screen > .battle-fight-inner {
+    margin-block: 0 auto;
+  }
+
+  /* Arena: each fighter gets exactly half the width */
+  .battle-stage {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.5rem;
+    min-height: 0;
+    padding: 0.75rem 0.5rem 0.6rem;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .battle-fighter {
+    min-width: 0;
+    gap: 0.5rem;
+  }
+
+  /* Fixed-height sprite row leaves room for the timer badge between the sprites */
+  .battle-fighter-sprite {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 3.5rem;
+  }
+
+  .battle-fighter-sprite .battle-avatar-img {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  /* Both cards stay the same height even when a long monster name wraps */
+  .battle-fighter-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0.4rem 0.45rem;
+    gap: 0.35rem;
+    border-width: 2px;
+  }
+
+  /* margin-bottom: auto keeps both HP bars and heart rows lined up at the bottom */
+  .battle-fighter-panel strong {
+    margin-bottom: auto;
+    font-size: 0.62rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .battle-monster-level {
+    white-space: nowrap;
+  }
+
+  .battle-fighter-panel .battle-hp-row {
+    align-self: stretch;
+    gap: 0.35rem;
+  }
+
+  .battle-hp-bar {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 0.8rem;
+    border-width: 2px;
+  }
+
+  .battle-hp-value {
+    font-size: 0.6rem;
+  }
+
+  .battle-hearts {
+    gap: 0.2rem;
+    font-size: 0.8rem;
+  }
+
+  /* Timer / VS / streak: centered in the gap between the two sprites */
+  .battle-stage .battle-vs-badge {
+    top: 0.6rem;
+    transform: translateX(-50%);
+    gap: 0.3rem;
+    font-size: 0.75rem;
+  }
+
+  .battle-timer {
+    gap: 0.3rem;
+    padding: 0.3rem 0.45rem;
+    font-size: 0.7rem;
+    border-width: 2px;
+  }
+
+  /* Board */
+  .battle-fight-board {
+    gap: 0.85rem;
+    padding: 0.65rem;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  #battle-vocab-note {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .battle-question-panel {
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .battle-question-label {
+    margin-bottom: 0.3rem;
+    font-size: 0.62rem;
+  }
+
+  .battle-question-text {
+    font-size: 0.9rem;
+  }
+
+  .battle-word-preview {
+    min-height: 2.75rem;
+    padding: 0.35rem 0.4rem 0.35rem 0.65rem;
+  }
+
+  /* Buttons: Clear / Scramble / Hint on top, Attack / Next below */
+  .battle-word-actions,
+  .battle-word-actions.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin: 0.6rem 0;
+  }
+
+  .battle-word-actions .btn {
+    grid-column: span 2;
+    min-width: 0;
+    max-width: none;
+    gap: 0.35rem;
+    padding: 0.7rem 0.35rem;
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+
+  .battle-word-actions #battle-attack-btn,
+  .battle-word-actions #next-btn {
+    grid-column: span 3;
+  }
+
+  /* Letters: 5 x 4 uses the phone's width; shrinks with height so it all fits
+     (never below ~44px tiles) */
+  .battle-letter-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.55rem;
+    width: min(100%, 26rem, max(17rem, calc((100vh - 560px) * 1.25)));
+    width: min(100%, 26rem, max(17rem, calc((100dvh - 560px) * 1.25)));
+    border-width: 3px;
+  }
+
+  .battle-tile {
+    font-size: 1rem;
+    border-width: 2px;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  /* Correct Answers drops below the board */
+  .battle-words-used {
+    padding: 0.75rem 0 0;
+    border-left: 0;
+    border-top: 3px solid var(--arcade-ink);
+  }
+
+  .battle-words-used-list {
+    max-height: 14rem;
+  }
+}
+
+/* Small phones: keep "Scramble" on one line */
+@media (max-width: 380px) {
+  .battle-word-actions .btn {
+    font-size: 0.55rem;
+    letter-spacing: 0;
   }
 }

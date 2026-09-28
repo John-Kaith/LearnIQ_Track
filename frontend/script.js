@@ -1018,12 +1018,23 @@ function initMobileSidebarDrawer() {
   const backdrop = document.createElement("div");
   backdrop.className = "sidebar-mobile-backdrop";
 
+  // "‹" tab on the middle of the open drawer's right edge — closes it. The
+  // hamburger hides while the drawer is open so it no longer covers the logo.
+  const closeTab = document.createElement("button");
+  closeTab.type = "button";
+  closeTab.className = "sidebar-mobile-close";
+  closeTab.setAttribute("aria-label", "Close menu");
+  closeTab.innerHTML = '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i>';
+
   document.body.appendChild(backdrop);
   document.body.appendChild(toggleBtn);
+  document.body.appendChild(closeTab);
 
   function openDrawer() {
     sidebar.classList.add("is-open");
     backdrop.classList.add("is-open");
+    toggleBtn.classList.add("is-hidden");
+    closeTab.classList.add("is-open");
     toggleBtn.setAttribute("aria-expanded", "true");
     document.body.style.overflow = "hidden";
   }
@@ -1031,9 +1042,13 @@ function initMobileSidebarDrawer() {
   function closeDrawer() {
     sidebar.classList.remove("is-open");
     backdrop.classList.remove("is-open");
+    toggleBtn.classList.remove("is-hidden");
+    closeTab.classList.remove("is-open");
     toggleBtn.setAttribute("aria-expanded", "false");
     document.body.style.overflow = "";
   }
+
+  closeTab.addEventListener("click", closeDrawer);
 
   toggleBtn.addEventListener("click", () => {
     if (sidebar.classList.contains("is-open")) closeDrawer();
@@ -1054,7 +1069,6 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
     items: [
       { id: "dashboard", href: "teacher-learniq-dashboard.html", icon: "fa-chalkboard-user", label: "Dashboard" },
       { id: "subjects", href: "teacher-subjects.html", icon: "fa-book-open", label: "My Subjects" },
-      { id: "ai-result", href: "ai-result.html", icon: "fa-wand-sparkles", label: "Full lesson review" },
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
       { id: "gradecard", href: "teacher-student-gradecard.html", icon: "fa-id-card", label: "Student Gradecard" },
       {
@@ -1094,7 +1108,6 @@ const TEACHER_ONLY_PAGE_PATHS = new Set([
   "teacher-dashboard.html",
   "teacher-subjects.html",
   "teacher-subject-lessons.html",
-  "ai-result.html",
   "teacher-student-gradecard.html",
   "teacher-immersion-attendance.html",
   "teacher-student-registration.html",
@@ -1106,7 +1119,6 @@ const TEACHER_PATH_TO_SIDEBAR_ID = {
   "teacher-dashboard.html": "dashboard",
   "teacher-subjects.html": "subjects",
   "teacher-subject-lessons.html": "subjects",
-  "ai-result.html": "ai-result",
   "leaderboard.html": "leaderboard",
   "teacher-student-gradecard.html": "gradecard",
   "teacher-immersion-attendance.html": "immersion-attendance",
@@ -1812,6 +1824,25 @@ function setupLeaderboardPage() {
     if (retryBtn) retryBtn.hidden = false;
   }
 
+  // "quiz" = ranked by quiz points (default); "arena" = ranked by AI Battle Arena level.
+  let rankMode = "quiz";
+  let lastEntries = [];
+
+  function rankedEntries(entries) {
+    const list =
+      rankMode === "arena"
+        ? entries
+            .filter((e) => Number(e.battle_total_exp || 0) > 0)
+            .sort(
+              (a, b) =>
+                Number(b.battle_level || 0) - Number(a.battle_level || 0) ||
+                Number(b.battle_total_exp || 0) - Number(a.battle_total_exp || 0) ||
+                Number(b.battle_best_score || 0) - Number(a.battle_best_score || 0),
+            )
+        : entries.filter((e) => Number(e.quiz_attempts || 0) > 0);
+    return list.map((e, i) => ({ ...e, rank: i + 1 }));
+  }
+
   function renderPodium(entries) {
     if (!podiumEl) return;
     const slots = [
@@ -1833,8 +1864,12 @@ function setupLeaderboardPage() {
         return `<article class="glass-card top-rank-card ${podiumClass}">
           <div class="rank-badge">#${e.rank}</div>
           <h3>${escapeHtml(e.display_name || getProfileDisplayName(e) || "Student")}</h3>
-          <p>${fmtInt(e.total_points)} points</p>
-          <small>${escapeHtml(e.tagline || "")}</small>
+          <p>${
+            rankMode === "arena"
+              ? `Level ${fmtInt(e.battle_level || 0)} · ${fmtInt(e.battle_best_score || 0)} best`
+              : `${fmtInt(e.total_points)} points`
+          }</p>
+          <small>${escapeHtml(rankMode === "arena" ? `${fmtInt(e.battle_total_exp || 0)} total EXP` : e.tagline || "")}</small>
         </article>`;
       })
       .join("");
@@ -1853,6 +1888,8 @@ function setupLeaderboardPage() {
           <td>${fmtInt(e.total_points)}</td>
           <td>${fmtInt(e.quiz_attempts)}</td>
           <td>${fmtPct(e.progress_pct)}</td>
+          <td><span class="leaderboard-level-cell"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Lv ${fmtInt(e.battle_level || 0)}</span></td>
+          <td>${fmtInt(e.battle_best_score || 0)}</td>
         </tr>`;
       })
       .join("");
@@ -1861,9 +1898,10 @@ function setupLeaderboardPage() {
   async function refresh() {
     if (liveLine) liveLine.textContent = "Updating…";
     try {
-      const res = await fetch(apiUrl("/student/leaderboard?limit=50"));
+      const res = await fetch(apiUrl("/student/leaderboard?limit=200"));
       const data = await readApiJson(res);
-      const entries = Array.isArray(data.entries) ? data.entries : [];
+      lastEntries = Array.isArray(data.entries) ? data.entries : [];
+      const entries = rankedEntries(lastEntries);
       const updated = data.updated_at;
 
       defaultEmptyCopy();
@@ -1878,23 +1916,7 @@ function setupLeaderboardPage() {
         }
       }
 
-      if (tableNote) {
-        tableNote.textContent =
-          entries.length === 0
-            ? "No submitted quiz attempts yet."
-            : `Showing ${entries.length} student${entries.length === 1 ? "" : "s"} · Sorted by total points, then accuracy.`;
-      }
-
-      if (entries.length === 0) {
-        if (emptyEl) emptyEl.hidden = false;
-        if (populatedEl) populatedEl.hidden = true;
-      } else {
-        if (emptyEl) emptyEl.hidden = true;
-        if (populatedEl) populatedEl.hidden = false;
-        renderPodium(entries);
-        const u = getCurrentUserSession();
-        renderTable(entries, u && u.id_number ? String(u.id_number) : "");
-      }
+      renderRankings(entries);
     } catch (e) {
       console.error("leaderboard:", e);
       errorEmptyCopy(e?.message || "Request failed.");
@@ -1903,6 +1925,43 @@ function setupLeaderboardPage() {
       if (populatedEl) populatedEl.hidden = true;
     }
   }
+
+  function renderRankings(entries) {
+    if (tableNote) {
+      const sortedBy =
+        rankMode === "arena" ? "Sorted by AI Battle Arena level, then EXP." : "Sorted by total points, then accuracy.";
+      tableNote.textContent =
+        entries.length === 0
+          ? rankMode === "arena"
+            ? "No AI Battle Arena games played yet."
+            : "No submitted quiz attempts yet."
+          : `Showing ${entries.length} student${entries.length === 1 ? "" : "s"} · ${sortedBy}`;
+    }
+
+    // Keep the table (and the rank toggle) visible whenever anyone has quiz or arena data.
+    if (entries.length === 0 && lastEntries.length === 0) {
+      if (emptyEl) emptyEl.hidden = false;
+      if (populatedEl) populatedEl.hidden = true;
+    } else {
+      if (emptyEl) emptyEl.hidden = true;
+      if (populatedEl) populatedEl.hidden = false;
+      renderPodium(entries);
+      const u = getCurrentUserSession();
+      renderTable(entries, u && u.id_number ? String(u.id_number) : "");
+    }
+  }
+
+  document.querySelectorAll("[data-rank-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      rankMode = btn.dataset.rankMode === "arena" ? "arena" : "quiz";
+      document.querySelectorAll("[data-rank-mode]").forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      renderRankings(rankedEntries(lastEntries));
+    });
+  });
 
   emptyCta?.addEventListener("click", () => {
     const user = getCurrentUserSession();
@@ -2489,17 +2548,42 @@ async function setupImmersionDashboard() {
             .map((j) => {
               const when = j.submitted_at || j.created_at || "";
               const content = j.body || j.journal_text || "";
-              const d = when ? new Date(when) : null;
-              return `<article class="journal-entry">
+              const entryDay = j.entry_date ? new Date(`${String(j.entry_date).slice(0, 10)}T00:00:00`) : null;
+              const d = entryDay && !Number.isNaN(entryDay.getTime()) ? entryDay : when ? new Date(when) : null;
+              const valid = d && !Number.isNaN(d.getTime());
+              const weekday = valid ? d.toLocaleDateString(undefined, { weekday: "long" }) : "";
+              const longDate = valid
+                ? d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+                : "—";
+              return `<article class="journal-entry journal-entry--paper">
               <div class="journal-header">
-                <strong>${escapeHtml(d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : "—")}</strong>
-                <span class="small-note">${escapeHtml(fmtImmersionClock(when))}</span>
+                <div class="journal-date-block">
+                  ${weekday ? `<span class="journal-weekday">${escapeHtml(weekday)}</span>` : ""}
+                  <strong>${escapeHtml(longDate)}</strong>
+                </div>
+                <span class="small-note"><i class="fa-regular fa-clock"></i> ${escapeHtml(fmtImmersionClock(when))}</span>
               </div>
-              <p class="journal-content">${escapeHtml(content)}</p>
+              <div class="journal-content journal-rich is-collapsed">${journalBodyToHtml(content)}</div>
+              <div class="journal-entry-actions">
+                <button type="button" class="journal-more-btn" hidden>See more</button>
+                ${
+                  j.id != null
+                    ? `<button type="button" class="journal-unsubmit-btn" data-journal-id="${escapeHtml(String(j.id))}">
+                  <i class="fa-solid fa-rotate-left"></i> Unsubmit
+                </button>`
+                    : ""
+                }
+              </div>
             </article>`;
             })
             .join("")
         : '<p class="small-note">No journal entries yet.</p>';
+      box.querySelectorAll(".journal-entry").forEach((entry) => {
+        const body = entry.querySelector(".journal-content");
+        const more = entry.querySelector(".journal-more-btn");
+        if (body && more && body.scrollHeight > body.clientHeight + 4) more.hidden = false;
+        else body?.classList.remove("is-collapsed");
+      });
     } catch (e) {
       box.innerHTML = `<p class="small-note">${escapeHtml(e?.message || "Could not load journals.")}</p>`;
     }
@@ -2552,11 +2636,53 @@ async function setupImmersionDashboard() {
     }
   });
 
+  document.getElementById("recent-journal-list")?.addEventListener("click", async (ev) => {
+    const unsubmit = ev.target.closest(".journal-unsubmit-btn");
+    if (unsubmit) {
+      const journalId = unsubmit.dataset.journalId;
+      if (!journalId) return;
+      const opts = {
+        title: "Unsubmit journal entry?",
+        message: "This entry will be removed from your journal. This can't be undone.",
+        confirmText: "Unsubmit",
+        cancelText: "Cancel",
+        variant: "danger",
+      };
+      const ok = window.LearnIQConfirm?.show
+        ? await window.LearnIQConfirm.show(opts)
+        : window.confirm(opts.message);
+      if (!ok) return;
+      unsubmit.disabled = true;
+      try {
+        const res = await fetch(apiUrl(`/journals/${encodeURIComponent(journalId)}`), {
+          method: "DELETE",
+          headers: immersionAuthHeaders(),
+        });
+        await readApiJson(res);
+        showToast("Journal entry removed.", "success");
+        await loadJournals();
+      } catch (e) {
+        unsubmit.disabled = false;
+        showToast(e?.message || "Could not remove journal entry.", "error");
+      }
+      return;
+    }
+    const more = ev.target.closest(".journal-more-btn");
+    if (!more) return;
+    const body = more.closest(".journal-entry")?.querySelector(".journal-content");
+    if (!body) return;
+    const collapsed = body.classList.toggle("is-collapsed");
+    body.classList.toggle("is-expanded", !collapsed);
+    if (collapsed) body.scrollTop = 0;
+    more.textContent = collapsed ? "See more" : "See less";
+  });
+
+  const journalEditor = initJournalEditor();
+
   document.getElementById("journal-form")?.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const bodyEl = document.getElementById("journal-body");
     const dateEl = document.getElementById("journal-date");
-    const text = (bodyEl && bodyEl.value.trim()) || "";
+    const text = journalEditor ? journalEditor.getMarkdown() : "";
     if (!text) {
       showToast("Write something in your journal first.", "error");
       return;
@@ -2571,7 +2697,7 @@ async function setupImmersionDashboard() {
       });
       await readApiJson(res);
       showToast("Journal saved.", "success");
-      if (bodyEl) bodyEl.value = "";
+      journalEditor?.clear();
       await loadJournals();
     } catch (e) {
       showToast(e?.message || "Could not save journal.", "error");
@@ -2580,6 +2706,79 @@ async function setupImmersionDashboard() {
 
   await refreshAttendanceUi();
   await loadJournals();
+}
+
+/** Journal body (Markdown from the formatting toolbar) → sanitized HTML. Plain-text entries still render. */
+function journalBodyToHtml(text) {
+  const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return "";
+  if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+    const html = marked.parse(raw, { breaks: true, gfm: true });
+    const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    const wrap = document.createElement("div");
+    wrap.innerHTML = clean;
+    wrap.querySelectorAll("a").forEach((a) => {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    });
+    return wrap.innerHTML;
+  }
+  return escapeHtml(raw).replace(/\n/g, "<br>");
+}
+
+/**
+ * Daily Journal rich-text editor (Quill). Journals are still saved as Markdown text
+ * (Quill HTML → Turndown) so the API, mobile app and journalBodyToHtml() keep working.
+ * Falls back to a plain textarea if the CDN scripts did not load.
+ */
+function initJournalEditor() {
+  const host = document.getElementById("journal-body");
+  if (!host) return null;
+
+  if (typeof Quill === "undefined" || typeof TurndownService === "undefined") {
+    document.getElementById("journal-toolbar")?.setAttribute("hidden", "");
+    const ta = document.createElement("textarea");
+    ta.id = "journal-body";
+    ta.rows = 8;
+    ta.placeholder = "Describe what you did today, what you learned, challenges faced, etc.";
+    host.replaceWith(ta);
+    return {
+      getMarkdown: () => ta.value.trim(),
+      clear: () => {
+        ta.value = "";
+      },
+    };
+  }
+
+  const quill = new Quill(host, {
+    theme: "snow",
+    placeholder: "Describe what you did today, what you learned, challenges faced, etc.",
+    modules: { toolbar: "#journal-toolbar" },
+    formats: ["bold", "italic", "underline", "list", "link", "header"],
+  });
+
+  const turndown = new TurndownService({
+    headingStyle: "atx",
+    bulletListMarker: "-",
+    emDelimiter: "*",
+    strongDelimiter: "**",
+  });
+  turndown.addRule("underline", {
+    filter: ["u", "ins"],
+    replacement: (content) => (content.trim() ? `<u>${content}</u>` : content),
+  });
+
+  return {
+    getMarkdown: () => {
+      if (!quill.getText().trim()) return "";
+      return turndown
+        .turndown(quill.getSemanticHTML())
+        .replace(/ /g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    },
+    clear: () => quill.setText(""),
+  };
 }
 
 const sampleUsers = [
@@ -5702,10 +5901,28 @@ async function joinSubjectWithCode(joinCode) {
  * Global "Join a class" modal, opened from the sidebar nav on any student
  * page (not just My lesson) — built once on demand, reuses joinSubjectWithCode().
  */
+/** Sidebar "+" button turns into an "×" while the Join a class modal is open. */
+function setJoinClassButtonsOpen(open) {
+  document.querySelectorAll('[data-action="join-class"]').forEach((btn) => {
+    btn.classList.toggle("is-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    const label = open ? "Close join a class" : "Join a class";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+  });
+}
+
+function closeJoinClassModal() {
+  const backdrop = document.getElementById("join-class-modal-backdrop");
+  if (backdrop) backdrop.hidden = true;
+  setJoinClassButtonsOpen(false);
+}
+
 function openJoinClassModal() {
   let backdrop = document.getElementById("join-class-modal-backdrop");
   if (backdrop) {
     backdrop.hidden = false;
+    setJoinClassButtonsOpen(true);
     document.getElementById("join-class-code-input")?.focus();
     return;
   }
@@ -5733,9 +5950,8 @@ function openJoinClassModal() {
     </div>`;
   document.body.appendChild(backdrop);
 
-  const closeModal = () => {
-    backdrop.hidden = true;
-  };
+  const closeModal = closeJoinClassModal;
+  setJoinClassButtonsOpen(true);
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeModal();
   });
@@ -5791,7 +6007,9 @@ function bindJoinClassSidebarLink() {
     const link = event.target.closest('[data-action="join-class"]');
     if (!link) return;
     event.preventDefault();
-    openJoinClassModal();
+    const backdrop = document.getElementById("join-class-modal-backdrop");
+    if (backdrop && !backdrop.hidden) closeJoinClassModal();
+    else openJoinClassModal();
   });
 }
 bindJoinClassSidebarLink();
@@ -5876,13 +6094,20 @@ function buildSubjectCardHtml(subject, options = {}) {
         <button type="button" class="subject-card-menu-btn" aria-label="Subject options" aria-haspopup="menu" aria-expanded="false" data-subject-menu-toggle="${safeId}">
           <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
         </button>
-        <div class="subject-card-menu" role="menu" hidden data-subject-menu="${safeId}">
+        <div class="subject-card-menu" role="menu" hidden data-subject-menu="${safeId}">${
+          archivedView
+            ? `
+          <button type="button" role="menuitem" data-subject-action="unarchive" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}">
+            <i class="fa-solid fa-box-open" aria-hidden="true"></i> Unarchive
+          </button>`
+            : `
           <button type="button" role="menuitem" data-subject-action="archive" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}">
             <i class="fa-solid fa-box-archive" aria-hidden="true"></i> Archive
           </button>
           <button type="button" role="menuitem" data-subject-action="unenroll" data-subject-id="${safeId}" data-subject-name="${escapeHtml(name)}">
             <i class="fa-solid fa-user-minus" aria-hidden="true"></i> Unenroll
-          </button>
+          </button>`
+        }
         </div>
       </div>`
     : "";
@@ -5929,17 +6154,30 @@ function closeAllSubjectCardMenus() {
 }
 
 async function confirmSubjectEnrollmentAction(subjectName, action) {
-  const title =
-    action === "archive" ? "Archive this subject?" : "Unenroll from this subject?";
-  const message =
-    action === "archive"
-      ? "Are you sure you want to archive this subject?"
-      : `Are you sure you want to unenroll from ${subjectName || "this subject"}? It will be removed from My subjects.`;
+  const label = subjectName || "this subject";
+  const copy = {
+    archive: {
+      title: "Archive this subject?",
+      message: `${label} will move to Archived. You can unarchive it there anytime.`,
+      confirmText: "Archive",
+    },
+    unarchive: {
+      title: "Unarchive this subject?",
+      message: `${label} will move back to My subjects.`,
+      confirmText: "Unarchive",
+    },
+    unenroll: {
+      title: "Unenroll from this subject?",
+      message: `Are you sure you want to unenroll from ${label}? It will be removed from My subjects.`,
+      confirmText: "Unenroll",
+    },
+  }[action] || { title: "Update subject?", message: "", confirmText: "OK" };
+  const { title, message } = copy;
   if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
     return window.LearnIQConfirm.show({
       title,
       message,
-      confirmText: action === "archive" ? "Archive" : "Unenroll",
+      confirmText: copy.confirmText,
       cancelText: "Cancel",
       variant: action === "unenroll" ? "danger" : "default",
     });
@@ -6046,6 +6284,65 @@ async function renderSubjectsPage() {
   }
 }
 
+const SUBJECT_ACTION_TOASTS = {
+  archive: "Subject archived. Find it under Archived in the sidebar.",
+  unarchive: "Subject unarchived. It's back in My subjects.",
+  unenroll: "Unenrolled. View it under Archived in the sidebar.",
+};
+
+/**
+ * "⋮" menus on subject cards (My subjects: Archive / Unenroll; Archived: Unarchive).
+ * Bound once per page; re-renders whichever subject list is on screen afterwards.
+ */
+function bindSubjectCardMenus() {
+  if (window.__subjectsPageMenuBound) return;
+  window.__subjectsPageMenuBound = true;
+  document.addEventListener("click", async (event) => {
+    const toggle = event.target.closest("[data-subject-menu-toggle]");
+    if (toggle) {
+      event.preventDefault();
+      event.stopPropagation();
+      const subjectId = toggle.getAttribute("data-subject-menu-toggle");
+      const menu = document.querySelector(`[data-subject-menu="${subjectId}"]`);
+      const wasOpen = menu && !menu.hidden;
+      closeAllSubjectCardMenus();
+      if (menu && !wasOpen) {
+        menu.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+
+    const actionBtn = event.target.closest("[data-subject-action]");
+    if (actionBtn) {
+      event.preventDefault();
+      closeAllSubjectCardMenus();
+      const action = actionBtn.getAttribute("data-subject-action");
+      const subjectId = actionBtn.getAttribute("data-subject-id");
+      const subjectName = actionBtn.getAttribute("data-subject-name") || "";
+      if (!subjectId || !action) return;
+      const ok = await confirmSubjectEnrollmentAction(subjectName, action);
+      if (!ok) return;
+      try {
+        await patchStudentSubjectEnrollment(subjectId, action);
+        showToast(SUBJECT_ACTION_TOASTS[action] || "Subject updated.", "success");
+        if (document.getElementById("archived-subjects-root")) {
+          await renderStudentArchivedPage();
+        } else {
+          await renderSubjectsPage();
+        }
+      } catch (err) {
+        showToast(err.message || "Could not update subject.", "error");
+      }
+      return;
+    }
+
+    if (!event.target.closest(".subject-card-menu-wrap")) {
+      closeAllSubjectCardMenus();
+    }
+  });
+}
+
 function setupSubjectsPage() {
   console.log("PAGE INIT RUNNING: setupSubjectsPage() called");
   hydrateStudentSidebarChip();
@@ -6059,54 +6356,7 @@ function setupSubjectsPage() {
     renderSubjectsPage();
   });
 
-  if (!window.__subjectsPageMenuBound) {
-    window.__subjectsPageMenuBound = true;
-    document.addEventListener("click", async (event) => {
-      const toggle = event.target.closest("[data-subject-menu-toggle]");
-      if (toggle) {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectId = toggle.getAttribute("data-subject-menu-toggle");
-        const menu = document.querySelector(`[data-subject-menu="${subjectId}"]`);
-        const wasOpen = menu && !menu.hidden;
-        closeAllSubjectCardMenus();
-        if (menu && !wasOpen) {
-          menu.hidden = false;
-          toggle.setAttribute("aria-expanded", "true");
-        }
-        return;
-      }
-
-      const actionBtn = event.target.closest("[data-subject-action]");
-      if (actionBtn) {
-        event.preventDefault();
-        closeAllSubjectCardMenus();
-        const action = actionBtn.getAttribute("data-subject-action");
-        const subjectId = actionBtn.getAttribute("data-subject-id");
-        const subjectName = actionBtn.getAttribute("data-subject-name") || "";
-        if (!subjectId || !action) return;
-        const ok = await confirmSubjectEnrollmentAction(subjectName, action);
-        if (!ok) return;
-        try {
-          await patchStudentSubjectEnrollment(subjectId, action);
-          showToast(
-            action === "archive"
-              ? "Subject archived. It stays in My subjects."
-              : "Unenrolled. View it under Archived in the sidebar.",
-            "success"
-          );
-          await renderSubjectsPage();
-        } catch (err) {
-          showToast(err.message || "Could not update subject.", "error");
-        }
-        return;
-      }
-
-      if (!event.target.closest(".subject-card-menu-wrap")) {
-        closeAllSubjectCardMenus();
-      }
-    });
-  }
+  bindSubjectCardMenus();
 
   void renderSubjectsPage();
 }
@@ -6152,7 +6402,7 @@ function buildArchivedSubjectBlockHtml(subject, lessons) {
   const canOpen = status === "archived";
   const sid = String(subject.id);
   const subjectLessons = lessons.filter((l) => String(l.subject_id || "") === sid);
-  const cardHtml = buildSubjectCardHtml(subject, { showMenu: false, archivedView: true });
+  const cardHtml = buildSubjectCardHtml(subject, { showMenu: canOpen, archivedView: true });
   const lessonsHtml =
     subjectLessons.length > 0
       ? subjectLessons
@@ -6241,6 +6491,7 @@ function setupStudentArchivedPage() {
   initRoleAwareDashboardSidebar();
   void hydrateSidebarProfileFromDatabase();
 
+  bindSubjectCardMenus();
   document.getElementById("archived-refresh-btn")?.addEventListener("click", () => {
     void renderStudentArchivedPage();
   });
@@ -9920,8 +10171,9 @@ function recordStudentHistory(type, payload) {
   const list = readStudentHistoryList(type);
 
   // For reviewer/activity, avoid spam by collapsing repeat opens of the same
-  // lesson within a 5-minute window into the most recent entry.
-  if (type !== "quiz" && list.length > 0) {
+  // lesson within a 5-minute window into the most recent entry. Quizzes and
+  // battles are real results, so every one is kept.
+  if (type !== "quiz" && type !== "battle" && list.length > 0) {
     const last = list[0];
     const sameLesson = String(last.lesson_id || "") === String(payload?.lesson_id || "");
     const lastTime = last.timestamp ? new Date(last.timestamp).getTime() : 0;
@@ -9978,8 +10230,15 @@ function buildHistoryItemHtml(type, item, index) {
   } else if (type === "battle") {
     const won = String(item.outcome || "").toLowerCase() === "win";
     const correct = Number(item.correct_answers || 0);
+    const points = Number(item.score ?? item.total_damage ?? 0);
+    const extras = [`${points} pts`];
+    if (item.difficulty) extras.unshift(String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1));
+    if (item.exp_gained != null) extras.push(`+${Number(item.exp_gained)} EXP`);
+    if (item.level_after != null) extras.push(`Lv ${Number(item.level_after)}`);
     iconHtml = '<i class="fa-solid fa-gamepad" aria-hidden="true"></i>';
-    summary = `<span class="history-summary-pill">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct)</span></span>`;
+    summary = `<span class="history-summary-pill">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct · ${escapeHtml(extras.join(" · "))})</span></span>${
+      item.new_best ? ' <span class="history-summary-pill is-ok">New best</span>' : ""
+    }${item.leveled_up ? ' <span class="history-summary-pill is-ok">Level up</span>' : ""}`;
   }
 
   return `
@@ -10249,6 +10508,24 @@ function renderBattleDetailIntoModal(item) {
   const won = String(item.outcome || "").toLowerCase() === "win";
   const correct = Number(item.correct_answers || 0);
   const damage = Number(item.total_damage || 0);
+  const points = Number(item.score ?? item.total_damage ?? 0);
+  const progressRows = [
+    item.difficulty ? ["Difficulty", String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1)] : null,
+    ["Points", String(points)],
+    item.exp_gained != null ? ["EXP earned", `+${Number(item.exp_gained)}`] : null,
+    item.level_after != null ? ["Arena level after battle", String(Number(item.level_after))] : null,
+    item.new_best ? ["Personal best", "New best score!"] : null,
+    item.leveled_up ? ["Level up", `Reached Level ${Number(item.level_after)}`] : null,
+  ]
+    .filter(Boolean)
+    .map(
+      ([label, value]) => `
+        <div class="battle-info-row">
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(value)}</dd>
+        </div>`,
+    )
+    .join("");
   setHistoryDetailBody(`
     <article class="history-battle-detail">
       <p class="history-summary-pill ${won ? "is-ok" : "is-bad"}">
@@ -10264,6 +10541,7 @@ function renderBattleDetailIntoModal(item) {
           <dt>Total damage dealt</dt>
           <dd>${damage}</dd>
         </div>
+        ${progressRows}
       </dl>
     </article>
   `);

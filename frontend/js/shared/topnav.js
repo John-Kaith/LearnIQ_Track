@@ -72,11 +72,6 @@
       if (l) l.classList.add("is-active");
       return;
     }
-    if (file === "ai-result.html" || path.endsWith("/ai-result.html")) {
-      const x = document.querySelector('[data-lms-module="teacher-app"] a[data-nav-id="ai-review"]');
-      if (x) x.classList.add("is-active");
-      return;
-    }
     if (file === "leaderboard.html" || path.endsWith("/leaderboard.html")) {
       const x = document.querySelector('[data-lms-module="teacher-app"] a[data-nav-id="ext-leaderboard"]');
       if (x) x.classList.add("is-active");

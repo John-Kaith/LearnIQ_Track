@@ -5,7 +5,7 @@ ALTER TABLE enrollments
   ADD COLUMN IF NOT EXISTS enrollment_status text NOT NULL DEFAULT 'active';
 
 COMMENT ON COLUMN enrollments.enrollment_status IS
-  'active = default; archived = still on My subjects; unenrolled = hidden from My subjects, listed under Archived';
+  'active = default (My subjects); archived = moved to Archived, can be unarchived; unenrolled = listed under Archived, rejoin with class code';
 
 DO $$
 BEGIN

@@ -107,7 +107,8 @@
       return {};
     });
     if (!response.ok) {
-      var err = result.error;
+      // FastAPI's own errors (404/405/422) use "detail" instead of "error".
+      var err = result.error != null ? result.error : result.detail;
       var msg =
         typeof err === "string"
           ? err

@@ -215,6 +215,21 @@
   outline-offset: 2px;
 }
 
+/* While the Join a class modal is open the "+" rotates into an "×" (click closes it). */
+.dashboard-shell > .sidebar .sidebar-join-btn i {
+  transition: transform 0.2s ease;
+}
+
+.dashboard-shell > .sidebar .sidebar-join-btn.is-open i {
+  transform: rotate(45deg);
+}
+
+.dashboard-shell > .sidebar .sidebar-join-btn.is-open {
+  position: relative;
+  z-index: 1;
+  border-color: var(--lq-border-accent-soft);
+}
+
 /* ── Navigation links ── */
 .dashboard-shell > .sidebar .side-links {
   flex: 1 1 auto;
@@ -424,6 +439,18 @@ html[data-theme="dark"] .dashboard-shell > .sidebar .theme-toggle-btn:hover {
   background: rgba(99, 102, 241, 0.14);
 }
 
+/* "Join a class" (+) button: white background hid the light icon in dark mode */
+html[data-theme="dark"] .dashboard-shell > .sidebar .sidebar-join-btn {
+  background: rgba(8, 15, 29, 0.65);
+  box-shadow: var(--lq-glow-inset);
+  color: var(--lq-text-primary);
+}
+
+html[data-theme="dark"] .dashboard-shell > .sidebar .sidebar-join-btn:hover,
+html[data-theme="dark"] .dashboard-shell > .sidebar .sidebar-join-btn:focus-visible {
+  background: rgba(99, 102, 241, 0.14);
+}
+
 html[data-theme="dark"] .dashboard-shell > .sidebar .side-links a:hover {
   background: rgba(99, 102, 241, 0.08);
   border-color: rgba(99, 102, 241, 0.12);
@@ -497,6 +524,10 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
   display: none;
 }
 
+.sidebar-mobile-close {
+  display: none;
+}
+
 @media (max-width: 1080px) {
   .dashboard-shell.container,
   .page-shell.container {
@@ -527,6 +558,50 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
   }
 
+  /* Hidden while the drawer is open so it doesn't cover the logo. */
+  .sidebar-mobile-toggle.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* "‹" close tab, vertically centered on the drawer's right edge. */
+  .sidebar-mobile-close {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    top: 50%;
+    left: min(85vw, 320px);
+    z-index: 210; /* above the drawer (200) and backdrop (190) */
+    width: 30px;
+    height: 64px;
+    padding: 0;
+    border: 1px solid var(--lq-border-accent);
+    border-left: none;
+    border-radius: 0 12px 12px 0;
+    background: var(--panel, #fff);
+    color: var(--lq-text-secondary, #57534e);
+    font-size: 0.95rem;
+    box-shadow: 6px 0 16px rgba(15, 23, 42, 0.18);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-100%, -50%);
+    transition:
+      opacity 0.2s ease,
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .sidebar-mobile-close.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(0, -50%);
+  }
+
+  html[data-theme="dark"] .sidebar-mobile-close {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
   .sidebar-mobile-backdrop {
     display: block;
     position: fixed;
@@ -553,6 +628,7 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
     left: 0;
     width: min(85vw, 320px);
     height: 100vh;
+    height: 100dvh; /* phones: exclude the browser toolbars so the profile card isn't cut off */
     max-height: none;
     margin-bottom: 0;
     transform: translateX(-100%);

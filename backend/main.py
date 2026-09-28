@@ -1243,7 +1243,12 @@ def list_student_enrolled_subjects_endpoint(
     if not student_uuid:
         return JSONResponse({"error": "Student not found"}, status_code=404)
     try:
-        subjects = db_supabase.list_enrolled_subjects_for_student(student_uuid, period_id)
+        # Archived subjects live only on the Archived page (they can be unarchived there).
+        subjects = db_supabase.list_enrolled_subjects_for_student(
+            student_uuid,
+            period_id,
+            statuses=(db_supabase.ENROLLMENT_STATUS_ACTIVE,),
+        )
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -1281,7 +1286,7 @@ async def patch_student_subject_enrollment_endpoint(
     body: dict = Body(...),
     authorization: str | None = Header(default=None),
 ):
-    """Archive or unenroll a student from a subject (updates Supabase enrollments)."""
+    """Archive, unarchive, or unenroll a student from a subject (updates Supabase enrollments)."""
     err = require_supabase()
     if err is not None:
         return err
@@ -1292,9 +1297,9 @@ async def patch_student_subject_enrollment_endpoint(
     action = str(payload.get("action") or "").strip().lower()
     if not student_id_number:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
-    if action not in ("archive", "unenroll"):
+    if action not in ("archive", "unarchive", "unenroll"):
         return JSONResponse(
-            {"error": "action must be archive or unenroll"},
+            {"error": "action must be archive, unarchive, or unenroll"},
             status_code=400,
         )
     student_uuid = db_supabase.profile_uuid_for_id_number(student_id_number)
@@ -1304,17 +1309,23 @@ async def patch_student_subject_enrollment_endpoint(
     if not period_id:
         cur = db_supabase.get_current_grading_period() or {}
         period_id = cur.get("id")
-    new_status = (
-        db_supabase.ENROLLMENT_STATUS_ARCHIVED
-        if action == "archive"
-        else db_supabase.ENROLLMENT_STATUS_UNENROLLED
-    )
+    new_status = {
+        "archive": db_supabase.ENROLLMENT_STATUS_ARCHIVED,
+        "unarchive": db_supabase.ENROLLMENT_STATUS_ACTIVE,
+        "unenroll": db_supabase.ENROLLMENT_STATUS_UNENROLLED,
+    }[action]
     try:
         row = db_supabase.get_student_enrollment_row(
             student_uuid, str(subject_id), period_id
         )
         if not row:
             return JSONResponse({"error": "Enrollment not found"}, status_code=404)
+        if (
+            action == "unarchive"
+            and db_supabase.enrollment_status_from_row(row) != db_supabase.ENROLLMENT_STATUS_ARCHIVED
+        ):
+            # Unenrolled students rejoin with the class code, not by unarchiving.
+            return JSONResponse({"error": "Only archived subjects can be unarchived."}, status_code=400)
         updated = db_supabase.update_student_enrollment_status(
             student_uuid, str(subject_id), period_id, new_status
         )
@@ -2623,9 +2634,38 @@ async def generate_question(body: dict, authorization: str | None = Header(defau
     return {"questions": questions_data, "count": len(questions_data)}
 
 
-def normalize_battle_questions(questions: object) -> list[dict[str, str]]:
+BATTLE_DIFFICULTIES = ("normal", "medium", "hard")
+
+# How each AI Battle Arena difficulty shapes its questions (see generate_battle_questions).
+BATTLE_DIFFICULTY_GUIDE = {
+    "normal": (
+        "DIFFICULTY: NORMAL. Straightforward recall. Ask for the main key terms of the lesson using "
+        "clear definition-style questions (\"What word means...?\"). Prefer common, shorter answers "
+        "(4 to 8 letters)."
+    ),
+    "medium": (
+        "DIFFICULTY: MEDIUM. Understanding and application. Describe a situation, example, purpose or "
+        "effect from the lesson and ask which term fits, not a plain definition. Use less obvious "
+        "terms (5 to 10 letters)."
+    ),
+    "hard": (
+        "DIFFICULTY: HARD. Analysis and inference. Ask about relationships, causes, comparisons or the "
+        "most specific/technical term in the lesson; the answer should require real understanding, not "
+        "just recognising a definition. Prefer longer, more specific answers (6 to 12 letters)."
+    ),
+}
+
+
+def normalize_battle_difficulty(value: object) -> str:
+    d = str(value or "normal").strip().lower()
+    return d if d in BATTLE_DIFFICULTIES else "normal"
+
+
+def normalize_battle_questions(questions: object, difficulty: str = "normal") -> list[dict[str, str]]:
     if not isinstance(questions, list):
         return []
+    difficulty = normalize_battle_difficulty(difficulty)
+    max_len = 12 if difficulty == "hard" else 10
     seen_answers: set[str] = set()
     normalized: list[dict[str, str]] = []
     for entry in questions:
@@ -2637,7 +2677,7 @@ def normalize_battle_questions(questions: object) -> list[dict[str, str]]:
         if len(question_text) > 220:
             question_text = question_text[:217].rstrip() + "..."
         answer = re.sub(r"[^a-z]", "", str(entry.get("answer") or "").strip().lower())
-        if len(answer) < 4 or len(answer) > 10:
+        if len(answer) < 4 or len(answer) > max_len:
             continue
         if answer in seen_answers:
             continue
@@ -2645,7 +2685,10 @@ def normalize_battle_questions(questions: object) -> list[dict[str, str]]:
         meaning = str(entry.get("meaning") or "").strip()
         if len(meaning) > 140:
             meaning = meaning[:137].rstrip() + "..."
-        normalized.append({"question": question_text, "answer": answer, "meaning": meaning})
+        item = {"question": question_text, "answer": answer, "meaning": meaning}
+        if difficulty != "normal":
+            item["difficulty"] = difficulty  # untagged = normal (older saved questions)
+        normalized.append(item)
     return normalized[:12]
 
 
@@ -2667,8 +2710,10 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
     if not lesson:
         return JSONResponse({"error": "File not found"}, status_code=404)
 
+    difficulty = normalize_battle_difficulty(body.get("difficulty"))
+    cooldown_kind = "battle_questions" if difficulty == "normal" else f"battle_questions_{difficulty}"
     if not body.get("skip_cooldown"):
-        cd_err = check_ai_generation_cooldown("battle_questions", str(file_id))
+        cd_err = check_ai_generation_cooldown(cooldown_kind, str(file_id))
         if cd_err is not None:
             return cd_err
 
@@ -2685,10 +2730,12 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
         "single-word answer.\n"
         "Rules:\n"
         "- Each question must be answerable with exactly ONE word — no phrases, no multi-word answers.\n"
-        "- The answer word must be letters only (no spaces/punctuation/numbers), 4 to 10 letters long.\n"
+        "- The answer word must be letters only (no spaces/punctuation/numbers), "
+        f"4 to {12 if difficulty == 'hard' else 10} letters long.\n"
         "- Base every question only on facts, terms, or concepts that actually appear in the lesson text.\n"
         "- Keep each question under 20 words and unambiguous.\n"
         "- Also include a one-sentence meaning/explanation of the answer term.\n"
+        f"{BATTLE_DIFFICULTY_GUIDE[difficulty]}\n"
         "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences) with this schema:\n"
         '{ "questions": [ { "question": "...", "answer": "...", "meaning": "..." } ] }\n\n'
         "LESSON TEXT:\n"
@@ -2711,7 +2758,10 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
 
     try:
         parsed = parse_model_json(raw_output)
-        questions = normalize_battle_questions(parsed.get("questions") if isinstance(parsed, dict) else None)
+        questions = normalize_battle_questions(
+            parsed.get("questions") if isinstance(parsed, dict) else None,
+            difficulty,
+        )
     except (json.JSONDecodeError, ValueError):
         return JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=502)
 
@@ -2719,14 +2769,14 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
         return JSONResponse({"error": "AI could not build enough usable questions from this lesson."}, status_code=502)
 
     try:
-        db_supabase.set_battle_questions(str(file_id), questions)
+        db_supabase.replace_battle_questions_for_difficulty(str(file_id), difficulty, questions)
     except Exception as e:
         print("AI GENERATION ERROR (db write battle_questions):", str(e))
         return JSONResponse({"error": str(e)}, status_code=502)
 
     if not body.get("skip_cooldown"):
-        start_ai_generation_cooldown("battle_questions", str(file_id))
-    return {"questions": questions}
+        start_ai_generation_cooldown(cooldown_kind, str(file_id))
+    return {"questions": questions, "difficulty": difficulty}
 
 
 @app.post("/generate-activities")
@@ -2981,6 +3031,27 @@ def student_learning_history_endpoint(
                 "battle": len(data.get("battle") or []),
             },
         }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.get("/student/battle-stats")
+def student_battle_stats_endpoint(
+    student_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
+):
+    """AI Battle Arena level / EXP / personal best, derived from saved battle history."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
+    try:
+        return {"student_id_number": sid, **db_supabase.get_student_battle_stats(sid)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -3637,6 +3708,26 @@ async def journals_create(body: dict, authorization: str | None = Header(default
         if not text_body:
             return JSONResponse({"error": "body (or journal_text) is required."}, status_code=400)
         return db_supabase.insert_journal(sid, text_body, entry_date=body.get("entry_date"))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
+@app.delete("/journals/{journal_id}")
+def journals_delete(journal_id: str, authorization: str | None = Header(default=None)):
+    """Student unsubmits (deletes) one of their own journal entries."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid, bad = resolve_student_id_number_or_403({}, authorization)
+    if bad is not None:
+        return bad
+    try:
+        db_supabase.delete_journal_for_student(journal_id, sid)
+        return {"ok": True}
+    except PermissionError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
