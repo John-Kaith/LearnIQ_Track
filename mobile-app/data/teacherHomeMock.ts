@@ -34,3 +34,4 @@ export const teacherHomeMock = {
     { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline', color: '#34d399' },
   ] satisfies TeacherQuickAction[],
 };
+// .

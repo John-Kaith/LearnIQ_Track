@@ -6,3 +6,4 @@ alter table if exists public.lessons
 
 comment on column public.lessons.file_base64 is
   'Standard base64 of the uploaded lesson file. When set, storage_path / uploads/lessons may be empty.';
+-- .

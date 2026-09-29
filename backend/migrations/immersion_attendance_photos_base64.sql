@@ -6,3 +6,4 @@ alter table if exists public.attendance_logs
   add column if not exists time_out_photo_base64 text;
 
 NOTIFY pgrst, 'reload schema';
+-- .

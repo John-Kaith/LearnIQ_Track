@@ -87,3 +87,4 @@ const styles = StyleSheet.create({
   badgeTextSubmitted: { color: '#22c55e' },
   badgeTextMissing: { color: Colors.textMuted },
 });
+// .

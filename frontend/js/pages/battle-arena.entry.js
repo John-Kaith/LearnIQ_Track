@@ -1960,3 +1960,4 @@
 
   window.setupBattleArenaPage = setupBattleArenaPage;
 })();
+// .

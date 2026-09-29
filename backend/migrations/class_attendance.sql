@@ -38,3 +38,4 @@ create index if not exists class_attendance_records_session_idx
   on public.class_attendance_records (session_id, time_in desc);
 
 notify pgrst, 'reload schema';
+-- .

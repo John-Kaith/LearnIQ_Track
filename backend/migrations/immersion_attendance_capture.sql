@@ -9,3 +9,4 @@ alter table if exists public.attendance_logs
   add column if not exists capture_timestamp timestamptz;
 
 NOTIFY pgrst, 'reload schema';
+-- .

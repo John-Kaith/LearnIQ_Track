@@ -67,3 +67,4 @@ fi
 echo ""
 echo "Backend and tunnel are running. Press Ctrl+C to stop both."
 wait
+# .

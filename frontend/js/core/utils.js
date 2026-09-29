@@ -32,3 +32,4 @@ function animateProgressBars() {
     bar.style.width = width;
   });
 }
+// .

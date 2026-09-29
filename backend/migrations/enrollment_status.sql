@@ -20,3 +20,4 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_enrollments_student_status
   ON enrollments (student_id, grading_period_id, enrollment_status);
+-- .

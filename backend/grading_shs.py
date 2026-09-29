@@ -74,3 +74,4 @@ def resolve_component_scores(
         float(pt) if pt is not None else auto_pt,
         float(qa) if qa is not None else auto_qa,
     )
+# .

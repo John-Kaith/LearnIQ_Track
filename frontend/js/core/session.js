@@ -98,3 +98,4 @@ function hydrateImmersionSidebarUserChip() {
   }
   if (trackEl && u.id_number) trackEl.textContent = `ID ${u.id_number}`;
 }
+// .

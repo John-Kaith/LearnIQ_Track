@@ -125,3 +125,4 @@ alter table if exists public.profiles
   add column if not exists name_suffix text,
   add column if not exists grade_level text,
   add column if not exists strand text;
+-- .

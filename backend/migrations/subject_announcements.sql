@@ -13,3 +13,4 @@ create table if not exists public.subject_announcements (
 
 create index if not exists subject_announcements_subject_id_idx
   on public.subject_announcements (subject_id, created_at desc);
+-- .

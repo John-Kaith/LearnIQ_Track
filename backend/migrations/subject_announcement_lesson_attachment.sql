@@ -4,3 +4,4 @@
 
 alter table public.subject_announcements
   add column if not exists lesson_id uuid references public.lessons(id) on delete set null;
+-- .

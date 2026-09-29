@@ -4,3 +4,4 @@
 
 alter table if exists public.lesson_content
   add column if not exists battle_questions jsonb;
+-- .

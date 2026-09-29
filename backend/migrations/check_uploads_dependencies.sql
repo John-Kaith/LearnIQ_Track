@@ -18,3 +18,4 @@ select count(*)::int as immersion_time_out_path_only
 from public.attendance_logs
 where coalesce(trim(time_out_photo_path), '') <> ''
   and coalesce(trim(time_out_photo_base64), '') = '';
+-- .

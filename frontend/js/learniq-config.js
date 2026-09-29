@@ -5,3 +5,4 @@
 window.LEARNIQ_CONFIG = {
   apiBase: "https://api.learniqtrack.site",
 };
+// .

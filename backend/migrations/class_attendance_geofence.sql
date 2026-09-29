@@ -16,3 +16,4 @@ alter table public.class_attendance_records
   add column if not exists location_verified boolean;
 
 notify pgrst, 'reload schema';
+-- .

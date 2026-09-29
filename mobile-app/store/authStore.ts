@@ -83,3 +83,4 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // Wire apiClient's Authorization header to whatever user is currently signed in,
 // without apiClient importing this store directly (avoids an import cycle).
 setAccessTokenGetter(() => useAuthStore.getState().user?.access_token ?? null);
+// .

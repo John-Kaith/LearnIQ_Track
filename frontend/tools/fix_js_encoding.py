@@ -26,3 +26,4 @@ for p in root.rglob("*.js"):
     if t != o:
         p.write_text(t, encoding="utf-8")
         print("fixed", p.relative_to(root))
+# .

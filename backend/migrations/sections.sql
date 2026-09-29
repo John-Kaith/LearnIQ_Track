@@ -17,3 +17,4 @@ create index if not exists sections_grade_strand_idx
   on public.sections (grade_level, strand);
 
 comment on table public.sections is 'Admin-managed fixed list of SHS sections, scoped to grade level + strand.';
+-- .

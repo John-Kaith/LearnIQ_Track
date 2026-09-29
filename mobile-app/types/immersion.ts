@@ -24,3 +24,4 @@ export type TodayAttendanceState = {
   totalHours: number;
   durationLabel: string;
 };
+// .

@@ -47,3 +47,4 @@ export const profileSettingsItems = [
     subtitle: 'App information, support and privacy policy',
   },
 ];
+// .

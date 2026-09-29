@@ -3,3 +3,4 @@ alter table if exists public.profiles
   alter column full_name drop not null;
 
 NOTIFY pgrst, 'reload schema';
+-- .

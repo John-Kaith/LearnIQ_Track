@@ -12,3 +12,4 @@ alter table if exists public.profiles
 -- Then run profiles_drop_full_name_column.sql to remove full_name.
 
 NOTIFY pgrst, 'reload schema';
+-- .
