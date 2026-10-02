@@ -1006,7 +1006,7 @@ function initMobileSidebarDrawer() {
   const sidebar = document.querySelector(
     ".dashboard-shell > .sidebar.lq-sidebar, .dashboard-shell > .sidebar, .dashboard-shell > aside.sidebar"
   );
-  if (!sidebar || document.querySelector(".sidebar-mobile-toggle")) return;
+  if (!sidebar || document.querySelector(".sidebar-mobile-topbar")) return;
 
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
@@ -1018,16 +1018,29 @@ function initMobileSidebarDrawer() {
   const backdrop = document.createElement("div");
   backdrop.className = "sidebar-mobile-backdrop";
 
-  // "‹" tab on the middle of the open drawer's right edge — closes it. The
+  // "›" tab on the middle of the open drawer's left edge — closes it. The
   // hamburger hides while the drawer is open so it no longer covers the logo.
   const closeTab = document.createElement("button");
   closeTab.type = "button";
   closeTab.className = "sidebar-mobile-close";
   closeTab.setAttribute("aria-label", "Close menu");
-  closeTab.innerHTML = '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i>';
+  closeTab.innerHTML = '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>';
+
+  // Mobile top bar: LearnIQ logo on the left, hamburger in the right corner,
+  // so the brand stays visible while the drawer is closed. Logo clicks are
+  // handled by the delegated `.brand` listener in theme-toggle.js.
+  const topbar = document.createElement("div");
+  topbar.className = "sidebar-mobile-topbar";
+  const brandLink = document.createElement("a");
+  brandLink.className = "brand sidebar-mobile-brand";
+  brandLink.href = sidebar.querySelector(".brand")?.getAttribute("href") || "#";
+  brandLink.innerHTML =
+    '<span class="brand-mark" aria-hidden="true">LQ</span><strong>LearnIQ Track</strong>';
+  topbar.appendChild(brandLink);
+  topbar.appendChild(toggleBtn);
 
   document.body.appendChild(backdrop);
-  document.body.appendChild(toggleBtn);
+  document.body.appendChild(topbar);
   document.body.appendChild(closeTab);
 
   function openDrawer() {
@@ -1136,7 +1149,7 @@ const STUDENT_PATH_TO_SIDEBAR_ID = {
   "history.html": "history",
   "module-selection.html": "module",
   "student-settings.html": "settings",
-  "student-profile.html": "settings",
+  "student-profile.html": "profile",
 };
 
 function getDashboardSidebarActivePageId() {
@@ -1267,8 +1280,6 @@ function refreshDashboardSidebarForSession() {
 
 const ADMIN_SIDEBAR_ITEMS = [
   { id: "dashboard", href: "admin-approval.html", icon: "fa-gauge", label: "Dashboard" },
-  { id: "student-approvals", href: "admin-student-approvals.html", icon: "fa-user-graduate", label: "Students" },
-  { id: "teacher-approvals", href: "admin-teacher-approvals.html", icon: "fa-chalkboard-user", label: "Teachers" },
   {
     id: "teacher-registration",
     href: "admin-teacher-registration.html",
@@ -2950,6 +2961,92 @@ function formatAdminActivityTime(iso) {
   }
 }
 
+/**
+ * "Show more" for long lists/tables: shows the first `limit` items; clicking
+ * Show more reveals everything inside a scroll box (Show less collapses it
+ * again). Pass `limit: "fit"` to show as many items as fit in the element's
+ * current height — the button then only appears when the list overflows.
+ * Safe to call after every re-render.
+ */
+function applyShowMore(scrollEl, items, limit) {
+  if (!scrollEl) return;
+  const list = Array.from(items || []);
+  const fit = limit === "fit";
+  let btn = scrollEl.nextElementSibling;
+  if (!btn || !btn.classList.contains("lq-show-more-btn")) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary lq-show-more-btn";
+    scrollEl.insertAdjacentElement("afterend", btn);
+  }
+  scrollEl.classList.toggle("lq-show-more-fit", fit);
+
+  let shown = fit ? list.length : limit;
+
+  const setExpanded = (expanded) => {
+    list.forEach((el, i) => {
+      el.hidden = !expanded && i >= shown;
+    });
+    scrollEl.classList.toggle("lq-show-more-scroll", expanded);
+    if (!expanded) scrollEl.scrollTop = 0;
+    btn.innerHTML = expanded
+      ? '<i class="fa-solid fa-chevron-up" aria-hidden="true"></i> Show less'
+      : `<i class="fa-solid fa-chevron-down" aria-hidden="true"></i> Show more (${list.length - shown})`;
+    btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+  };
+
+  // How many leading items fit fully inside scrollEl's visible height.
+  const countFitting = () => {
+    const top = scrollEl.getBoundingClientRect().top;
+    const avail = scrollEl.clientHeight;
+    let n = 0;
+    for (const el of list) {
+      if (el.getBoundingClientRect().bottom - top > avail + 1) break;
+      n += 1;
+    }
+    return n;
+  };
+
+  const layout = () => {
+    if (fit) {
+      list.forEach((el) => (el.hidden = false));
+      scrollEl.classList.remove("lq-show-more-scroll");
+      btn.hidden = true;
+      shown = countFitting();
+      if (shown < list.length) {
+        btn.hidden = false; // button takes space, so re-measure
+        shown = Math.max(1, countFitting());
+      }
+    }
+    if (shown >= list.length) {
+      list.forEach((el) => (el.hidden = false));
+      scrollEl.classList.remove("lq-show-more-scroll");
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = false;
+    setExpanded(false);
+  };
+
+  btn.onclick = () => setExpanded(btn.getAttribute("aria-expanded") !== "true");
+  layout();
+
+  if (fit) {
+    // Re-fit when the card's size changes (window resize, other column loads).
+    scrollEl._showMoreRelayout = () => {
+      if (btn.getAttribute("aria-expanded") !== "true") layout();
+    };
+    if (!scrollEl._showMoreObserver && typeof ResizeObserver === "function") {
+      let raf = 0;
+      scrollEl._showMoreObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => scrollEl._showMoreRelayout?.());
+      });
+      scrollEl._showMoreObserver.observe(scrollEl.parentElement || scrollEl);
+    }
+  }
+}
+
 async function refreshAdminRecentActivity() {
   const list = document.getElementById("recent-activity-list");
   if (!list) return;
@@ -2978,6 +3075,7 @@ async function refreshAdminRecentActivity() {
       `
       )
       .join("");
+    applyShowMore(list, list.children, "fit");
   } catch (e) {
     console.error("refreshAdminRecentActivity:", e);
     list.innerHTML =
@@ -3046,6 +3144,45 @@ function renderSystemStatus() {
       setBadge(3, "Unknown", false);
     }
   })();
+}
+
+/**
+ * Full-screen "Welcome back" card shown after a successful login (all roles)
+ * while the redirect runs. The progress bar fills over `durationMs`.
+ */
+function showLoginWelcome(user, durationMs) {
+  document.getElementById("login-welcome-overlay")?.remove();
+  const role = String(user?.role || "student").trim().toLowerCase();
+  const roleInfo =
+    role === "admin"
+      ? { label: "Admin", icon: "fa-user-shield", dest: "the admin dashboard" }
+      : role === "teacher"
+      ? { label: "Teacher", icon: "fa-chalkboard-user", dest: "your teacher dashboard" }
+      : { label: "Student", icon: "fa-user-graduate", dest: "your learning modules" };
+  const fullName = getProfileDisplayName(user) || "";
+  const firstName = String(user?.first_name || "").trim() || fullName.split(/\s+/)[0] || roleInfo.label;
+
+  const overlay = document.createElement("div");
+  overlay.id = "login-welcome-overlay";
+  overlay.className = "login-welcome-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.style.setProperty("--login-welcome-duration", `${durationMs}ms`);
+  overlay.innerHTML = `
+    <div class="login-welcome-card">
+      <div class="login-welcome-check" aria-hidden="true">
+        <i class="fa-solid fa-check"></i>
+      </div>
+      <span class="login-welcome-role">
+        <i class="fa-solid ${roleInfo.icon}" aria-hidden="true"></i> ${escapeHtml(roleInfo.label)}
+      </span>
+      <h2 class="login-welcome-title">Welcome back, ${escapeHtml(firstName)}!</h2>
+      <p class="login-welcome-sub">Taking you to ${escapeHtml(roleInfo.dest)}…</p>
+      <div class="login-welcome-progress" aria-hidden="true"><span></span></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-visible"));
 }
 
 function showAuthMessage(message, element, type = "info") {
@@ -3598,19 +3735,12 @@ function setupLoginPage() {
         throw new Error("Invalid response format: missing user data");
       }
       
-      const successMessage =
-        user.role === "admin"
-          ? "Welcome Admin. Redirecting to approval dashboard..."
-          : user.role === "teacher"
-          ? "Welcome Teacher. Redirecting to teacher dashboard..."
-          : "Login successful. Redirecting to student dashboard...";
-      
       console.log("SAVING SESSION:", user);
       setCurrentUserSession(user);
       console.log("SESSION CHECK AFTER SAVE:", sessionStorage.getItem(authSessionKey));
-      showAuthMessage(successMessage, loginMessage, "success");
-      showToast(successMessage, "success");
-      
+      if (loginMessage) loginMessage.style.display = "none";
+      const redirectDelayMs = 1800;
+      showLoginWelcome(user, redirectDelayMs);
       setTimeout(() => {
         console.log("REDIRECT BLOCK REACHED");
         console.log("USER ROLE:", user.role);
@@ -3634,7 +3764,7 @@ function setupLoginPage() {
         } else {
           window.location.href = "login.html";
         }
-      }, 1000);
+      }, redirectDelayMs);
     } catch (error) {
       const errorMsg = error.message || "Login failed. Please try again.";
       if (loginMessage) {
@@ -3807,7 +3937,7 @@ async function renderAdminTable(filter = "") {
   try {
     const response = await fetch(apiUrl("/users"), { headers: adminAuthHeaders() });
     if (!response.ok) {
-      tableBody.innerHTML = `<tr><td colspan="5">Failed to load users from server.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="6">Failed to load users from server.</td></tr>`;
       return;
     }
     
@@ -3827,15 +3957,21 @@ async function renderAdminTable(filter = "") {
             <td>${escapeHtml(user.id_number || "N/A")}</td>
             <td>${escapeHtml(user.email || "N/A")}</td>
             <td>${escapeHtml(user.role || "N/A")}</td>
+            <td>${
+              String(user.role || "").trim().toLowerCase() === "student"
+                ? escapeHtml(user.strand || "—")
+                : "—"
+            }</td>
             <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}</td>
           </tr>
         `
       );
 
-    tableBody.innerHTML = rows.join("") || `<tr><td colspan="5">No matching users found.</td></tr>`;
+    tableBody.innerHTML = rows.join("") || `<tr><td colspan="6">No matching users found.</td></tr>`;
+    applyShowMore(tableBody.closest(".table-overflow"), rows.length ? tableBody.rows : [], 8);
   } catch (error) {
     console.error("Failed to render admin table:", error);
-    tableBody.innerHTML = `<tr><td colspan="5">Error loading user data.</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="6">Error loading user data.</td></tr>`;
   }
 }
 
@@ -4275,6 +4411,7 @@ function renderAdminUsersTable() {
       u.id_number,
       u.email,
       u.role,
+      u.strand,
     ]
       .map((v) => String(v || "").toLowerCase())
       .join(" ");
@@ -4285,7 +4422,7 @@ function renderAdminUsersTable() {
     const msg = adminUsersCache.length
       ? "No users match the current filter."
       : "No users found.";
-    tableBody.innerHTML = `<tr><td colspan="5">${msg}</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="6">${msg}</td></tr>`;
     return;
   }
 
@@ -4297,6 +4434,11 @@ function renderAdminUsersTable() {
         <td>${escapeHtml(user.id_number || 'N/A')}</td>
         <td>${escapeHtml(user.email || 'N/A')}</td>
         <td>${escapeHtml(user.role || 'N/A')}</td>
+        <td>${
+          String(user.role || "").trim().toLowerCase() === "student"
+            ? escapeHtml(user.strand || "—")
+            : "—"
+        }</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
       </tr>
     `

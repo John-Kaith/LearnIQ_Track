@@ -73,6 +73,7 @@
     const name = (typeof getProfileDisplayName === "function" ? getProfileDisplayName(session) : session.display_name) || "—";
     const idNumber = session.id_number || "—";
     const email = session.email || "—";
+    const showBackendCard = String(session.role || "").trim().toLowerCase() !== "student";
     const role = (session.role || "—").replace(/^./, (c) => c.toUpperCase());
     return `
       <section class="cs-panel">
@@ -131,8 +132,8 @@
           </div>
         </article>
 
-        <!-- Backend (Ubuntu API) -->
-        <article class="cs-card">
+        <!-- Backend (Ubuntu API) — hidden for students -->
+        ${showBackendCard ? `<article class="cs-card">
           <div class="cs-card-head">
             <h3><i class="fa-solid fa-server"></i> Backend connection</h3>
             <p class="small-note">All features use one API host — the Ubuntu laptop running FastAPI (not Windows localhost).</p>
@@ -150,7 +151,7 @@
               <i class="fa-solid fa-plug"></i> Test connection
             </button>
           </div>
-        </article>
+        </article>` : ""}
 
         <!-- Notifications -->
         <article class="cs-card">

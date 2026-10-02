@@ -777,7 +777,7 @@
     if (!previewEl || !fight) return;
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("");
     if (!word) {
-      previewEl.innerHTML = '<span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap letters to spell the answer…</span>';
+      previewEl.innerHTML = '<span class="battle-word-preview-placeholder" id="battle-word-preview-placeholder">Tap or type letters to spell the answer…</span>';
     } else {
       previewEl.textContent = word;
     }
@@ -833,22 +833,80 @@
     renderWordPreview();
   }
 
-  /** Physical Backspace key does the same, but only mid-round with nothing else open. */
-  function onBackspaceKey(e) {
-    if (e.key !== "Backspace") return;
+  /** Pick the first unused tile showing `letter` (keyboard typing). */
+  function selectTileByLetter(letter) {
+    if (!fight || !fight.grid) return false;
+    var want = String(letter).toLowerCase();
+    for (var i = 0; i < fight.grid.length; i++) {
+      if (fight.selected.indexOf(i) !== -1) continue;
+      if (String(fight.grid[i].letter).toLowerCase() === want) {
+        fight.selected.push(i);
+        playClickSound();
+        renderGrid();
+        renderWordPreview();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Brief shake on the letter grid when a typed letter isn't available. */
+  function flashGridMiss() {
+    var gridEl = document.getElementById("battle-letter-grid");
+    if (!gridEl) return;
+    gridEl.classList.remove("is-miss");
+    void gridEl.offsetWidth; // restart the animation
+    gridEl.classList.add("is-miss");
+  }
+
+  /**
+   * Physical keyboard, mid-round with nothing else open:
+   * letters/digits pick a matching tile, Backspace removes the last letter,
+   * Enter attacks.
+   */
+  function onBattleKey(e) {
     if (!fight || !fight.started || fight.ended || fight.paused) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     var screen = document.getElementById("battle-fight-screen");
     if (!screen || screen.hidden) return;
     var target = e.target;
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
     if (document.querySelector(".action-modal-backdrop:not([hidden]), #battle-character-dialog:not([hidden])")) return;
-    e.preventDefault();
-    onBackspaceClick();
+
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      onBackspaceClick();
+      return;
+    }
+    if (e.key === "Enter") {
+      // Let Enter still activate a focused button (Hint, Next, ...).
+      if (target && target.tagName === "BUTTON" && !target.classList.contains("battle-tile")) return;
+      e.preventDefault();
+      if (fight.selected.length) onAttackClick();
+      return;
+    }
+    if (e.key && e.key.length === 1 && /[a-z0-9]/i.test(e.key)) {
+      e.preventDefault();
+      if (!selectTileByLetter(e.key)) flashGridMiss();
+    }
   }
 
   function onNextClick() {
     if (!fight || !fight.questions.length) return;
     fight.selected = [];
+    var inRound = fight.started && !fight.ended && !fight.paused;
+    if (inRound) {
+      // Skipping a question gives the monster a free attack.
+      var monsterName = fight.monster ? fight.monster.name : "AI";
+      var dmg = monsterCounterAttack();
+      if (typeof showToast === "function") {
+        showToast("Skipped — the " + monsterName + " attacks for " + dmg + "!", "error");
+      }
+      if (fight.playerHp <= 0) {
+        endBattle("lose");
+        return;
+      }
+    }
     advanceToQuestion(fight.questionIndex + 1);
   }
 
@@ -985,6 +1043,11 @@
     if (!track.el) return;
     track.el.pause();
     track.el.currentTime = 0;
+    if (typeof musicPausedByTab !== "undefined") {
+      musicPausedByTab = musicPausedByTab.filter(function (t) {
+        return t !== track;
+      });
+    }
   }
 
   function playIntroMusic() {
@@ -999,6 +1062,30 @@
 
   function stopAllMusic() {
     ALL_TRACKS.forEach(stopTrack);
+  }
+
+  /* Switching tabs/minimizing pauses whatever music is playing; coming back
+     resumes it from the same spot. Tracks stopped meanwhile stay stopped. */
+  var musicPausedByTab = [];
+
+  function onTabVisibilityChange() {
+    if (document.hidden) {
+      musicPausedByTab = [introMusic, battleMusic].filter(function (t) {
+        return t.el && !t.el.paused;
+      });
+      musicPausedByTab.forEach(function (t) {
+        t.el.pause();
+      });
+      return;
+    }
+    var toResume = musicPausedByTab;
+    musicPausedByTab = [];
+    toResume.forEach(function (t) {
+      if (!t.el || (fight && fight.ended && t === battleMusic)) return;
+      t.el.volume = effectiveVolume(t.kind);
+      var playing = t.el.play();
+      if (playing && typeof playing.catch === "function") playing.catch(function () {});
+    });
   }
 
   /* Plays timer runsout.mp3 once when the clock reaches 3 seconds. If a +3s bonus
@@ -1501,6 +1588,23 @@
     }, 900);
   }
 
+  /** Monster hits the player: damage, streak reset, animation + sound. Returns the damage. */
+  function monsterCounterAttack() {
+    var counterDmg = 6 + Math.floor(Math.random() * 9) + (fight.monster ? fight.monster.power : 0);
+    fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
+    fight.selected = [];
+    fight.streak = 0;
+    renderStreak();
+    renderHp();
+    triggerAttackAnim("ai");
+    playAttackSound("ai");
+    setTimeout(function () {
+      triggerHitAnim("player", counterDmg);
+      playHitSound();
+    }, 200);
+    return counterDmg;
+  }
+
   function onAttackClick() {
     if (!fight || !fight.selected.length) return;
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
@@ -1558,22 +1662,10 @@
     }
 
     playTrack(sfxWrong);
-    var counterDmg = 6 + Math.floor(Math.random() * 9) + (fight.monster ? fight.monster.power : 0);
-    fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
-    fight.selected = [];
-    fight.streak = 0;
-    renderStreak();
+    var counterDmg = monsterCounterAttack();
     adjustBattleTime(-TIME_PENALTY_WRONG);
-
-    renderHp();
     renderGrid();
     renderWordPreview();
-    triggerAttackAnim("ai");
-    playAttackSound("ai");
-    setTimeout(function () {
-      triggerHitAnim("player", counterDmg);
-      playHitSound();
-    }, 200);
 
     if (typeof showToast === "function") {
       showToast(
@@ -1933,7 +2025,8 @@
     document.getElementById("battle-letter-grid")?.addEventListener("click", onTileClick);
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
     document.getElementById("battle-backspace-btn")?.addEventListener("click", onBackspaceClick);
-    document.addEventListener("keydown", onBackspaceKey);
+    document.addEventListener("keydown", onBattleKey);
+    document.addEventListener("visibilitychange", onTabVisibilityChange);
     document.getElementById("battle-scramble-btn")?.addEventListener("click", onScrambleClick);
     document.getElementById("battle-hint-btn")?.addEventListener("click", onHintClick);
     document.getElementById("battle-start-btn")?.addEventListener("click", onStartRoundClick);

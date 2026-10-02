@@ -1,6 +1,6 @@
 /* LearnIQ Design System — tokens & primitives (benchmark: Learning IQ card) */
 @import url("css/learniq-design-system.css?v=2026092701");
-@import url("css/learniq-sidebar.css?v=2026092701");
+@import url("css/learniq-sidebar.css?v=2026100206");
 @import url("css/learniq-light-theme.css?v=2026092701");
 
 :root {
@@ -12669,3 +12669,234 @@ html[data-theme="dark"] .profile-insight-card--grow .profile-insight-icon {
   }
 }
 /* . */
+
+/* "Show more" lists (admin dashboard: Recent Activity, User Management) —
+   expanded state scrolls inside a fixed-height box. See applyShowMore(). */
+.lq-show-more-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.table-overflow.lq-show-more-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel, #f8fafc);
+}
+
+.lq-show-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.lq-show-more-btn[hidden] {
+  display: none;
+}
+
+/* Items collapsed by applyShowMore() — beat any display rule on li/tr. */
+.activity-list > li[hidden],
+.data-table tr[hidden] {
+  display: none !important;
+}
+
+/* Recent Activity fills its (stretched) card; items that don't fit are
+   tucked behind "Show more", and the expanded list scrolls in place. */
+.recent-activity-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.recent-activity-card .activity-list {
+  flex: 1 1 0;
+  min-height: 22rem;
+  overflow: hidden;
+}
+
+.lq-show-more-fit.lq-show-more-scroll {
+  max-height: none;
+  overflow-y: auto;
+}
+
+.recent-activity-card .lq-show-more-btn {
+  flex: 0 0 auto;
+}
+
+/* Admin dashboard: line the search bar, Reset button and result cards up
+   with the panel header's inset (.panel-header uses 1.1rem 1.25rem). */
+#ai-results > .search-box,
+#ai-results > .content-grid {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+#ai-results > .content-grid {
+  padding-bottom: 1.25rem;
+}
+
+/* ── Login success: "Welcome back" overlay (showLoginWelcome in script.js) ── */
+.login-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.login-welcome-overlay.is-visible {
+  opacity: 1;
+}
+
+.login-welcome-card {
+  width: min(380px, 100%);
+  padding: 2rem 1.75rem 1.6rem;
+  border-radius: 24px;
+  text-align: center;
+  background: linear-gradient(180deg, #fffdf6 0%, #ffffff 100%);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  transform: translateY(14px) scale(0.96);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.login-welcome-overlay.is-visible .login-welcome-card {
+  transform: none;
+}
+
+.login-welcome-check {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  background: var(--lq-gradient-accent, linear-gradient(135deg, #fbbf24, #eab308));
+  color: #fff;
+  font-size: 1.9rem;
+  box-shadow:
+    0 0 0 8px rgba(251, 191, 36, 0.18),
+    0 12px 28px rgba(234, 179, 8, 0.4);
+  animation: login-welcome-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+}
+
+.login-welcome-check i {
+  animation: login-welcome-tick 0.35s ease-out 0.4s both;
+}
+
+.login-welcome-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.login-welcome-title {
+  margin: 0.8rem 0 0.35rem;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #1c1917;
+}
+
+.login-welcome-sub {
+  margin: 0 0 1.3rem;
+  font-size: 0.95rem;
+  color: #57534e;
+}
+
+.login-welcome-progress {
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.login-welcome-progress span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--lq-gradient-accent, linear-gradient(135deg, #fbbf24, #eab308));
+  transform-origin: left center;
+  animation: login-welcome-fill var(--login-welcome-duration, 1800ms) linear forwards;
+}
+
+html[data-theme="dark"] .login-welcome-overlay {
+  background: rgba(2, 6, 23, 0.6);
+}
+
+html[data-theme="dark"] .login-welcome-card {
+  background: linear-gradient(180deg, #111a33 0%, #0b1224 100%);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
+}
+
+html[data-theme="dark"] .login-welcome-check {
+  box-shadow:
+    0 0 0 8px rgba(99, 102, 241, 0.2),
+    0 12px 28px rgba(59, 130, 246, 0.35);
+}
+
+html[data-theme="dark"] .login-welcome-role {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+html[data-theme="dark"] .login-welcome-title {
+  color: #f1f5f9;
+}
+
+html[data-theme="dark"] .login-welcome-sub {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .login-welcome-progress {
+  background: rgba(99, 102, 241, 0.18);
+}
+
+@keyframes login-welcome-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes login-welcome-tick {
+  from { transform: scale(0) rotate(-20deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes login-welcome-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-welcome-overlay,
+  .login-welcome-card {
+    transition: none;
+  }
+  .login-welcome-check,
+  .login-welcome-check i {
+    animation: none;
+  }
+}
