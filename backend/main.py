@@ -1188,8 +1188,11 @@ async def unpublish_lesson(body: dict, authorization: str | None = Header(defaul
 def get_student_lessons(
     subject_id: str | None = None,
     student_id_number: str | None = Query(default=None),
+    lite: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ):
+    """lite=1 leaves out reviewer/quiz/activities (the web lesson list fetches
+    them per lesson on open). The mobile app relies on the default full rows."""
     err = require_supabase()
     if err is not None:
         return err
@@ -1209,6 +1212,7 @@ def get_student_lessons(
         lessons = db_supabase.list_published_lessons_for_student(
             student_uuid,
             subject_id=subject_id,
+            include_content=not lite,
         )
         print(
             "STUDENT LESSONS DEBUG: Found",

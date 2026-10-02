@@ -845,19 +845,28 @@ def unpublish_lesson(lesson_id: str) -> None:
     _sb().table("lessons").update({"is_published": False}).eq("id", lesson_id).execute()
 
 
-def list_published_lessons_with_content() -> list[dict[str, Any]]:
-    lesson_cols = (
-        "id, filename, file_type, extracted_text, is_published, "
-        "created_at, teacher_id_number, subject_id, lesson_content(*)"
-    )
-    res = (
-        _sb()
-        .table("lessons")
-        .select(lesson_cols)
-        .eq("is_published", True)
-        .order("created_at", desc=True)
-        .execute()
-    )
+def list_published_lessons_with_content(
+    subject_ids: list[str] | None = None,
+    *,
+    include_content: bool = True,
+) -> list[dict[str, Any]]:
+    """Published lessons, newest first.
+
+    subject_ids narrows the query in the database instead of pulling every
+    school lesson. include_content=False skips reviewer/quiz/activities (and
+    omits those keys) for list views that fetch content per lesson on open.
+    extracted_text is never selected: it isn't returned and made up most of
+    the transfer.
+    """
+    if subject_ids is not None and not subject_ids:
+        return []
+    lesson_cols = "id, filename, file_type, is_published, created_at, teacher_id_number, subject_id"
+    if include_content:
+        lesson_cols += ", lesson_content(*)"
+    q = _sb().table("lessons").select(lesson_cols).eq("is_published", True)
+    if subject_ids is not None:
+        q = q.in_("subject_id", [str(s) for s in subject_ids])
+    res = q.order("created_at", desc=True).execute()
     # Build a lookup of subjects so we can attach name/color/description to each lesson.
     subjects_by_id = {str(s.get("id")): s for s in list_subjects()}
 
@@ -892,19 +901,21 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
         sid_key = str(sid) if sid is not None else None
         subject = subjects_by_id.get(sid_key) if sid_key else None
 
-        lessons.append({
+        lesson = {
             "file_id": clean["id"],
             "filename": clean.get("filename") or "",
             "file_type": clean.get("file_type") or "",
             "created_at": clean.get("created_at"),
-            "reviewer": reviewer_str,
-            "quiz": quiz,
-            "activities": activities,
             "subject_id": sid_key,
             "subject_name": (subject or {}).get("name") or "",
             "subject_color": (subject or {}).get("color") or "",
             "teacher_id_number": (clean.get("teacher_id_number") or "").strip(),
-        })
+        }
+        if include_content:
+            lesson["reviewer"] = reviewer_str
+            lesson["quiz"] = quiz
+            lesson["activities"] = activities
+        lessons.append(lesson)
 
     return lessons
 
@@ -3160,6 +3171,8 @@ def list_published_lessons_for_student(
     student_uuid: str,
     subject_id: str | None = None,
     grading_period_id: str | None = None,
+    *,
+    include_content: bool = True,
 ) -> list[dict[str, Any]]:
     """Published lessons limited to subjects the student is enrolled in."""
     if not student_uuid:
@@ -3171,7 +3184,13 @@ def list_published_lessons_for_student(
     access = _student_enrollment_access_map(student_uuid, period_id)
     if not access:
         return []
-    lessons = list_published_lessons_with_content()
+    # Only ask the DB about enrolled subjects: an unknown or malformed subject_id
+    # just yields no lessons (as before) instead of a uuid syntax error.
+    if subject_id is not None:
+        wanted = [str(subject_id)] if str(subject_id) in access else []
+    else:
+        wanted = list(access.keys())
+    lessons = list_published_lessons_with_content(wanted, include_content=include_content)
     out: list[dict[str, Any]] = []
     for lesson in lessons:
         sid = lesson.get("subject_id")

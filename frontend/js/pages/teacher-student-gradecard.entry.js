@@ -111,7 +111,9 @@
             role="listitem"
             data-strand="${escapeHtml(code)}"
             data-label="${escapeHtml(label)}"
-            style="--strand-accent:${meta.color}">
+            style="--strand-accent:${meta.color}; --strand-accent-dark:${
+              typeof darkSubjectColor === "function" ? darkSubjectColor(meta.color) : meta.color
+            }">
             <span class="gradecard-strand-icon"><i class="fa-solid ${meta.icon}"></i></span>
             <strong>${escapeHtml(label)}</strong>
             <span class="small-note">${escapeHtml(meta.blurb)}</span>

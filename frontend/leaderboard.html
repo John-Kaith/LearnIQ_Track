@@ -9,12 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=2026100201" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js" defer></script>
+  <script src="script.js?v=2026100201" defer></script>
 </head>
 <body class="leaderboard-page" data-sidebar-active="leaderboard">
   <div class="dashboard-shell container">
@@ -33,20 +33,22 @@
       </div>
 
       <nav class="side-links">
-        <a href="learniq-dashboard.html"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
-        <a href="subjects.html"><i class="fa-solid fa-book-open"></i> My lesson</a>
-        <a class="active" href="leaderboard.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
-        <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
-        <a href="module-selection.html"><i class="fa-solid fa-th-large"></i> Module Selection</a>
-        <a href="student-settings.html"><i class="fa-solid fa-gear"></i> Settings</a>
+        <a href="learniq-dashboard.html" data-nav-id="learniq-dashboard"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a href="subjects.html" data-nav-id="subjects"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="student-archived.html" data-nav-id="archived"><i class="fa-solid fa-box-archive"></i> Archived</a>
+        <a href="battle-arena.html" data-nav-id="battle-arena"><i class="fa-solid fa-gamepad"></i> AI Battle Arena</a>
+        <a href="leaderboard.html" data-nav-id="leaderboard" class="active"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html" data-nav-id="history"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+        <a href="module-selection.html" data-nav-id="module"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="student-settings.html" data-nav-id="settings"><i class="fa-solid fa-gear"></i> Settings</a>
       </nav>
 
       <div class="sidebar-footer">
         <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
-          <div class="avatar" id="student-avatar-initials">ST</div>
+          <div class="avatar" id="student-avatar-initials"></div>
           <div class="user-chip-text">
-            <span id="student-display-name">Student</span>
-            <div class="small-note" id="student-display-track"></div>
+            <span id="student-display-name">&nbsp;</span>
+            <div class="small-note" id="student-display-track">&nbsp;</div>
           </div>
         </a>
         <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">

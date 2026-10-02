@@ -416,8 +416,33 @@
     } else {
       selectedLessonId = id;
       selectedLesson = lessonsById[id];
+      // The dashboard launcher preselects the last lesson the student opened.
+      try {
+        localStorage.setItem("learniq-last-lesson", id);
+      } catch (e) {
+        /* ignore */
+      }
     }
     syncSelectionUi();
+  }
+
+  /**
+   * Dashboard launcher deep link: battle-arena.html?lesson=<file_id>&difficulty=<key>&start=1
+   * selects the lesson and difficulty; start=1 goes straight to the loading screen.
+   */
+  var launchFromUrlHandled = false;
+  function applyLaunchFromUrl() {
+    if (launchFromUrlHandled) return;
+    launchFromUrlHandled = true;
+    var params = new URLSearchParams(window.location.search);
+    var lessonId = params.get("lesson");
+    if (!lessonId || !lessonsById[lessonId]) return;
+    var difficulty = params.get("difficulty");
+    if (difficulty && BATTLE_DIFFICULTIES[difficulty]) saveSelectedDifficulty(difficulty);
+    selectLesson(lessonId);
+    // Plain lobby URL again, so Back / refresh doesn't restart the battle.
+    window.history.replaceState(null, "", window.location.pathname);
+    if (params.get("start") === "1") void startBattle();
   }
 
   function buildLessonCard(lesson) {
@@ -515,6 +540,7 @@
       listEl.innerHTML = lessons.map(buildLessonCard).filter(Boolean).join("");
       listEl.hidden = false;
       syncSelectionUi();
+      applyLaunchFromUrl();
     } catch (err) {
       if (statusEl) {
         statusEl.hidden = false;

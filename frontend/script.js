@@ -35,6 +35,50 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+/**
+ * Dark-mode display colour for a subject / strand colour. The palette is all
+ * gold-family, so in dark mode each one shows as its blue/violet match; the
+ * stored colour never changes. Pages put this in a *-dark CSS variable next to
+ * the real colour and style.css swaps it in under html[data-theme="dark"].
+ */
+function darkSubjectColor(color) {
+  const PALETTE_DARK = {
+    "#ca8a04": "#3b82f6",
+    "#a16207": "#2563eb",
+    "#d97706": "#6366f1",
+    "#b45309": "#4f46e5",
+    "#eab308": "#8b5cf6",
+    "#fbbf24": "#7c3aed",
+    "#f59e0b": "#0284c7",
+    "#92400e": "#1e40af",
+  };
+  const hex = String(color || "").trim().toLowerCase();
+  if (PALETTE_DARK[hex]) return PALETTE_DARK[hex];
+  // Colours outside the palette: turn gold/orange hues to the opposite (blue) side.
+  const m = /^#([0-9a-f]{6})$/.exec(hex);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return color;
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 20 || h > 70 || s < 0.3) return color;
+  const hue = (h + 180) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const [r1, g1, b1] =
+    hue < 60 ? [c, x, 0] : hue < 120 ? [x, c, 0] : hue < 180 ? [0, c, x] : hue < 240 ? [0, x, c] : hue < 300 ? [x, 0, c] : [c, 0, x];
+  const to = (v) => Math.round((v + l - c / 2) * 255).toString(16).padStart(2, "0");
+  return `#${to(r1)}${to(g1)}${to(b1)}`;
+}
+
 function getProfileDisplayName(user) {
   if (!user) return "User";
   const dn = user.display_name && String(user.display_name).trim();
@@ -1128,7 +1172,7 @@ const TEACHER_PATH_TO_SIDEBAR_ID = {
 
 const STUDENT_PATH_TO_SIDEBAR_ID = {
   "learniq-dashboard.html": "learniq-dashboard",
-  "my-lesson.html": "learniq-dashboard",
+  "my-lesson.html": "subjects",
   "subjects.html": "subjects",
   "student-archived.html": "archived",
   "battle-arena.html": "battle-arena",
@@ -6115,7 +6159,7 @@ function buildSubjectCardHtml(subject, options = {}) {
   const bannerHref = isUnenrolled ? "" : ` href="${targetUrl}"`;
 
   return `
-    <article class="subject-classroom-card" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+    <article class="subject-classroom-card" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)}; --subject-color-dark: ${escapeHtml(darkSubjectColor(color))};">
       <${bannerTag} class="subject-classroom-card-banner"${bannerHref} aria-label="Open ${escapeHtml(name)}">
         <div class="subject-classroom-card-banner-text">
           <h4>${escapeHtml(name)}</h4>
@@ -6533,7 +6577,7 @@ function buildTeacherSubjectCardHtml(subject) {
         </div>
       </div>`;
   return `
-    <article class="lesson-card subject-card-themed${isUnassigned ? "" : " subject-card-with-menu"}" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)};">
+    <article class="lesson-card subject-card-themed${isUnassigned ? "" : " subject-card-with-menu"}" data-subject-id="${safeId}" style="--subject-color: ${escapeHtml(color)}; --subject-color-dark: ${escapeHtml(darkSubjectColor(color))};">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
       <div class="lesson-info">
         <h4>${escapeHtml(name)}</h4>
@@ -6898,6 +6942,7 @@ async function hydrateTeacherSubjectLessonsPage() {
     const bannerEl = document.getElementById("teacher-subject-banner");
     if (bannerEl) {
       bannerEl.style.setProperty("--subject-banner-color", match.color || DEFAULT_SUBJECT_COLOR);
+      bannerEl.style.setProperty("--subject-banner-color-dark", darkSubjectColor(match.color || DEFAULT_SUBJECT_COLOR));
     }
 
     const code = String(match.join_code || "").trim();
@@ -7295,7 +7340,10 @@ async function loadSubjectAnnouncements(subjectId) {
   lastLoadedSubjectAnnouncementsId = String(subjectId);
 
   const user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
-  if (!user?.access_token) return;
+  if (!user?.access_token) {
+    feedEl.innerHTML = ""; // drop the loading skeleton
+    return;
+  }
 
   try {
     const res = await fetch(apiUrl(`/subjects/${encodeURIComponent(subjectId)}/announcements`), {
@@ -7540,7 +7588,7 @@ function buildAdminTeacherCardHtml(teacher, lessonStats) {
   const publishedLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
   const drillUrl = `admin-subjects.html?teacher_id=${encodeURIComponent(teacher.id_number || "")}`;
   return `
-    <article class="lesson-card subject-card-themed admin-teacher-card" data-teacher-id="${safeTid}" style="--subject-color: #60a5fa;" onclick="window.location.href='${drillUrl}'">
+    <article class="lesson-card subject-card-themed admin-teacher-card" data-teacher-id="${safeTid}" style="--subject-color: #60a5fa; --subject-color-dark: #60a5fa;" onclick="window.location.href='${drillUrl}'">
       <div class="lesson-card-icon admin-teacher-card-avatar">${escapeHtml(initials)}</div>
       <div class="lesson-info">
         <h4>${escapeHtml(fullName)}</h4>
@@ -7572,7 +7620,7 @@ function buildAdminSubjectDrillCardHtml(subject, teacherIdNumber, stats) {
   const publishedLabel = publishedCount === 1 ? "1 published" : `${publishedCount} published`;
   const drillUrl = `admin-subjects.html?teacher_id=${encodeURIComponent(teacherIdNumber || "")}&subject_id=${encodeURIComponent(subject.id || "")}`;
   return `
-    <article class="lesson-card subject-card-themed" data-subject-id="${safeSid}" style="--subject-color: ${escapeHtml(color)};" onclick="window.location.href='${drillUrl}'">
+    <article class="lesson-card subject-card-themed" data-subject-id="${safeSid}" style="--subject-color: ${escapeHtml(color)}; --subject-color-dark: ${escapeHtml(darkSubjectColor(color))};" onclick="window.location.href='${drillUrl}'">
       <div class="lesson-card-icon"><i class="fa-solid fa-book-open"></i></div>
       <div class="lesson-info">
         <h4>${escapeHtml(name)}</h4>
@@ -8852,6 +8900,7 @@ function updateMyLessonHeaderForSubject() {
     if (banner) {
       banner.hidden = false;
       banner.style.setProperty("--subject-banner-color", subjectMeta?.color || DEFAULT_SUBJECT_COLOR);
+      banner.style.setProperty("--subject-banner-color-dark", darkSubjectColor(subjectMeta?.color || DEFAULT_SUBJECT_COLOR));
     }
     if (bannerTitle) bannerTitle.textContent = name || "Subject";
     if (bannerSubtitle) {
@@ -8991,6 +9040,12 @@ async function selectLesson(lesson) {
   selectedLesson = lesson;
   lessonData = lesson; // Update legacy for compatibility
   activeContentType = "lesson";
+  // The dashboard launcher preselects the last lesson the student opened.
+  try {
+    localStorage.setItem("learniq-last-lesson", String(lesson.file_id || ""));
+  } catch {
+    /* ignore */
+  }
   
   console.log("Selected lesson:", selectedLesson); // Debug: Log selected lesson
   
@@ -9391,6 +9446,43 @@ function showEmpty(message) {
     }
   }
 
+  /**
+   * Dashboard launcher deep link: my-lesson.html?subject_id=…&lesson=<file_id>&tab=reviewer|quiz|activity
+   * opens that lesson's workspace on the tab. An empty tab starts the same action
+   * as its Generate button (reviewer generates; quiz/activity open their settings).
+   */
+  let lessonDeepLinkHandled = false;
+  async function openLessonFromUrl() {
+    if (lessonDeepLinkHandled) return;
+    lessonDeepLinkHandled = true;
+    const params = new URLSearchParams(window.location.search);
+    const lessonId = params.get("lesson");
+    if (!lessonId) return;
+    const lesson = getActiveStudentLessons().find((l) => String(l.file_id) === lessonId);
+    if (!lesson) {
+      showToast("That lesson isn't available anymore.", "error");
+      return;
+    }
+    const tab = ["reviewer", "quiz", "activity"].includes(params.get("tab")) ? params.get("tab") : "lesson";
+    // Drop tab from the URL so a refresh reopens the lesson without re-triggering the action.
+    params.delete("tab");
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+
+    document.querySelector('.subject-class-tab[data-subject-tab="classwork"]')?.click();
+    await selectLesson(lesson);
+    if (tab === "lesson") {
+      workspaceEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    showContentSection(tab);
+    focusStudentSection(tab);
+    const hasContent =
+      tab === "reviewer"
+        ? !!String(selectedLesson?.reviewer || "").trim()
+        : (selectedLesson?.[tab === "quiz" ? "quiz" : "activities"] || []).length > 0;
+    if (!hasContent) document.getElementById(`student-generate-${tab}-btn`)?.click();
+  }
+
   async function loadStudentLessons() {
     console.log("DEBUG: loadStudentLessons called");
     console.log("DEBUG: Current page:", window.location.pathname);
@@ -9404,9 +9496,11 @@ function showEmpty(message) {
     // Pin the subject for this page view to whatever is in the URL.
     selectedSubjectId = readSelectedSubjectFromUrl();
 
-    try {
-      await loadStudentSubjects();
+    // Stream + People only need the subject id, so load them alongside the lessons.
+    loadSubjectAnnouncements(selectedSubjectId);
+    loadSubjectPeople(selectedSubjectId);
 
+    try {
       const studentId = getStudentIdNumberForApi();
       if (!studentId) {
         studentLessons = [];
@@ -9414,11 +9508,21 @@ function showEmpty(message) {
         return;
       }
 
+      // Subjects and lessons don't depend on each other: fetch both at once.
+      // lite=1 skips reviewer/quiz/activities (loaded per lesson on open), and
+      // subject_id limits the list to the subject being viewed.
       console.log("Calling /student/lessons...");
+      const subjectFilter =
+        selectedSubjectId && selectedSubjectId !== "__unassigned__"
+          ? `&subject_id=${encodeURIComponent(selectedSubjectId)}`
+          : "";
       const apiUrlValue = apiUrl(
-        `/student/lessons?student_id_number=${encodeURIComponent(studentId)}`
+        `/student/lessons?student_id_number=${encodeURIComponent(studentId)}&lite=1${subjectFilter}`
       );
-      const res = await fetch(apiUrlValue, { headers: adminAuthHeaders() });
+      const [, res] = await Promise.all([
+        loadStudentSubjects(),
+        fetch(apiUrlValue, { headers: adminAuthHeaders() }),
+      ]);
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -9453,9 +9557,14 @@ function showEmpty(message) {
 
       if (emptyEl) emptyEl.hidden = true;
       renderLessonSelection();
+      void openLessonFromUrl();
     } catch (e) {
       console.log("DEBUG: loadStudentLessons error:", e);
       showEmpty("Cannot reach the Ubuntu API. Set the backend URL in Settings (learniq-api-base).");
+    } finally {
+      // my-lesson.html starts as a skeleton (body.is-loading) so the placeholder
+      // header and "No published lesson" card never flash; reveal it in one step.
+      document.body.classList.remove("is-loading");
     }
   }
 
