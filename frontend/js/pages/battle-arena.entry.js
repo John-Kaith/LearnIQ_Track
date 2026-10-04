@@ -1,37 +1,31 @@
 /**
- * AI Battle Arena — Phase 2 lobby + Phase 3 battle (frontend only).
- * Loads published lessons via /student/lessons, lesson content via
- * /get-content/{file_id}. Battle vocabulary/grid/HP are all client-side —
- * no new backend endpoints, no persistence.
+ * Word Clash (battle-arena.html) — the Arcade's spelling battle game.
+ *
+ * Game shell: PRESS START → menu (Start / Battle Log / Settings / Quit) →
+ * world select (one world per subject) → stage select (one stage per lesson)
+ * → loading → Ready → battle → results. Esc / Pause opens the pause menu.
+ *
+ * Data: /student/subjects + /student/lessons?lite=1 for worlds and stages,
+ * /get-content and /generate-battle-questions for questions (one shared bank
+ * per lesson + difficulty that grows as students play),
+ * /student/learning-history (event "battle") for results — every battle saves
+ * its question-by-question answers so the Battle Log can replay them.
  */
 (function () {
   "use strict";
 
   var selectedLessonId = null;
   var selectedLesson = null;
-  var selectedMode = "ai";
   var lessonsById = {};
+  var subjects = []; // worlds, in the order /student/subjects returns them
+  var lessonsBySubject = {}; // subject id -> lessons (stages), oldest first
+  var battleLog = []; // saved battles, newest first (Battle Log + cleared stars)
+  var battleLogLoaded = false;
+  var currentWorldId = null;
 
   var GRID_SIZE = 20;
   var PLAYER_MAX_HP = 100;
   var AI_MAX_HP = 100;
-  var FALLBACK_QUESTIONS = [
-    { question: "What word means breaking something down into its parts to understand it?", answer: "analysis", meaning: "Examining something closely by studying its parts." },
-    { question: "What word means an idea or principle behind something?", answer: "concept", meaning: "A general idea behind a topic or theory." },
-    { question: "What word means information that supports a claim?", answer: "evidence", meaning: "Facts or information showing something is true." },
-    { question: "What word means a series of steps to reach a result?", answer: "process", meaning: "A series of actions taken to achieve a result." },
-    { question: "What word means the arrangement of parts within something?", answer: "structure", meaning: "The way parts are arranged to form a whole." },
-    { question: "What word means a set of ideas explaining how something works?", answer: "theory", meaning: "An explanation based on general principles." },
-    { question: "What word means the setting or background of a situation?", answer: "context", meaning: "The circumstances surrounding an idea or event." },
-    { question: "What word means a brief overview of the main points?", answer: "summary", meaning: "A short statement of the main points." },
-    { question: "What word means something that contributes to a result?", answer: "factor", meaning: "Something that contributes to a result." },
-    { question: "What word means a particular way of doing something?", answer: "method", meaning: "A particular way of doing something." },
-    { question: "What word means a fundamental rule or belief?", answer: "principle", meaning: "A fundamental rule or belief guiding behavior." },
-    { question: "What word means a response triggered by something else?", answer: "reaction", meaning: "A response triggered by an action or event." },
-    { question: "What word means something that can change or vary?", answer: "variable", meaning: "Something that can change or vary." },
-    { question: "What word means an educated guess to be tested?", answer: "hypothesis", meaning: "A proposed explanation to be tested." },
-    { question: "What word means a set of connected parts working together?", answer: "system", meaning: "A set of connected parts working as a whole." },
-  ];
   var LETTER_FILLER =
     "eeeeeeeeeeeeaaaaaaaaaiiiiiiiiiooooooooonnnnnnnrrrrrrrttttttllllssssuuuu" +
     "ddddggg" + "bbccmmppffhhvvwwyykjxqz";
@@ -92,10 +86,9 @@
    * ---------------------------------------------------------- */
 
   /* ----------------------------------------------------------
-   * Game menu (☰, top-right on the loading / battle screens):
-   * arena level, AI defeated, best score, and separate volume +
-   * mute for music and for sound effects (saved in localStorage).
-   * 50% = the original loudness.
+   * Sound settings (Settings screen): separate volume for music and
+   * for sound effects, saved in localStorage. 50% = the original
+   * loudness; 0 = muted.
    * ---------------------------------------------------------- */
   var AUDIO_STORAGE_KEY = "learniq-battle-audio";
   var OLD_VOLUME_STORAGE_KEY = "learniq-battle-volume";
@@ -145,21 +138,13 @@
       if (t && t.el) t.el.volume = effectiveVolume(t.kind);
     });
     ["music", "sfx"].forEach(function (kind) {
-      var vol = effectiveVolume(kind);
-      var name = kind === "music" ? "music" : "sound effects";
-      document.querySelectorAll('.battle-sound-mute[data-sound-kind="' + kind + '"]').forEach(function (btn) {
-        var icon = btn.querySelector("i");
-        if (icon) {
-          icon.className =
-            "fa-solid " + (vol === 0 ? "fa-volume-xmark" : vol < 0.5 ? "fa-volume-low" : "fa-volume-high");
-        }
-        var label = audioSettings[kind].muted ? "Unmute " + name : "Mute " + name;
-        btn.setAttribute("aria-label", label);
-        btn.setAttribute("title", label);
-        btn.setAttribute("aria-pressed", audioSettings[kind].muted ? "true" : "false");
+      var pct = String(Math.round(effectiveVolume(kind) * 100));
+      document.querySelectorAll('.wc-volume[data-sound-kind="' + kind + '"]').forEach(function (slider) {
+        slider.value = pct;
+        slider.setAttribute("aria-label", (kind === "music" ? "Music" : "Sound effects") + " volume");
       });
-      document.querySelectorAll('.battle-sound-slider[data-sound-kind="' + kind + '"]').forEach(function (slider) {
-        slider.value = String(Math.round(vol * 100));
+      document.querySelectorAll('.wc-volume-value[data-sound-kind="' + kind + '"]').forEach(function (out) {
+        out.textContent = pct === "0" ? "OFF" : pct;
       });
     });
   }
@@ -187,43 +172,47 @@
     return { level: Math.floor(totalExp / EXP_PER_LEVEL), totalExp: totalExp, wins: wins, best: best };
   }
 
-  function renderBattleMenuStats() {
+  /** Player card on the main menu: fighter, name, level, EXP bar, wins, best score. */
+  function renderMenuPlayer() {
     var st = menuStats();
     var into = st.totalExp % EXP_PER_LEVEL;
     var set = function (id, text) {
       var el = document.getElementById(id);
       if (el) el.textContent = text;
     };
-    set("battle-menu-level", String(st.level));
-    set("battle-menu-wins", String(st.wins));
-    set("battle-menu-best", String(st.best));
-    set("battle-menu-exp-text", into + " / " + EXP_PER_LEVEL + " EXP to Level " + (st.level + 1));
-    var fill = document.getElementById("battle-menu-exp-fill");
+    set("wc-player-name", playerDisplayName().toUpperCase());
+    set("wc-player-level", "LV " + st.level + " · " + into + "/" + EXP_PER_LEVEL + " EXP");
+    set("wc-player-meta", st.wins + (st.wins === 1 ? " WIN" : " WINS") + " · BEST " + st.best);
+    var fill = document.getElementById("wc-player-exp-fill");
     if (fill) fill.style.width = Math.round((into / EXP_PER_LEVEL) * 100) + "%";
+    renderCharacterInto(document.getElementById("wc-player-sprite"), selectedCharacter);
   }
 
-  function setBattleMenuOpen(open) {
-    var panel = document.getElementById("battle-menu-panel");
-    var toggle = document.getElementById("battle-menu-toggle");
-    if (open) renderBattleMenuStats();
-    if (panel) panel.hidden = !open;
-    if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  function playerDisplayName() {
+    var user = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
+    var name = user && typeof getProfileDisplayName === "function" ? getProfileDisplayName(user) : "";
+    return String(name || "Player").trim() || "Player";
   }
 
-  function setupBattleMenu() {
-    var toggle = document.getElementById("battle-menu-toggle");
-    var wrap = document.getElementById("battle-menu");
-    toggle?.addEventListener("click", function () {
-      var panel = document.getElementById("battle-menu-panel");
-      setBattleMenuOpen(!!(panel && panel.hidden));
-    });
-    document.addEventListener("click", function (e) {
-      if (wrap && !wrap.contains(e.target)) setBattleMenuOpen(false);
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") setBattleMenuOpen(false);
-    });
-    document.querySelectorAll(".battle-sound-slider").forEach(function (slider) {
+  /* Reduce motion: same preference as the LMS Settings page (learniq-prefs). */
+  var PREFS_KEY = "learniq-prefs";
+
+  function readPrefs() {
+    try {
+      return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function applyReduceMotion(on) {
+    document.documentElement.classList.toggle("reduce-motion", !!on);
+    var box = document.getElementById("wc-reduce-motion");
+    if (box) box.checked = !!on;
+  }
+
+  function setupSettings() {
+    document.querySelectorAll(".wc-volume").forEach(function (slider) {
       slider.addEventListener("input", function () {
         var kind = slider.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
         audioSettings[kind].volume = Math.max(0, Math.min(1, Number(slider.value) / 100));
@@ -231,21 +220,21 @@
         applyVolume();
         saveAudioSettings();
       });
-    });
-    document.querySelectorAll(".battle-sound-mute").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var kind = btn.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
-        var ch = audioSettings[kind];
-        if (ch.muted || ch.volume === 0) {
-          ch.muted = false;
-          if (ch.volume === 0) ch.volume = 0.5;
-        } else {
-          ch.muted = true;
-        }
-        applyVolume();
-        saveAudioSettings();
+      slider.addEventListener("change", function () {
+        if (slider.getAttribute("data-sound-kind") !== "music") playClickSound();
       });
     });
+    document.getElementById("wc-reduce-motion")?.addEventListener("change", function (e) {
+      var prefs = readPrefs();
+      prefs.reduce_motion = !!e.target.checked;
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+      } catch (err) {
+        /* ignore */
+      }
+      applyReduceMotion(prefs.reduce_motion);
+    });
+    applyReduceMotion(!!readPrefs().reduce_motion);
     applyVolume();
   }
 
@@ -345,259 +334,431 @@
     return String(lesson.file_type || "file").toUpperCase();
   }
 
-  function modeLabel() {
-    return selectedMode === "player" ? "Battle Player" : "Battle AI";
+  /* ----------------------------------------------------------
+   * Screens. The menus live in #wc-app; the loading screen and the
+   * battle are separate full-screen layers on top of it.
+   * ---------------------------------------------------------- */
+  var SCREENS = ["splash", "menu", "worlds", "stages", "results", "log", "log-detail", "settings"];
+  var activeScreen = "splash";
+  var settingsReturn = "menu"; // "pause" when Settings was opened from the pause menu
+
+  function screenEl(name) {
+    return document.getElementById("wc-" + name);
   }
 
-  function isLobbyReady() {
-    return !!(selectedLessonId && selectedMode === "ai");
-  }
-
-  function setStartEnabled(on) {
-    var btn = document.getElementById("battle-arena-start-btn");
-    var label = document.getElementById("battle-arena-start-label");
-    var hint = document.getElementById("battle-arena-start-hint");
-    if (btn) {
-      btn.disabled = !on;
-      btn.classList.toggle("is-ready", !!on);
+  /** Shows one menu screen (hiding the battle layers) and focuses its first control. */
+  function showScreen(name, opts) {
+    activeScreen = name;
+    SCREENS.forEach(function (s) {
+      var el = screenEl(s);
+      if (el) el.hidden = s !== name;
+    });
+    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
+    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
+    var app = document.getElementById("wc-app");
+    if (app) {
+      app.hidden = false;
+      app.scrollTop = 0;
     }
-    if (label) label.textContent = on ? "Ready to Battle" : "Start Battle";
-    if (hint) {
-      hint.textContent = on
-        ? "Ready to Battle — review Step 3, then click to continue."
-        : "Select a lesson and battle mode to continue.";
-    }
+    if (!(opts && opts.noFocus)) focusFirst(screenEl(name));
   }
 
-  function renderSelectedPanel() {
-    var emptyEl = document.getElementById("battle-selected-empty");
-    var detailsEl = document.getElementById("battle-selected-details");
-    var nameEl = document.getElementById("battle-info-name");
-    var typeEl = document.getElementById("battle-info-type");
-    var dateEl = document.getElementById("battle-info-date");
+  function focusFirst(root) {
+    if (!root) return;
+    var target = root.querySelector(
+      ".wc-menu-item, .wc-press-start, .wc-world:not([disabled]), .wc-stage, .wc-log-item, .wc-btn-primary:not([disabled]), button:not([disabled])"
+    );
+    if (target) target.focus({ preventScroll: true });
+  }
 
-    if (!selectedLesson) {
-      if (emptyEl) emptyEl.hidden = false;
-      if (detailsEl) detailsEl.hidden = true;
+  function showLoadingScreen() {
+    document.getElementById("wc-app")?.setAttribute("hidden", "");
+    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
+    document.getElementById("battle-loading-screen")?.removeAttribute("hidden");
+  }
+
+  function showFightScreenEl() {
+    document.getElementById("wc-app")?.setAttribute("hidden", "");
+    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
+    document.getElementById("battle-fight-screen")?.removeAttribute("hidden");
+  }
+
+  /** BACK and Esc on the menu screens. */
+  function goBack() {
+    switch (activeScreen) {
+      case "worlds":
+      case "log":
+        showScreen("menu");
+        break;
+      case "stages":
+        showScreen("worlds", { noFocus: true });
+        focusWorld(currentWorldId);
+        break;
+      case "log-detail":
+        showScreen("log", { noFocus: true });
+        focusFirst(document.getElementById("wc-log-list"));
+        break;
+      case "settings":
+        closeSettings();
+        break;
+      default:
+        return;
+    }
+    playClickSound();
+  }
+
+  function openSettings(from) {
+    settingsReturn = from === "pause" ? "pause" : "menu";
+    applyVolume();
+    renderDifficultyPicker();
+    showScreen("settings");
+  }
+
+  function closeSettings() {
+    if (settingsReturn === "pause" && fight && !fight.ended) {
+      document.getElementById("wc-app")?.setAttribute("hidden", "");
+      document.getElementById("battle-fight-screen")?.removeAttribute("hidden");
+      openPause();
       return;
     }
-
-    if (emptyEl) emptyEl.hidden = true;
-    if (detailsEl) detailsEl.hidden = false;
-    if (nameEl) nameEl.textContent = lessonTitle(selectedLesson);
-    if (typeEl) typeEl.textContent = lessonFileType(selectedLesson);
-    if (dateEl) dateEl.textContent = formatDate(selectedLesson.created_at);
+    showScreen("menu");
   }
 
-  function syncSelectionUi() {
-    document.querySelectorAll("#battle-arena-lesson-list .battle-arena-lesson-card").forEach(function (card) {
-      var id = card.getAttribute("data-lesson-id");
-      var isOn = id && id === selectedLessonId;
-      card.classList.toggle("selected", !!isOn);
-      card.setAttribute("aria-pressed", isOn ? "true" : "false");
-      var selectBtn = card.querySelector("[data-select-lesson]");
-      if (selectBtn) {
-        selectBtn.textContent = isOn ? "Unselect" : "Select Lesson";
-        selectBtn.classList.toggle("btn-primary", !isOn);
-        selectBtn.classList.toggle("btn-secondary", !!isOn);
-      }
+  /* ----------------------------------------------------------
+   * Worlds (subjects) and stages (lessons)
+   * ---------------------------------------------------------- */
+  function authHeaders() {
+    return typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {};
+  }
+
+  async function fetchJson(path) {
+    var res = await fetch(apiUrl(path), { headers: authHeaders() });
+    var data = await res.json().catch(function () {
+      return {};
     });
-    renderSelectedPanel();
-    setStartEnabled(isLobbyReady());
+    if (!res.ok) throw new Error((data && data.error) || "Request failed.");
+    return data;
   }
 
-  function selectLesson(lessonId) {
-    var id = String(lessonId || "").trim();
-    if (!id || !lessonsById[id]) return;
-    // Clicking the already-selected lesson unselects it.
-    if (id === selectedLessonId) {
-      selectedLessonId = null;
-      selectedLesson = null;
-    } else {
-      selectedLessonId = id;
-      selectedLesson = lessonsById[id];
+  /** Subjects become worlds; their published lessons become stages. */
+  async function loadWorlds() {
+    var sid = studentId();
+    if (!sid) throw new Error("Sign in as a student to play.");
+    if (typeof apiUrl !== "function") throw new Error("API helper missing. Check js/core/api.js.");
+    var q = "?student_id_number=" + encodeURIComponent(sid);
+    var results = await Promise.all([
+      fetchJson("/student/subjects" + q),
+      fetchJson("/student/lessons" + q + "&lite=1"),
+    ]);
+    subjects = Array.isArray(results[0].subjects) ? results[0].subjects : [];
+    var lessons = Array.isArray(results[1].lessons) ? results[1].lessons : [];
+    lessonsById = {};
+    lessonsBySubject = {};
+    lessons.forEach(function (lesson) {
+      var id = String(lesson.file_id || lesson.lesson_id || "").trim();
+      if (!id) return;
+      lessonsById[id] = lesson;
+      var key = String(lesson.subject_id || "");
+      (lessonsBySubject[key] = lessonsBySubject[key] || []).push(lesson);
+    });
+    // Stage 1 is the first lesson the teacher published.
+    Object.keys(lessonsBySubject).forEach(function (key) {
+      lessonsBySubject[key].sort(function (a, b) {
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      });
+    });
+  }
+
+  var worldsLoaded = false;
+  var worldsLoading = null;
+
+  function ensureWorlds() {
+    if (worldsLoaded) return Promise.resolve();
+    if (!worldsLoading) {
+      worldsLoading = loadWorlds()
+        .then(function () {
+          worldsLoaded = true;
+        })
+        .finally(function () {
+          worldsLoading = null;
+        });
+    }
+    return worldsLoading;
+  }
+
+  /** Saved battles, newest first: Battle Log, cleared stars and the menu stats. */
+  async function loadBattleLog() {
+    var sid = studentId();
+    if (!sid || typeof apiUrl !== "function") return battleLog;
+    try {
+      var data = await fetchJson("/student/learning-history?student_id_number=" + encodeURIComponent(sid));
+      battleLog = Array.isArray(data.battle) ? data.battle : [];
+      battleLogLoaded = true;
+    } catch (e) {
+      console.warn("loadBattleLog failed:", e);
+    }
+    return battleLog;
+  }
+
+  function clearedLessonIds() {
+    var cleared = {};
+    battleLog.forEach(function (b) {
+      if (String(b.outcome || "").toLowerCase() === "win" && b.lesson_id) cleared[String(b.lesson_id)] = true;
+    });
+    return cleared;
+  }
+
+  function stageLabel(lesson) {
+    return lessonTitle(lesson).replace(/\.(pdf|pptx?|docx?|txt)$/i, "");
+  }
+
+  /** Worlds use the subject's colour in its dark-mode (blue/violet) form, matching the game palette. */
+  function worldColor(subject) {
+    var c = (subject && subject.color) || "#ca8a04";
+    return typeof darkSubjectColor === "function" ? darkSubjectColor(c) : c;
+  }
+
+  function cssEscape(v) {
+    return window.CSS && CSS.escape ? CSS.escape(String(v)) : String(v).replace(/["\\]/g, "\\$&");
+  }
+
+  async function openWorlds() {
+    showScreen("worlds", { noFocus: true });
+    var status = document.getElementById("wc-worlds-status");
+    var grid = document.getElementById("wc-world-grid");
+    if (!worldsLoaded) {
+      if (status) {
+        status.hidden = false;
+        status.textContent = "Loading worlds…";
+      }
+      if (grid) grid.innerHTML = "";
+    }
+    try {
+      await Promise.all([ensureWorlds(), battleLog.length ? null : loadBattleLog()]);
+    } catch (err) {
+      if (status) {
+        status.hidden = false;
+        status.textContent = (err && err.message) || "Could not load your subjects.";
+      }
+      focusFirst(screenEl("worlds"));
+      return;
+    }
+    renderWorlds();
+    focusWorld(currentWorldId);
+  }
+
+  function renderWorlds() {
+    var status = document.getElementById("wc-worlds-status");
+    var grid = document.getElementById("wc-world-grid");
+    if (!grid) return;
+    if (!subjects.length) {
+      if (status) {
+        status.hidden = false;
+        status.textContent = "No worlds yet. Join a class with your teacher's code, then come back.";
+      }
+      grid.innerHTML = "";
+      return;
+    }
+    if (status) status.hidden = true;
+    var cleared = clearedLessonIds();
+    grid.innerHTML = subjects
+      .map(function (subject, i) {
+        var stages = lessonsBySubject[String(subject.id)] || [];
+        var done = stages.filter(function (l) {
+          return cleared[String(l.file_id)];
+        }).length;
+        return (
+          '<button type="button" class="wc-world" data-world-id="' +
+          esc(subject.id) +
+          '"' +
+          (stages.length ? "" : " disabled") +
+          ' style="--world-color:' +
+          esc(worldColor(subject)) +
+          '">' +
+          '<span class="wc-world-banner"><span class="wc-world-num">WORLD ' +
+          (i + 1) +
+          "</span></span>" +
+          '<span class="wc-world-body">' +
+          '<span class="wc-world-name">' +
+          esc(subject.name || "Subject") +
+          "</span>" +
+          '<span class="wc-world-meta">' +
+          (stages.length
+            ? stages.length +
+              (stages.length === 1 ? " STAGE" : " STAGES") +
+              ' · <i class="fa-solid fa-star wc-star" aria-hidden="true"></i> ' +
+              done +
+              "/" +
+              stages.length
+            : "NO STAGES YET") +
+          "</span></span></button>"
+        );
+      })
+      .join("");
+  }
+
+  function focusWorld(worldId) {
+    var grid = document.getElementById("wc-world-grid");
+    if (!grid) return;
+    var btn =
+      (worldId && grid.querySelector('.wc-world[data-world-id="' + cssEscape(worldId) + '"]:not([disabled])')) ||
+      grid.querySelector(".wc-world:not([disabled])");
+    if (btn) btn.focus({ preventScroll: true });
+    else focusFirst(screenEl("worlds"));
+  }
+
+  function openStages(worldId) {
+    var subject = subjects.find(function (s) {
+      return String(s.id) === String(worldId);
+    });
+    if (!subject) return;
+    currentWorldId = String(subject.id);
+    setStageAlert("");
+    var stages = lessonsBySubject[currentWorldId] || [];
+    var title = document.getElementById("wc-stages-title");
+    var sub = document.getElementById("wc-stages-sub");
+    if (title) title.textContent = "WORLD " + (subjects.indexOf(subject) + 1);
+    if (sub) sub.textContent = subject.name || "";
+    // Keep the current pick if it's in this world, else the last lesson opened anywhere.
+    if (!selectedLesson || String(selectedLesson.subject_id) !== currentWorldId) {
+      var last = readLastLessonId();
+      var pick = stages.find(function (l) {
+        return String(l.file_id) === last;
+      });
+      setSelectedLesson(pick ? pick.file_id : null);
+    }
+    renderStages();
+    renderNextOpponent();
+    renderCharacterInto(document.getElementById("wc-fighter-sprite"), selectedCharacter);
+    renderDifficultyPicker();
+    showScreen("stages", { noFocus: true });
+    var list = document.getElementById("wc-stage-list");
+    var focusEl =
+      (selectedLessonId && list && list.querySelector('.wc-stage[data-lesson-id="' + cssEscape(selectedLessonId) + '"]')) ||
+      (list && list.querySelector(".wc-stage"));
+    if (focusEl) focusEl.focus({ preventScroll: true });
+  }
+
+  function renderStages() {
+    var list = document.getElementById("wc-stage-list");
+    if (!list) return;
+    var worldNum =
+      subjects.findIndex(function (s) {
+        return String(s.id) === String(currentWorldId);
+      }) + 1;
+    var stages = lessonsBySubject[String(currentWorldId)] || [];
+    var cleared = clearedLessonIds();
+    if (!stages.length) {
+      list.innerHTML = '<li class="wc-stage-empty">No lessons in this world yet.</li>';
+      renderSelectedStage();
+      return;
+    }
+    list.innerHTML = stages
+      .map(function (lesson, i) {
+        var id = String(lesson.file_id);
+        var on = id === selectedLessonId;
+        return (
+          '<li><button type="button" class="wc-stage' +
+          (on ? " is-selected" : "") +
+          '" data-lesson-id="' +
+          esc(id) +
+          '" aria-pressed="' +
+          (on ? "true" : "false") +
+          '">' +
+          '<span class="wc-stage-num">' +
+          worldNum +
+          "-" +
+          (i + 1) +
+          "</span>" +
+          '<span class="wc-stage-name">' +
+          esc(stageLabel(lesson)) +
+          "</span>" +
+          (cleared[id]
+            ? '<span class="wc-stage-badge is-cleared"><i class="fa-solid fa-star" aria-hidden="true"></i> CLEARED</span>'
+            : '<span class="wc-stage-badge">NEW</span>') +
+          "</button></li>"
+        );
+      })
+      .join("");
+    renderSelectedStage();
+  }
+
+  /** Why the last FIGHT didn't start; stays above FIGHT until the student changes something. */
+  function setStageAlert(text) {
+    var el = document.getElementById("wc-stage-alert");
+    if (!el) return;
+    el.textContent = text || "";
+    el.hidden = !text;
+  }
+
+  function renderSelectedStage() {
+    var label = document.getElementById("wc-selected-stage");
+    var fightBtn = document.getElementById("wc-fight-btn");
+    if (label) label.textContent = selectedLesson ? stageLabel(selectedLesson) : "Pick a stage";
+    if (fightBtn) fightBtn.disabled = !selectedLesson;
+  }
+
+  function readLastLessonId() {
+    try {
+      return localStorage.getItem("learniq-last-lesson") || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function setSelectedLesson(lessonId) {
+    var id = lessonId ? String(lessonId) : "";
+    selectedLessonId = id && lessonsById[id] ? id : null;
+    selectedLesson = selectedLessonId ? lessonsById[selectedLessonId] : null;
+    if (selectedLessonId) {
       // The dashboard launcher preselects the last lesson the student opened.
       try {
-        localStorage.setItem("learniq-last-lesson", id);
+        localStorage.setItem("learniq-last-lesson", selectedLessonId);
       } catch (e) {
         /* ignore */
       }
     }
-    syncSelectionUi();
+  }
+
+  function onStageListClick(event) {
+    var btn = event.target.closest(".wc-stage[data-lesson-id]");
+    if (!btn) return;
+    setStageAlert("");
+    setSelectedLesson(btn.getAttribute("data-lesson-id"));
+    playClickSound();
+    document.querySelectorAll("#wc-stage-list .wc-stage").forEach(function (b) {
+      var on = b === btn;
+      b.classList.toggle("is-selected", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    renderSelectedStage();
+    // Focus moves to FIGHT, so picking a stage and pressing Enter starts it
+    // (on phones this also scrolls the setup panel into view).
+    document.getElementById("wc-fight-btn")?.focus();
   }
 
   /**
    * Dashboard launcher deep link: battle-arena.html?lesson=<file_id>&difficulty=<key>&start=1
-   * selects the lesson and difficulty; start=1 goes straight to the loading screen.
+   * skips the menus and starts that battle right away.
    */
-  var launchFromUrlHandled = false;
-  function applyLaunchFromUrl() {
-    if (launchFromUrlHandled) return;
-    launchFromUrlHandled = true;
+  async function applyLaunchFromUrl() {
     var params = new URLSearchParams(window.location.search);
     var lessonId = params.get("lesson");
-    if (!lessonId || !lessonsById[lessonId]) return;
+    if (!lessonId || params.get("start") !== "1") return false;
+    window.history.replaceState(null, "", window.location.pathname);
+    try {
+      await ensureWorlds();
+    } catch (e) {
+      return false;
+    }
+    if (!lessonsById[lessonId]) return false;
     var difficulty = params.get("difficulty");
     if (difficulty && BATTLE_DIFFICULTIES[difficulty]) saveSelectedDifficulty(difficulty);
-    selectLesson(lessonId);
-    // Plain lobby URL again, so Back / refresh doesn't restart the battle.
-    window.history.replaceState(null, "", window.location.pathname);
-    if (params.get("start") === "1") void startBattle();
-  }
-
-  function buildLessonCard(lesson) {
-    var id = String(lesson.file_id || lesson.lesson_id || "").trim();
-    if (!id) return "";
-    var title = esc(lessonTitle(lesson));
-    var fileType = esc(lessonFileType(lesson));
-    var createdLabel = formatDate(lesson.created_at);
-    var createdHtml =
-      createdLabel !== "—"
-        ? '<span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ' + esc(createdLabel) + "</span>"
-        : "";
-
-    return (
-      '<article class="lesson-card battle-arena-lesson-card" data-lesson-id="' +
-      esc(id) +
-      '" aria-pressed="false">' +
-      '<div class="lesson-card-icon"><i class="fa-solid fa-file-lines" aria-hidden="true"></i></div>' +
-      '<div class="lesson-info">' +
-      "<h4>" +
-      title +
-      "</h4>" +
-      '<div class="lesson-card-meta-row">' +
-      '<span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ' +
-      fileType +
-      "</span>" +
-      createdHtml +
-      "</div>" +
-      "</div>" +
-      '<div class="lesson-actions">' +
-      '<button type="button" class="btn btn-primary btn-small" data-select-lesson="' +
-      esc(id) +
-      '">Select Lesson</button>' +
-      "</div>" +
-      "</article>"
-    );
-  }
-
-  async function loadLessons() {
-    var listEl = document.getElementById("battle-arena-lesson-list");
-    var emptyEl = document.getElementById("battle-arena-lessons-empty");
-    var statusEl = document.getElementById("battle-arena-lessons-status");
-    if (!listEl) return;
-
-    selectedLessonId = null;
-    selectedLesson = null;
-    lessonsById = {};
-    syncSelectionUi();
-
-    if (statusEl) {
-      statusEl.hidden = false;
-      statusEl.textContent = "Loading lessons…";
-    }
-    if (emptyEl) emptyEl.hidden = true;
-    listEl.hidden = true;
-    listEl.innerHTML = "";
-
-    var sid = studentId();
-    if (!sid) {
-      if (statusEl) statusEl.textContent = "Sign in as a student to load published lessons.";
-      return;
-    }
-    if (typeof apiUrl !== "function") {
-      if (statusEl) statusEl.textContent = "API helper missing. Check js/core/api.js.";
-      return;
-    }
-
-    try {
-      var url = apiUrl("/student/lessons?student_id_number=" + encodeURIComponent(sid));
-      var res = await fetch(url, {
-        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
-      });
-      var data = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        data = {};
-      }
-      if (!res.ok) {
-        throw new Error((data && data.error) || "Could not load lessons.");
-      }
-      var lessons = Array.isArray(data.lessons) ? data.lessons : [];
-      if (statusEl) statusEl.hidden = true;
-
-      if (!lessons.length) {
-        if (emptyEl) emptyEl.hidden = false;
-        return;
-      }
-
-      lessons.forEach(function (lesson) {
-        var id = String(lesson.file_id || lesson.lesson_id || "").trim();
-        if (id) lessonsById[id] = lesson;
-      });
-
-      listEl.innerHTML = lessons.map(buildLessonCard).filter(Boolean).join("");
-      listEl.hidden = false;
-      syncSelectionUi();
-      applyLaunchFromUrl();
-    } catch (err) {
-      if (statusEl) {
-        statusEl.hidden = false;
-        statusEl.textContent = (err && err.message) || "Could not load lessons.";
-      }
-      if (typeof showToast === "function") {
-        showToast((err && err.message) || "Could not load lessons.", "error");
-      }
-    }
-  }
-
-  function onLessonListClick(event) {
-    var selectBtn = event.target.closest("[data-select-lesson]");
-    if (selectBtn) {
-      event.preventDefault();
-      selectLesson(selectBtn.getAttribute("data-select-lesson"));
-      return;
-    }
-    var card = event.target.closest(".battle-arena-lesson-card[data-lesson-id]");
-    if (!card || !document.getElementById("battle-arena-lesson-list").contains(card)) return;
-    selectLesson(card.getAttribute("data-lesson-id"));
-  }
-
-  function onModeChange(event) {
-    var input = event.target;
-    if (!input || input.name !== "battle-mode") return;
-    selectedMode = input.value === "player" ? "player" : "ai";
-    document.querySelectorAll(".battle-mode-card").forEach(function (card) {
-      var radio = card.querySelector('input[name="battle-mode"]');
-      card.classList.toggle("is-selected", !!(radio && radio.checked));
-    });
-    setStartEnabled(isLobbyReady());
-  }
-
-  function openBattleModal() {
-    if (!isLobbyReady() || !selectedLesson) return;
-    var modal = document.getElementById("battle-arena-modal");
-    var lessonEl = document.getElementById("battle-modal-lesson");
-    var modeEl = document.getElementById("battle-modal-mode");
-    if (lessonEl) lessonEl.textContent = lessonTitle(selectedLesson);
-    if (modeEl) modeEl.textContent = modeLabel();
-    renderDifficultyPicker();
-    if (modal) {
-      modal.hidden = false;
-      document.body.classList.add("lq-modal-open");
-    }
-  }
-
-  function closeBattleModal() {
-    var modal = document.getElementById("battle-arena-modal");
-    if (modal) modal.hidden = true;
-    document.body.classList.remove("lq-modal-open");
-  }
-
-  function onStartClick() {
-    if (!isLobbyReady()) return;
-    openBattleModal();
+    setSelectedLesson(lessonId);
+    currentWorldId = String(selectedLesson.subject_id || "");
+    void loadBattleLog();
+    void startBattle();
+    return true;
   }
 
   /* ----------------------------------------------------------
@@ -678,7 +839,9 @@
       data = {};
     }
     if (!res.ok) {
-      throw new Error((data && data.error) || "Could not generate battle questions.");
+      var err = new Error((data && data.error) || "Could not generate battle questions.");
+      err.status = res.status;
+      throw err;
     }
     return Array.isArray(data.questions) ? data.questions : [];
   }
@@ -704,41 +867,9 @@
     return out;
   }
 
-  function showLobbyScreen() {
-    document.querySelector(".dashboard-shell")?.removeAttribute("hidden");
-    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
-    document.body.classList.remove("battle-fullscreen-active");
-  }
-
-  function showFightScreenEl() {
-    document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
-    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.removeAttribute("hidden");
-    document.body.classList.add("battle-fullscreen-active");
-  }
-
-  function showLoadingScreen() {
-    document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-loading-screen")?.removeAttribute("hidden");
-    document.body.classList.add("battle-fullscreen-active");
-  }
-
   function setLoadingHint(text) {
     var hint = document.getElementById("battle-loading-hint");
     if (hint) hint.textContent = text;
-  }
-
-  function renderVocabNote() {
-    var note = document.getElementById("battle-vocab-note");
-    if (!note || !fight) return;
-    if (fight.usingFallback) {
-      note.hidden = false;
-      note.textContent = "Using general questions — no AI content yet for this lesson.";
-    } else {
-      note.hidden = true;
-    }
   }
 
   function renderHpSide(hp, maxHp, fillId, valueId, heartsId) {
@@ -874,6 +1005,7 @@
 
   function onNextClick() {
     if (!fight || !fight.questions.length) return;
+    logAnswer("skipped");
     fight.selected = [];
     advanceToQuestion(fight.questionIndex + 1);
   }
@@ -912,6 +1044,7 @@
 
   function saveSelectedDifficulty(key) {
     selectedDifficulty = key;
+    setStageAlert("");
     try {
       localStorage.setItem(DIFFICULTY_STORAGE_KEY, key);
     } catch (e) {
@@ -920,6 +1053,7 @@
     renderDifficultyPicker();
   }
 
+  /** Stage select and Settings each have a picker; both show the same saved choice. */
   function renderDifficultyPicker() {
     document.querySelectorAll(".battle-difficulty-option").forEach(function (btn) {
       var on = btn.getAttribute("data-difficulty") === selectedDifficulty;
@@ -927,27 +1061,31 @@
       btn.setAttribute("aria-checked", on ? "true" : "false");
       btn.tabIndex = on ? 0 : -1;
     });
-    var modalEl = document.getElementById("battle-modal-difficulty");
-    if (modalEl) modalEl.textContent = difficultyConfig(selectedDifficulty).label;
+    var note = document.getElementById("wc-diff-note");
+    if (note) note.textContent = formatBattleTime(difficultyConfig(selectedDifficulty).seconds) + " on the clock";
   }
 
   function setupDifficultyPicker() {
-    var picker = document.querySelector(".battle-difficulty-picker");
-    if (!picker) return;
-    picker.addEventListener("click", function (e) {
-      var btn = e.target.closest(".battle-difficulty-option");
-      var key = btn && btn.getAttribute("data-difficulty");
-      if (key && BATTLE_DIFFICULTIES[key]) saveSelectedDifficulty(key);
-    });
-    // Arrow keys move between options (radio group behaviour).
-    picker.addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      var keys = Object.keys(BATTLE_DIFFICULTIES);
-      var idx = keys.indexOf(selectedDifficulty);
-      idx = (idx + (e.key === "ArrowRight" ? 1 : keys.length - 1)) % keys.length;
-      saveSelectedDifficulty(keys[idx]);
-      picker.querySelector('[data-difficulty="' + selectedDifficulty + '"]')?.focus();
-      e.preventDefault();
+    document.querySelectorAll(".battle-difficulty-picker").forEach(function (picker) {
+      picker.addEventListener("click", function (e) {
+        var btn = e.target.closest(".battle-difficulty-option");
+        var key = btn && btn.getAttribute("data-difficulty");
+        if (key && BATTLE_DIFFICULTIES[key]) {
+          saveSelectedDifficulty(key);
+          playClickSound();
+        }
+      });
+      // Left/right move between options (radio group behaviour).
+      picker.addEventListener("keydown", function (e) {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        var keys = Object.keys(BATTLE_DIFFICULTIES);
+        var idx = keys.indexOf(selectedDifficulty);
+        idx = (idx + (e.key === "ArrowRight" ? 1 : keys.length - 1)) % keys.length;
+        saveSelectedDifficulty(keys[idx]);
+        picker.querySelector('[data-difficulty="' + selectedDifficulty + '"]')?.focus();
+        e.preventDefault();
+        e.stopPropagation();
+      });
     });
     renderDifficultyPicker();
   }
@@ -1021,6 +1159,12 @@
 
   function stopIntroMusic() {
     stopTrack(introMusic);
+  }
+
+  /** Menu music: starts the intro loop unless it is already playing (no restart between screens). */
+  function ensureIntroMusic() {
+    if (introMusic.el && !introMusic.el.paused) return;
+    playIntroMusic();
   }
 
   function stopAllMusic() {
@@ -1186,6 +1330,7 @@
 
     fight.selected.push(tileIdx);
     fight.hintsLeft -= 1;
+    logAnswer("hint");
     playClickSound();
     renderGrid();
     renderWordPreview();
@@ -1222,9 +1367,44 @@
     fight.currentMeaning = current.meaning || "";
     fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
     fight.selected = [];
+    logQuestionShown(current);
     renderQuestion();
     renderGrid();
     renderWordPreview();
+  }
+
+  /* ----------------------------------------------------------
+   * Answer log: one entry per question shown, saved with the battle so
+   * the results screen and the Battle Log can show what was answered.
+   * result: "correct" | "skipped" | "unanswered" (still on screen when
+   * the battle ended); attempts = wrong words tried first.
+   * ---------------------------------------------------------- */
+  var MAX_LOGGED_QUESTIONS = 60;
+
+  function logQuestionShown(question) {
+    if (!fight) return;
+    fight.answerLog = fight.answerLog || [];
+    fight.currentLog = {
+      question: String(question.question || "").slice(0, 240),
+      answer: String(question.answer || ""),
+      meaning: String(question.meaning || "").slice(0, 200),
+      result: "unanswered",
+      attempts: [],
+      hints: 0,
+    };
+    if (fight.answerLog.length < MAX_LOGGED_QUESTIONS) fight.answerLog.push(fight.currentLog);
+  }
+
+  function logAnswer(kind, word) {
+    var entry = fight && fight.currentLog;
+    if (!entry || entry.result !== "unanswered") return;
+    if (kind === "wrong") {
+      if (entry.attempts.length < 5) entry.attempts.push(String(word || "").slice(0, 24));
+    } else if (kind === "hint") {
+      entry.hints += 1;
+    } else {
+      entry.result = kind; // "correct" | "skipped"
+    }
   }
 
   function damageForWordLength(len) {
@@ -1335,11 +1515,16 @@
     });
   }
 
+  var characterDialogOpener = null;
+
   function setCharacterDialogOpen(open) {
     var dialog = document.getElementById("battle-character-dialog");
     var sprite = document.getElementById("battle-player-sprite");
     if (!dialog) return;
-    if (open) renderCharacterPicker();
+    if (open) {
+      renderCharacterPicker();
+      characterDialogOpener = document.activeElement;
+    }
     dialog.hidden = !open;
     // Don't let the clock run while choosing mid-battle.
     if (fight && fight.started && !fight.ended) {
@@ -1349,6 +1534,8 @@
     if (sprite) sprite.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
       dialog.querySelector(".battle-character-option.is-active")?.focus();
+    } else if (characterDialogOpener && characterDialogOpener.isConnected && characterDialogOpener.offsetParent) {
+      characterDialogOpener.focus();
     } else if (sprite) {
       sprite.focus();
     }
@@ -1391,7 +1578,9 @@
         /* ignore */
       }
       renderCharacterPicker();
-      renderCharacterInto(document.getElementById("battle-player-sprite"), seed);
+      ["battle-player-sprite", "wc-fighter-sprite", "wc-player-sprite"].forEach(function (id) {
+        renderCharacterInto(document.getElementById(id), seed);
+      });
       playClickSound();
       setCharacterDialogOpen(false);
     });
@@ -1458,18 +1647,13 @@
     if (levelEl) levelEl.textContent = "Lv " + monster.level;
   }
 
+  /** Stage select panel: the monster the next battle will be against. */
   function renderNextOpponent() {
-    var el = document.getElementById("battle-next-opponent");
-    if (!el) return;
     var m = monsterForStage(currentStage());
-    el.innerHTML =
-      '<span class="battle-next-opponent-label">Next opponent</span> ' +
-      '<span class="battle-next-opponent-sprite" aria-hidden="true">' +
-      (m.boss ? "🐲" : esc(m.sprite)) +
-      "</span> <strong>" +
-      esc(m.name) +
-      "</strong> · Lv " +
-      m.level;
+    var sprite = document.getElementById("wc-opponent-sprite");
+    var name = document.getElementById("wc-opponent-name");
+    if (sprite) sprite.textContent = m.boss ? "🐲" : m.sprite;
+    if (name) name.textContent = m.name.toUpperCase() + " · LV " + m.level;
   }
 
   /* ----------------------------------------------------------
@@ -1532,6 +1716,7 @@
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
 
     if (word === fight.currentAnswer) {
+      logAnswer("correct");
       var dmg = damageForWordLength(word.length);
       var meaning = fight.currentMeaning || "";
       fight.aiHp = Math.max(0, fight.aiHp - dmg);
@@ -1583,6 +1768,7 @@
       return;
     }
 
+    logAnswer("wrong", word);
     playTrack(sfxWrong);
     var counterDmg = 6 + Math.floor(Math.random() * 9) + (fight.monster ? fight.monster.power : 0);
     fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
@@ -1620,36 +1806,6 @@
     var count = fight ? fight.wordsUsed.length : 0;
     var totalDamage = fight ? fight.wordsUsed.reduce(function (sum, e) { return sum + e.damage; }, 0) : 0;
     return count + " correct answer" + (count === 1 ? "" : "s") + ", " + totalDamage + " total damage dealt.";
-  }
-
-  function openResultModal(outcome) {
-    var modal = document.getElementById("battle-result-modal");
-    var titleEl = document.getElementById("battle-result-modal-title");
-    var bodyEl = document.getElementById("battle-result-modal-body");
-    var primaryBtn = document.getElementById("battle-result-primary-btn");
-    if (!modal) return;
-
-    if (titleEl) titleEl.textContent = outcome === "win" ? "Victory!" : "Defeated";
-    if (bodyEl) {
-      bodyEl.textContent =
-        (outcome === "win"
-          ? "You defeated the " + (fight && fight.monster ? fight.monster.name : "AI opponent") + "! "
-          : fight && fight.endReason === "time"
-          ? "Time's up! "
-          : "The " + (fight && fight.monster ? fight.monster.name : "AI opponent") + " defeated you. ") +
-        battleResultSummary();
-    }
-    if (primaryBtn) primaryBtn.textContent = outcome === "win" ? "Battle Again" : "Try Again";
-
-    modal.hidden = false;
-    document.body.classList.add("lq-modal-open");
-  }
-
-  function closeResultModal() {
-    var modal = document.getElementById("battle-result-modal");
-    if (modal) modal.hidden = true;
-    renderResultProgress(null);
-    document.body.classList.remove("lq-modal-open");
   }
 
   /** Points, EXP and level change for the battle that just ended. */
@@ -1705,9 +1861,94 @@
     el.hidden = false;
   }
 
+  /* ----------------------------------------------------------
+   * Answer review: results screen and Battle Log detail
+   * ---------------------------------------------------------- */
+  function renderReviewList(listEl, answers) {
+    if (!listEl) return;
+    if (!Array.isArray(answers)) {
+      listEl.innerHTML =
+        '<li class="wc-review-empty">Answers weren\'t saved for this battle. Battles from now on keep every answer.</li>';
+      return;
+    }
+    if (!answers.length) {
+      listEl.innerHTML = '<li class="wc-review-empty">No questions were answered in this battle.</li>';
+      return;
+    }
+    listEl.innerHTML = answers
+      .map(function (row) {
+        var tries = (Array.isArray(row.attempts) ? row.attempts : []).filter(Boolean);
+        var result = row.result === "correct" ? "correct" : row.result === "skipped" ? "skipped" : "unanswered";
+        var state = result === "correct" ? "correct" : tries.length ? "wrong" : result;
+        var icon = { correct: "fa-check", wrong: "fa-xmark", skipped: "fa-forward", unanswered: "fa-hourglass-end" }[state];
+        var status =
+          state === "correct"
+            ? tries.length
+              ? "Correct after " + (tries.length + 1) + " tries"
+              : "Correct"
+            : state === "wrong"
+            ? result === "skipped"
+              ? "Wrong, then skipped"
+              : "Wrong"
+            : result === "skipped"
+            ? "Skipped"
+            : "Not answered";
+        var hints = Number(row.hints || 0);
+        return (
+          '<li class="wc-review-item is-' + state + '">' +
+          '<span class="wc-review-icon" aria-hidden="true"><i class="fa-solid ' + icon + '"></i></span>' +
+          '<div class="wc-review-body">' +
+          '<p class="wc-review-q">' + esc(row.question || "") + "</p>" +
+          '<p class="wc-review-a"><span class="wc-review-status">' +
+          esc(status) +
+          (hints ? " · " + hints + (hints === 1 ? " hint" : " hints") : "") +
+          "</span>" +
+          (tries.length
+            ? ' <span class="wc-review-tries">You tried: ' +
+              esc(tries.map(function (w) { return String(w).toUpperCase(); }).join(", ")) +
+              "</span>"
+            : "") +
+          "</p>" +
+          '<p class="wc-review-answer">Answer: <strong>' +
+          esc(String(row.answer || "").toUpperCase()) +
+          "</strong>" +
+          (row.meaning ? ' <span class="wc-review-meaning">— ' + esc(row.meaning) + "</span>" : "") +
+          "</p>" +
+          "</div></li>"
+        );
+      })
+      .join("");
+  }
+
+  function showResults(outcome, progress) {
+    var title = document.getElementById("wc-results-title");
+    var sub = document.getElementById("wc-results-sub");
+    var again = document.getElementById("wc-play-again");
+    var monster = fight && fight.monster ? fight.monster.name : "monster";
+    var timeUp = fight && fight.endReason === "time";
+    if (title) {
+      title.textContent = outcome === "win" ? "VICTORY!" : timeUp ? "TIME'S UP!" : "DEFEAT";
+      title.classList.toggle("is-win", outcome === "win");
+    }
+    if (sub) {
+      sub.textContent =
+        (outcome === "win"
+          ? "You defeated the " + monster + "! "
+          : timeUp
+          ? "The clock ran out. "
+          : "The " + monster + " won this time. ") + battleResultSummary();
+    }
+    renderResultProgress(progress);
+    renderReviewList(document.getElementById("wc-results-review"), fight ? fight.answerLog || [] : []);
+    if (again) again.textContent = outcome === "win" ? "PLAY AGAIN" : "TRY AGAIN";
+    showScreen("results", { noFocus: true });
+    again?.focus({ preventScroll: true });
+  }
+
   function endBattle(outcome) {
     if (!fight || fight.ended) return;
     fight.ended = true;
+    closePause(true);
     stopBattleTimer();
     stopTrack(battleMusic);
     stopTrack(sfxTimerRunsOut);
@@ -1718,9 +1959,8 @@
       playTrack(gameOverSound);
     }
     var progress = computeBattleProgress(outcome);
-    openResultModal(outcome);
-    renderResultProgress(progress);
     saveBattleResultToHistory(outcome, progress);
+    requestMoreQuestionsIfLow();
 
     // Update locally right away; the server copy is refreshed once history is saved.
     var prevStats = battleStats || {};
@@ -1734,15 +1974,26 @@
       battleStats.wins = prevStats.wins + (outcome === "win" ? 1 : 0);
       battleStats.battles = Number(prevStats.battles || 0) + 1;
     }
-    setTimeout(loadBattleStats, 1500);
+
+    // Let the last hit and the victory / game-over sound play before the results screen.
+    var endedFight = fight;
+    setTimeout(function () {
+      if (fight === endedFight) showResults(outcome, progress);
+    }, 1100);
+    setTimeout(function () {
+      void loadBattleStats();
+      void loadBattleLog();
+    }, 1800);
   }
 
   function saveBattleResultToHistory(outcome, progress) {
-    if (!fight || typeof recordStudentHistory !== "function") return;
+    if (!fight) return;
     var p = progress || computeBattleProgress(outcome);
-    recordStudentHistory("battle", {
+    var entry = {
       lesson_id: fight.lessonId || null,
-      lesson_title: selectedLesson ? lessonTitle(selectedLesson) : "Battle Arena",
+      lesson_title: selectedLesson ? lessonTitle(selectedLesson) : "Word Clash",
+      subject_name: selectedLesson ? String(selectedLesson.subject_name || "") : "",
+      game: "word-clash",
       outcome: outcome,
       difficulty: fight.difficulty || "normal",
       correct_answers: p.correct,
@@ -1753,7 +2004,20 @@
       total_exp_after: p.totalExp,
       leveled_up: p.leveledUp,
       new_best: p.newBest,
-    });
+      answers: (fight.answerLog || []).map(function (e) {
+        return {
+          question: e.question,
+          answer: e.answer,
+          meaning: e.meaning,
+          result: e.result,
+          attempts: e.attempts.slice(),
+          hints: e.hints,
+        };
+      }),
+    };
+    // Shown in the Battle Log and stage stars right away; replaced by the server copy on refresh.
+    battleLog.unshift(Object.assign({ timestamp: new Date().toISOString() }, entry));
+    if (typeof recordStudentHistory === "function") recordStudentHistory("battle", entry);
   }
 
   function resetFightForRebattle() {
@@ -1763,66 +2027,161 @@
     fight.playerHp = PLAYER_MAX_HP;
     fight.aiHp = AI_MAX_HP;
     fight.wordsUsed = [];
+    fight.answerLog = [];
+    fight.currentLog = null;
     fight.hintsLeft = HINTS_PER_BATTLE;
     renderHintButton();
-    fight.questions = shuffleArray(fight.questions);
+    var pick = pickBattleQuestions(fight.bank || fight.questions, fight.lessonId);
+    fight.questions = pick.questions;
+    fight.unseenKeys = pick.unseenKeys;
     renderHp();
     renderWordsUsed();
     advanceToQuestion(0);
     resetBattleClock();
   }
 
-  function exitToLobby() {
+  function showMenu() {
+    renderMenuPlayer();
+    showScreen("menu");
+  }
+
+  /** Leaves the battle (or its results) for the main menu or the stage list. */
+  function leaveFight(target) {
     stopBattleTimer();
     stopAllMusic();
-    renderNextOpponent();
     setBattleWaiting(false);
+    closePause(true);
     fight = null;
-    closeResultModal();
-    showLobbyScreen();
+    if (target === "stages" && currentWorldId && subjects.length) {
+      openStages(currentWorldId);
+    } else {
+      showMenu();
+    }
+    ensureIntroMusic();
+  }
+
+  /* ----------------------------------------------------------
+   * Question bank: each lesson + difficulty has one bank on the server,
+   * shared by every student and growing over time (backend
+   * /generate-battle-questions). A battle shows the questions this student
+   * hasn't seen first, then the ones they missed last time, then the rest.
+   * When fewer than MORE_QUESTIONS_BELOW unseen ones are left, the server is
+   * asked to add more in the background for the next battle.
+   * ---------------------------------------------------------- */
+  var QUESTIONS_PER_BATTLE = 12;
+  var MORE_QUESTIONS_BELOW = 6;
+  var BANK_MAX = 60; // keep in sync with BATTLE_BANK_MAX in backend/main.py
+
+  function answerKey(word) {
+    return String(word || "").toLowerCase().replace(/[^a-z]/g, "");
+  }
+
+  /** Latest result per answer word in this student's battles on a lesson: "missed" or "mastered". */
+  function questionHistory(lessonId) {
+    var state = {};
+    // battleLog is newest first, so the first time a word shows up is its latest result.
+    battleLog.forEach(function (b) {
+      if (String(b.lesson_id || "") !== String(lessonId) || !Array.isArray(b.answers)) return;
+      b.answers.forEach(function (a) {
+        var key = answerKey(a && a.answer);
+        if (!key || state[key]) return;
+        var clean = a.result === "correct" && !(a.attempts && a.attempts.length) && !Number(a.hints || 0);
+        state[key] = clean ? "mastered" : "missed";
+      });
+    });
+    return state;
+  }
+
+  /** Up to 12 questions: never seen first, then missed last time, then the rest (each group shuffled). */
+  function pickBattleQuestions(bank, lessonId) {
+    var state = questionHistory(lessonId);
+    var unseen = [];
+    var missed = [];
+    var mastered = [];
+    bank.forEach(function (q) {
+      var s = state[answerKey(q.answer)];
+      (s === "missed" ? missed : s === "mastered" ? mastered : unseen).push(q);
+    });
+    return {
+      questions: shuffleArray(unseen)
+        .concat(shuffleArray(missed), shuffleArray(mastered))
+        .slice(0, QUESTIONS_PER_BATTLE),
+      unseenKeys: unseen.map(function (q) {
+        return answerKey(q.answer);
+      }),
+    };
+  }
+
+  function bankForDifficulty(content, difficulty) {
+    return normalizeQuestionEntries(content.battleQuestions).filter(function (q) {
+      return q.difficulty === difficulty;
+    });
+  }
+
+  /** The lesson's bank for one difficulty; the first player of a lesson waits for the AI's first batch. */
+  async function loadQuestionBank(fileId, difficulty) {
+    var bank = bankForDifficulty(await loadLessonContentAndVocab(fileId), difficulty);
+    if (bank.length >= 5) return bank;
+    setLoadingHint("Generating " + difficultyConfig(difficulty).label.toLowerCase() + " battle questions with AI…");
+    try {
+      bank = normalizeQuestionEntries(await generateBattleQuestionsWithAi(fileId, difficulty));
+    } catch (err) {
+      // 400/404: the lesson file has no readable text (or is missing) — retrying won't help.
+      if (err && (err.status === 400 || err.status === 404)) {
+        throw new Error(
+          "This lesson's file can't be read, so Word Clash can't make questions for it. Ask your teacher to upload it again."
+        );
+      }
+      var message = (err && err.message) || "Couldn't make questions for this lesson.";
+      throw new Error(/try again/i.test(message) ? message : message + " Press FIGHT to try again.");
+    }
+    if (bank.length < 5) throw new Error("Couldn't make questions for this lesson. Press FIGHT to try again.");
+    return bank;
+  }
+
+  /** After a battle: if this student has (almost) seen the whole bank, ask the server for more. */
+  function requestMoreQuestionsIfLow() {
+    if (!fight || !fight.bankSize || fight.bankSize >= BANK_MAX) return;
+    var shown = {};
+    (fight.answerLog || []).forEach(function (e) {
+      shown[answerKey(e.answer)] = true;
+    });
+    var unseenLeft = (fight.unseenKeys || []).filter(function (k) {
+      return !shown[k];
+    }).length;
+    if (unseenLeft >= MORE_QUESTIONS_BELOW) return;
+    fetch(apiUrl("/generate-battle-questions"), {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ file_id: fight.lessonId, difficulty: fight.difficulty, mode: "more" }),
+    }).catch(function () {
+      /* best effort: the next battle just repeats a few questions */
+    });
   }
 
   async function startBattle() {
-    if (!isLobbyReady() || !selectedLesson) return;
+    if (!selectedLesson) return;
 
     var fileId = selectedLessonId;
-    closeBattleModal();
-    playIntroMusic();
+    setStageAlert("");
+    ensureIntroMusic();
     renderCharacterInto(document.getElementById("battle-loading-sprite"), selectedCharacter);
     showLoadingScreen();
     setLoadingHint("Preparing your battle…");
 
     try {
       var difficulty = selectedDifficulty;
-      var content = await loadLessonContentAndVocab(fileId);
-      var questions = normalizeQuestionEntries(content.battleQuestions).filter(function (q) {
-        return q.difficulty === difficulty;
-      });
-      var usingAi = questions.length >= 5;
-      var usingFallback = false;
-
-      if (!usingAi) {
-        setLoadingHint("Generating " + difficultyConfig(difficulty).label.toLowerCase() + " battle questions with AI…");
-        try {
-          var aiQuestions = await generateBattleQuestionsWithAi(fileId, difficulty);
-          questions = normalizeQuestionEntries(aiQuestions);
-          usingAi = questions.length >= 5;
-        } catch (aiErr) {
-          if (typeof showToast === "function") {
-            showToast((aiErr && aiErr.message) || "Could not generate AI battle questions.", "error");
-          }
-        }
-      }
-
-      if (!usingAi) {
-        questions = FALLBACK_QUESTIONS.slice();
-        usingFallback = true;
-      }
-      questions = shuffleArray(questions).slice(0, 12);
+      // The Battle Log says which questions this student has seen (deep links skip the menus that load it).
+      var loaded = await Promise.all([loadQuestionBank(fileId, difficulty), battleLogLoaded ? null : loadBattleLog()]);
+      var bank = loaded[0];
+      var pick = pickBattleQuestions(bank, fileId);
 
       fight = {
         lessonId: fileId,
-        questions: questions,
+        bank: bank,
+        bankSize: bank.length,
+        unseenKeys: pick.unseenKeys,
+        questions: pick.questions,
         questionIndex: 0,
         currentAnswer: "",
         currentMeaning: "",
@@ -1831,7 +2190,8 @@
         playerHp: PLAYER_MAX_HP,
         aiHp: AI_MAX_HP,
         wordsUsed: [],
-        usingFallback: usingFallback,
+        answerLog: [],
+        currentLog: null,
         hintsLeft: HINTS_PER_BATTLE,
         difficulty: difficulty,
         monster: monsterForStage(currentStage()),
@@ -1841,12 +2201,9 @@
       renderHintButton();
 
       var playerNameEl = document.getElementById("battle-fight-player-name");
-      if (playerNameEl) {
-        playerNameEl.textContent = document.getElementById("student-display-name")?.textContent || "You";
-      }
+      if (playerNameEl) playerNameEl.textContent = playerDisplayName();
 
       showFightScreenEl();
-      renderVocabNote();
       renderHp();
       renderWordsUsed();
       advanceToQuestion(0);
@@ -1854,38 +2211,14 @@
     } catch (err) {
       fight = null;
       stopIntroMusic();
-      showLobbyScreen();
-      if (typeof showToast === "function") {
-        showToast((err && err.message) || "Could not start battle.", "error");
+      var message = (err && err.message) || "Could not start battle.";
+      if (currentWorldId && subjects.length) {
+        openStages(currentWorldId);
+        setStageAlert(message); // stays visible, unlike a toast
+      } else {
+        showMenu();
+        if (typeof showToast === "function") showToast(message, "error");
       }
-    }
-  }
-
-  /** Exit dialog: Keep Battling / Restart (back to the Ready screen) / Exit Battle. */
-  async function onExitBattleClick() {
-    var choice = true;
-    // Restart only makes sense once the round has started (not on the Ready screen).
-    var inBattle = !!(fight && fight.started && !fight.ended);
-    if (fight) fight.paused = true; // don't let the clock run out while deciding
-    if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
-      choice = await window.LearnIQConfirm.show({
-        title: "Exit Battle?",
-        message: inBattle
-          ? "Your progress in this battle will be lost. Restart to try again from the beginning."
-          : "You'll go back to the lesson list.",
-        confirmText: "Exit Battle",
-        cancelText: inBattle ? "Keep Battling" : "Stay",
-        extraText: inBattle ? "Restart" : "",
-        variant: "danger",
-      });
-    }
-    if (choice === "extra") {
-      restartBattle();
-    } else if (choice) {
-      exitToLobby();
-    } else if (fight) {
-      fight.paused = false;
-      battleTimerLastTick = Date.now(); // don't count the time spent in the dialog
     }
   }
 
@@ -1894,7 +2227,8 @@
     if (!fight) return;
     var opts = options || {};
     stopBattleTimer();
-    closeResultModal();
+    closePause(true);
+    showFightScreenEl();
     ALL_TRACKS.forEach(stopTrack);
     if (opts.tryAgain) {
       // "Try Again" after a loss: play try again.mp3 first, then the intro music.
@@ -1914,47 +2248,343 @@
     resetFightForRebattle();
   }
 
-  function onResultPrimaryClick() {
-    // The button reads "Try Again" after a loss and "Battle Again" after a win.
-    restartBattle({ tryAgain: !!fight && fight.lastOutcome !== "win" });
+  /** Results → PLAY AGAIN / TRY AGAIN: same stage, picked again from the bank (it may have grown). */
+  var playAgainBusy = false;
+
+  async function playAgain() {
+    var current = fight;
+    if (!current || playAgainBusy) return;
+    playAgainBusy = true;
+    try {
+      var bank = bankForDifficulty(await loadLessonContentAndVocab(current.lessonId), current.difficulty);
+      if (bank.length >= 5) {
+        current.bank = bank;
+        current.bankSize = bank.length;
+      }
+    } catch (e) {
+      /* keep the bank we have */
+    }
+    playAgainBusy = false;
+    // Reads "Try Again" after a loss and "Play Again" after a win.
+    if (fight === current) restartBattle({ tryAgain: current.lastOutcome !== "win" });
   }
 
-  function onResultSecondaryClick() {
-    exitToLobby();
+  /* ----------------------------------------------------------
+   * Pause menu (Pause button / Esc during a battle). The clock stops
+   * while it is open.
+   * ---------------------------------------------------------- */
+  function openPause() {
+    if (!fight || fight.ended) return;
+    var el = document.getElementById("wc-pause");
+    if (!el || !el.hidden) return;
+    fight.paused = true;
+    el.hidden = false;
+    var restart = el.querySelector('[data-wc-pause="restart"]');
+    if (restart) restart.hidden = !fight.started;
+    focusFirst(el);
+    playClickSound();
+  }
+
+  /** silent: just hide it (battle ending / leaving) without restarting the clock. */
+  function closePause(silent) {
+    var el = document.getElementById("wc-pause");
+    if (!el || el.hidden) return;
+    el.hidden = true;
+    if (silent || !fight) return;
+    fight.paused = false;
+    battleTimerLastTick = Date.now(); // time spent paused doesn't count
+    document.getElementById("battle-pause-btn")?.focus({ preventScroll: true });
+  }
+
+  async function confirmDialog(opts) {
+    if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
+      return window.LearnIQConfirm.show(Object.assign({ variant: "danger" }, opts));
+    }
+    return window.confirm(opts.message || opts.title);
+  }
+
+  async function onPauseAction(action) {
+    if (action === "resume") {
+      playClickSound();
+      closePause();
+    } else if (action === "restart") {
+      playClickSound();
+      restartBattle();
+    } else if (action === "settings") {
+      playClickSound();
+      document.getElementById("wc-pause").hidden = true; // stays paused while in Settings
+      openSettings("pause");
+    } else if (action === "quit") {
+      var ok = await confirmDialog({
+        title: "Quit to menu?",
+        message: fight && fight.started ? "This battle won't be saved." : "You'll go back to the main menu.",
+        confirmText: "Quit",
+        cancelText: "Keep playing",
+      });
+      if (ok) leaveFight("menu");
+      else document.querySelector('[data-wc-pause="quit"]')?.focus();
+    }
+  }
+
+  /* ----------------------------------------------------------
+   * Battle Log: saved battles with their answers
+   * ---------------------------------------------------------- */
+  function formatLogDate(iso) {
+    try {
+      var d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function difficultyLabel(key) {
+    return BATTLE_DIFFICULTIES[key] ? BATTLE_DIFFICULTIES[key].label.toUpperCase() : "NORMAL";
+  }
+
+  function logLessonName(b) {
+    return stageLabel({ filename: b.lesson_title || "Lesson" });
+  }
+
+  async function openBattleLog() {
+    showScreen("log", { noFocus: true });
+    var status = document.getElementById("wc-log-status");
+    var list = document.getElementById("wc-log-list");
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Loading…";
+    }
+    if (list) list.innerHTML = "";
+    await loadBattleLog();
+    renderBattleLog();
+    var first = list && list.querySelector(".wc-log-item");
+    if (first) first.focus({ preventScroll: true });
+    else focusFirst(screenEl("log"));
+  }
+
+  function renderBattleLog() {
+    var status = document.getElementById("wc-log-status");
+    var list = document.getElementById("wc-log-list");
+    if (!list) return;
+    if (!battleLog.length) {
+      if (status) {
+        status.hidden = false;
+        status.textContent = "No battles yet. Press START and pick a stage!";
+      }
+      list.innerHTML = "";
+      return;
+    }
+    if (status) status.hidden = true;
+    list.innerHTML = battleLog
+      .map(function (b, i) {
+        var won = String(b.outcome || "").toLowerCase() === "win";
+        var meta = [formatLogDate(b.timestamp), difficultyLabel(b.difficulty), b.subject_name || ""].filter(Boolean);
+        return (
+          '<li><button type="button" class="wc-log-item ' + (won ? "is-win" : "is-loss") + '" data-log-index="' + i + '">' +
+          '<span class="wc-log-outcome">' +
+          (won ? '<i class="fa-solid fa-star" aria-hidden="true"></i> WON' : '<i class="fa-solid fa-xmark" aria-hidden="true"></i> LOST') +
+          "</span>" +
+          '<span class="wc-log-main"><span class="wc-log-lesson">' + esc(logLessonName(b)) + "</span>" +
+          '<span class="wc-log-meta">' + esc(meta.join(" · ")) + "</span></span>" +
+          '<span class="wc-log-score">' + Number(b.score != null ? b.score : b.total_damage || 0) + " PTS</span>" +
+          "</button></li>"
+        );
+      })
+      .join("");
+  }
+
+  function openLogDetail(index) {
+    var b = battleLog[index];
+    if (!b) return;
+    var won = String(b.outcome || "").toLowerCase() === "win";
+    var title = document.getElementById("wc-log-detail-title");
+    var summary = document.getElementById("wc-log-detail-summary");
+    if (title) {
+      title.textContent = won ? "VICTORY" : "DEFEAT";
+      title.classList.toggle("is-win", won);
+      title.classList.toggle("is-loss", !won);
+    }
+    if (summary) {
+      var chips = [
+        formatLogDate(b.timestamp),
+        difficultyLabel(b.difficulty),
+        Number(b.score != null ? b.score : b.total_damage || 0) + " PTS",
+        b.exp_gained != null ? "+" + Number(b.exp_gained) + " EXP" : "",
+        Number(b.correct_answers || 0) + " CORRECT",
+        b.level_after != null ? "LV " + Number(b.level_after) : "",
+        b.new_best ? "NEW BEST!" : "",
+        b.leveled_up ? "LEVEL UP!" : "",
+      ].filter(Boolean);
+      summary.innerHTML =
+        '<p class="wc-log-detail-lesson">' + esc(logLessonName(b)) + "</p>" +
+        (b.subject_name ? '<p class="wc-log-detail-subject">' + esc(b.subject_name) + "</p>" : "") +
+        '<div class="wc-chip-row">' +
+        chips.map(function (c) { return '<span class="wc-chip">' + esc(c) + "</span>"; }).join("") +
+        "</div>";
+    }
+    renderReviewList(document.getElementById("wc-log-detail-review"), Array.isArray(b.answers) ? b.answers : null);
+    showScreen("log-detail");
+  }
+
+  /* ----------------------------------------------------------
+   * Main menu, PRESS START and keyboard controls
+   * ---------------------------------------------------------- */
+  function pressStart() {
+    if (activeScreen !== "splash") return;
+    getAudioCtx();
+    ensureIntroMusic();
+    playClickSound();
+    showMenu();
+  }
+
+  async function quitGame() {
+    var ok = await confirmDialog({
+      title: "Leave Word Clash?",
+      message: "You'll go back to the Arcade.",
+      confirmText: "Quit",
+      cancelText: "Stay",
+    });
+    if (ok) {
+      stopAllMusic();
+      window.location.href = "arcade.html";
+    } else {
+      document.querySelector('[data-wc-action="quit"]')?.focus();
+    }
+  }
+
+  function onMenuAction(action) {
+    playClickSound();
+    if (action === "start") void openWorlds();
+    else if (action === "log") void openBattleLog();
+    else if (action === "settings") openSettings("menu");
+    else if (action === "quit") void quitGame();
+  }
+
+  /** Arrow keys move between the main choices of each screen, like a game menu. */
+  var NAV_BY_SCREEN = {
+    menu: ".wc-menu-item",
+    worlds: ".wc-world:not([disabled])",
+    stages: ".wc-stage",
+    log: ".wc-log-item",
+    results: ".wc-btn-row .wc-btn",
+  };
+
+  function moveFocus(root, selector, dir) {
+    if (!root) return;
+    var items = Array.prototype.filter.call(root.querySelectorAll(selector), function (el) {
+      return !el.disabled && !el.hidden && el.offsetParent !== null;
+    });
+    if (!items.length) return;
+    var idx = items.indexOf(document.activeElement);
+    var next = idx === -1 ? items[0] : items[(idx + dir + items.length) % items.length];
+    next.focus();
+    playTone(520, 0.03, "square");
+  }
+
+  function onGlobalKeydown(e) {
+    if (e.defaultPrevented) return;
+    if (document.querySelector(".learniq-confirm-backdrop")) return; // the dialog handles its own keys
+    var charDialog = document.getElementById("battle-character-dialog");
+    if (charDialog && !charDialog.hidden) return;
+    var key = e.key;
+    var dir = key === "ArrowDown" || key === "ArrowRight" ? 1 : key === "ArrowUp" || key === "ArrowLeft" ? -1 : 0;
+    var fightScreen = document.getElementById("battle-fight-screen");
+    var pause = document.getElementById("wc-pause");
+    if (fightScreen && !fightScreen.hidden) {
+      if (key === "Escape") {
+        e.preventDefault();
+        if (pause && !pause.hidden) closePause();
+        else openPause();
+      } else if (pause && !pause.hidden && dir && (key === "ArrowDown" || key === "ArrowUp")) {
+        e.preventDefault();
+        moveFocus(pause, ".wc-menu-item", dir);
+      }
+      return;
+    }
+    var loading = document.getElementById("battle-loading-screen");
+    if (loading && !loading.hidden) return;
+    if (activeScreen === "splash") {
+      if (key === "Enter" || key === " ") {
+        e.preventDefault();
+        pressStart();
+      }
+      return;
+    }
+    if (key === "Escape") {
+      e.preventDefault();
+      goBack();
+      return;
+    }
+    var tag = (e.target && e.target.tagName) || "";
+    if (!dir || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    var selector = NAV_BY_SCREEN[activeScreen];
+    if (!selector) return;
+    e.preventDefault();
+    moveFocus(screenEl(activeScreen), selector, dir);
   }
 
   function setupBattleArenaPage() {
-    setupBattleMenu();
+    setupSettings();
     setupCharacterPicker();
-    renderNextOpponent();
     setupDifficultyPicker();
-    void loadBattleStats();
-    if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
-    if (typeof initRoleAwareDashboardSidebar === "function") initRoleAwareDashboardSidebar();
-    if (typeof hydrateSidebarProfileFromDatabase === "function") {
-      void hydrateSidebarProfileFromDatabase();
-    }
+    renderMenuPlayer();
+    void loadBattleStats().then(renderMenuPlayer);
+    void loadBattleLog();
 
-    document.getElementById("battle-arena-refresh-btn")?.addEventListener("click", function () {
-      void loadLessons();
+    document.getElementById("wc-press-start")?.addEventListener("click", pressStart);
+    // Tapping anywhere on the title screen also counts as PRESS START.
+    document.getElementById("wc-splash")?.addEventListener("click", function (e) {
+      if (!e.target.closest("button")) pressStart();
     });
-    document.getElementById("battle-arena-lesson-list")?.addEventListener("click", onLessonListClick);
-    document.querySelectorAll('input[name="battle-mode"]').forEach(function (radio) {
-      radio.addEventListener("change", onModeChange);
+    document.querySelectorAll("[data-wc-action]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        onMenuAction(btn.getAttribute("data-wc-action"));
+      });
     });
-    document.getElementById("battle-arena-start-btn")?.addEventListener("click", onStartClick);
-    document.getElementById("battle-arena-modal-ok")?.addEventListener("click", function () {
+    document.querySelectorAll("[data-wc-back]").forEach(function (btn) {
+      btn.addEventListener("click", goBack);
+    });
+    document.getElementById("wc-world-grid")?.addEventListener("click", function (e) {
+      var btn = e.target.closest(".wc-world[data-world-id]");
+      if (!btn || btn.disabled) return;
+      playClickSound();
+      openStages(btn.getAttribute("data-world-id"));
+    });
+    document.getElementById("wc-stage-list")?.addEventListener("click", onStageListClick);
+    document.getElementById("wc-fight-btn")?.addEventListener("click", function () {
+      if (!selectedLesson) return;
+      playClickSound();
       void startBattle();
     });
-    document.getElementById("battle-arena-modal-close")?.addEventListener("click", closeBattleModal);
-    document.getElementById("battle-arena-modal")?.addEventListener("click", function (e) {
-      if (e.target === e.currentTarget) closeBattleModal();
+    document.getElementById("wc-change-fighter")?.addEventListener("click", function () {
+      playClickSound();
+      setCharacterDialogOpen(true);
     });
-    document.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape") return;
-      var modal = document.getElementById("battle-arena-modal");
-      if (modal && !modal.hidden) closeBattleModal();
+    document.getElementById("wc-log-list")?.addEventListener("click", function (e) {
+      var btn = e.target.closest(".wc-log-item[data-log-index]");
+      if (!btn) return;
+      playClickSound();
+      openLogDetail(Number(btn.getAttribute("data-log-index")));
     });
+    document.getElementById("wc-play-again")?.addEventListener("click", function () {
+      void playAgain();
+    });
+    document.getElementById("wc-results-stages")?.addEventListener("click", function () {
+      playClickSound();
+      leaveFight("stages");
+    });
+    document.getElementById("wc-results-menu")?.addEventListener("click", function () {
+      playClickSound();
+      leaveFight("menu");
+    });
+    document.getElementById("battle-pause-btn")?.addEventListener("click", openPause);
+    document.querySelectorAll("[data-wc-pause]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        void onPauseAction(btn.getAttribute("data-wc-pause"));
+      });
+    });
+    document.addEventListener("keydown", onGlobalKeydown);
 
     document.getElementById("battle-letter-grid")?.addEventListener("click", onTileClick);
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
@@ -1965,15 +2595,19 @@
     document.getElementById("battle-start-btn")?.addEventListener("click", onStartRoundClick);
     document.getElementById("battle-attack-btn")?.addEventListener("click", onAttackClick);
     document.getElementById("next-btn")?.addEventListener("click", onNextClick);
-    document.getElementById("battle-exit-btn")?.addEventListener("click", function () {
-      void onExitBattleClick();
-    });
-    document.getElementById("battle-result-primary-btn")?.addEventListener("click", onResultPrimaryClick);
-    document.getElementById("battle-result-secondary-btn")?.addEventListener("click", onResultSecondaryClick);
 
-    setStartEnabled(false);
-    renderSelectedPanel();
-    void loadLessons();
+    // Dashboard launcher links straight into a battle; everyone else starts at PRESS START.
+    var params = new URLSearchParams(window.location.search);
+    var launching = !!params.get("lesson") && params.get("start") === "1";
+    if (launching) {
+      showLoadingScreen();
+      setLoadingHint("Preparing your battle…");
+    } else {
+      showScreen("splash");
+    }
+    void applyLaunchFromUrl().then(function (started) {
+      if (launching && !started) showScreen("splash");
+    });
   }
 
   document.addEventListener("DOMContentLoaded", function () {

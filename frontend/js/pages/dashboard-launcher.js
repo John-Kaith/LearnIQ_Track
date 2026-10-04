@@ -2,10 +2,10 @@
  * LearnIQ dashboard launcher (learniq-dashboard.html hero).
  *
  * Study card: pick a lesson, then Reviewer / Quiz / Activity opens it in
- * my-lesson.html on that tab. AI Battle card: pick a lesson + difficulty, then
- * Start goes straight into battle-arena.html. Both default to the last lesson
- * the student opened (localStorage "learniq-last-lesson", written by My Lesson
- * and the Battle Arena).
+ * my-lesson.html on that tab. Word Clash card: pick a lesson + difficulty, then
+ * Start goes straight into the battle (battle-arena.html). Both default to the
+ * last lesson the student opened (localStorage "learniq-last-lesson", written
+ * by My Lesson and Word Clash).
  *
  * Uses script.js / api.js globals: apiUrl, adminAuthHeaders, getStudentIdNumberForApi.
  */

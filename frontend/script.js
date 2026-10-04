@@ -1138,7 +1138,7 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
       { id: "learniq-dashboard", href: "learniq-dashboard.html", icon: "fa-graduation-cap", label: "LearnIQ Dashboard" },
       { id: "subjects", href: "subjects.html", icon: "fa-book-open", label: "My lesson" },
       { id: "archived", href: "student-archived.html", icon: "fa-box-archive", label: "Archived" },
-      { id: "battle-arena", href: "battle-arena.html", icon: "fa-gamepad", label: "AI Battle Arena" },
+      { id: "arcade", href: "arcade.html", icon: "fa-gamepad", label: "Arcade" },
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
       { id: "history", href: "history.html", icon: "fa-clock-rotate-left", label: "History" },
       { id: "module", href: "module-selection.html", icon: "fa-th-large", label: "Module Selection" },
@@ -1175,7 +1175,8 @@ const STUDENT_PATH_TO_SIDEBAR_ID = {
   "my-lesson.html": "subjects",
   "subjects.html": "subjects",
   "student-archived.html": "archived",
-  "battle-arena.html": "battle-arena",
+  "arcade.html": "arcade",
+  "battle-arena.html": "arcade",
   "leaderboard.html": "leaderboard",
   "history.html": "history",
   "module-selection.html": "module",
@@ -1868,8 +1869,9 @@ function setupLeaderboardPage() {
     if (retryBtn) retryBtn.hidden = false;
   }
 
-  // "quiz" = ranked by quiz points (default); "arena" = ranked by AI Battle Arena level.
-  let rankMode = "quiz";
+  // "quiz" = ranked by quiz points (default); "arena" = ranked by Word Clash level.
+  // The Arcade links here with ?rank=arena.
+  let rankMode = new URLSearchParams(window.location.search).get("rank") === "arena" ? "arena" : "quiz";
   let lastEntries = [];
 
   function rankedEntries(entries) {
@@ -1973,11 +1975,11 @@ function setupLeaderboardPage() {
   function renderRankings(entries) {
     if (tableNote) {
       const sortedBy =
-        rankMode === "arena" ? "Sorted by AI Battle Arena level, then EXP." : "Sorted by total points, then accuracy.";
+        rankMode === "arena" ? "Sorted by Word Clash level, then EXP." : "Sorted by total points, then accuracy.";
       tableNote.textContent =
         entries.length === 0
           ? rankMode === "arena"
-            ? "No AI Battle Arena games played yet."
+            ? "No Word Clash games played yet."
             : "No submitted quiz attempts yet."
           : `Showing ${entries.length} student${entries.length === 1 ? "" : "s"} · ${sortedBy}`;
     }
@@ -2005,6 +2007,11 @@ function setupLeaderboardPage() {
       });
       renderRankings(rankedEntries(lastEntries));
     });
+  });
+  document.querySelectorAll("[data-rank-mode]").forEach((b) => {
+    const on = (b.dataset.rankMode === "arena" ? "arena" : "quiz") === rankMode;
+    b.classList.toggle("is-active", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
   });
 
   emptyCta?.addEventListener("click", () => {
@@ -10170,10 +10177,22 @@ function readStudentHistoryListLocal(type) {
 }
 
 function historyEntryDedupKey(type, item) {
+  // client_id is set when the entry is recorded and saved with it on the server,
+  // so the local copy and the server copy of one event share a key.
+  if (item?.client_id) return `${type}:c:${item.client_id}`;
   if (item?.id) return `${type}:${item.id}`;
   const lid = String(item?.lesson_id || "");
   const ts = item?.timestamp ? new Date(item.timestamp).getTime() : 0;
   return `${type}:${lid}:${ts}`;
+}
+
+/** Battles cached locally before client_id existed: same lesson and score, saved within 2 minutes. */
+function isSameBattleEvent(a, b) {
+  if (String(a?.lesson_id || "") !== String(b?.lesson_id || "")) return false;
+  if (Number(a?.score ?? a?.total_damage ?? 0) !== Number(b?.score ?? b?.total_damage ?? 0)) return false;
+  const ta = a?.timestamp ? new Date(a.timestamp).getTime() : NaN;
+  const tb = b?.timestamp ? new Date(b.timestamp).getTime() : NaN;
+  return Number.isFinite(ta) && Number.isFinite(tb) && Math.abs(ta - tb) < 2 * 60 * 1000;
 }
 
 function readStudentHistoryList(type) {
@@ -10185,6 +10204,9 @@ function readStudentHistoryList(type) {
   for (const item of [...server, ...local]) {
     const key = historyEntryDedupKey(type, item);
     if (seen.has(key)) continue;
+    if (type === "battle" && !item?.id && !item?.client_id && server.some((s) => isSameBattleEvent(s, item))) {
+      continue;
+    }
     seen.add(key);
     merged.push(item);
   }
@@ -10264,7 +10286,11 @@ function writeStudentHistoryList(type, list) {
     const baseKey = STUDENT_HISTORY_KEYS[type];
     if (!baseKey) return;
     const key = `${baseKey}${getStudentHistoryUserKey()}`;
-    const capped = Array.isArray(list) ? list.slice(0, STUDENT_HISTORY_MAX_PER_TYPE) : [];
+    let capped = Array.isArray(list) ? list.slice(0, STUDENT_HISTORY_MAX_PER_TYPE) : [];
+    if (type === "battle") {
+      // Word Clash answers make entries large; the server keeps every battle's answers.
+      capped = capped.map((item, i) => (i < 10 || !item?.answers ? item : { ...item, answers: undefined }));
+    }
     localStorage.setItem(key, JSON.stringify(capped));
   } catch (e) {
     console.warn("writeStudentHistoryList failed:", e);
@@ -10277,6 +10303,9 @@ function recordStudentHistory(type, payload) {
     ...(payload || {}),
     timestamp: new Date().toISOString(),
   };
+  if (type !== "quiz" && !entry.client_id) {
+    entry.client_id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
   const list = readStudentHistoryList(type);
 
   // For reviewer/activity, avoid spam by collapsing repeat opens of the same
@@ -10345,7 +10374,7 @@ function buildHistoryItemHtml(type, item, index) {
     if (item.exp_gained != null) extras.push(`+${Number(item.exp_gained)} EXP`);
     if (item.level_after != null) extras.push(`Lv ${Number(item.level_after)}`);
     iconHtml = '<i class="fa-solid fa-gamepad" aria-hidden="true"></i>';
-    summary = `<span class="history-summary-pill">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct · ${escapeHtml(extras.join(" · "))})</span></span>${
+    summary = `<span class="history-summary-pill${won ? "" : " is-bad"}">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct · ${escapeHtml(extras.join(" · "))})</span></span>${
       item.new_best ? ' <span class="history-summary-pill is-ok">New best</span>' : ""
     }${item.leveled_up ? ' <span class="history-summary-pill is-ok">Level up</span>' : ""}`;
   }
@@ -10390,8 +10419,8 @@ function renderStudentHistoryList(type) {
         body: "Generate or open activities from My lesson and they will appear here.",
       },
       battle: {
-        title: "No Battle Arena history yet",
-        body: "Finish a battle in AI Battle Arena and the result will appear here.",
+        title: "No Word Clash games yet",
+        body: "Play Word Clash in the Arcade. Every battle, with your answers, will appear here.",
       },
     };
     const l = labels[type] || labels.quiz;
@@ -10622,7 +10651,7 @@ function renderBattleDetailIntoModal(item) {
     item.difficulty ? ["Difficulty", String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1)] : null,
     ["Points", String(points)],
     item.exp_gained != null ? ["EXP earned", `+${Number(item.exp_gained)}`] : null,
-    item.level_after != null ? ["Arena level after battle", String(Number(item.level_after))] : null,
+    item.level_after != null ? ["Level after battle", String(Number(item.level_after))] : null,
     item.new_best ? ["Personal best", "New best score!"] : null,
     item.leveled_up ? ["Level up", `Reached Level ${Number(item.level_after)}`] : null,
   ]
@@ -10652,8 +10681,59 @@ function renderBattleDetailIntoModal(item) {
         </div>
         ${progressRows}
       </dl>
+      ${buildBattleAnswersHtml(item.answers)}
     </article>
   `);
+}
+
+/** Word Clash: every question of the battle, what the student typed, and the answer. */
+function buildBattleAnswersHtml(answers) {
+  if (!Array.isArray(answers)) {
+    return '<p class="small-note">Answers weren\'t saved for this battle. Battles from now on keep every answer.</p>';
+  }
+  if (!answers.length) {
+    return '<p class="small-note">No questions were answered in this battle.</p>';
+  }
+  const rows = answers
+    .map((row, i) => {
+      const tries = (Array.isArray(row?.attempts) ? row.attempts : []).filter(Boolean);
+      const result = row?.result === "correct" ? "correct" : row?.result === "skipped" ? "skipped" : "unanswered";
+      const state = result === "correct" ? "correct" : tries.length ? "wrong" : result;
+      let status = "Not answered";
+      if (state === "correct") status = tries.length ? `Correct after ${tries.length + 1} tries` : "Correct";
+      else if (state === "wrong") status = result === "skipped" ? "Wrong, then skipped" : "Wrong";
+      else if (result === "skipped") status = "Skipped";
+      const mark = state === "correct" ? "is-ok" : state === "wrong" ? "is-bad" : "is-skip";
+      const icon =
+        state === "correct"
+          ? "fa-circle-check"
+          : state === "wrong"
+            ? "fa-circle-xmark"
+            : result === "skipped"
+              ? "fa-forward"
+              : "fa-hourglass-end";
+      const hints = Number(row?.hints || 0);
+      const details = [
+        tries.length
+          ? `You tried: <strong>${escapeHtml(tries.map((w) => String(w).toUpperCase()).join(", "))}</strong>`
+          : "",
+        `Answer: <strong>${escapeHtml(String(row?.answer || "").toUpperCase())}</strong>`,
+        hints ? `${hints} hint${hints === 1 ? "" : "s"} used` : "",
+      ]
+        .filter(Boolean)
+        .join(" &nbsp;&middot;&nbsp; ");
+      return `
+        <article class="history-quiz-question">
+          <header class="history-quiz-question-head">
+            <h4>Q${i + 1}. ${escapeHtml(String(row?.question || ""))}</h4>
+            <span class="history-quiz-mark ${mark}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${escapeHtml(status)}</span>
+          </header>
+          <p class="small-note history-quiz-answer-line">${details}</p>
+          ${row?.meaning ? `<p class="small-note history-battle-meaning">${escapeHtml(String(row.meaning))}</p>` : ""}
+        </article>`;
+    })
+    .join("");
+  return `<h4 class="history-battle-answers-title">Your answers</h4><div class="history-quiz-list">${rows}</div>`;
 }
 
 async function downloadHistoryDetailAsPdf() {
@@ -10736,6 +10816,8 @@ function setupStudentHistoryPage() {
     void hydrateSidebarProfileFromDatabase();
   }
   updateStudentHistoryTabCounts();
+  const tabFromUrl = new URLSearchParams(window.location.search).get("tab");
+  if (tabFromUrl && STUDENT_HISTORY_KEYS[tabFromUrl]) activeHistoryTab = tabFromUrl;
   setStudentHistoryActiveTab(activeHistoryTab);
   void fetchStudentHistoryFromServer();
 

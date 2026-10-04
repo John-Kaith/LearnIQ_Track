@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -14,7 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
+from fastapi import BackgroundTasks, Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -76,6 +78,22 @@ supabase_key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
 app = FastAPI(title="LearnIQ Track API")
+
+
+class _HideTokensInAccessLog(logging.Filter):
+    """uvicorn logs each request's full URL; replace ?access_token= / refresh_token= values."""
+
+    _token_in_url = re.compile(r"((?:access_token|refresh_token)=)[^&\s\"]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                self._token_in_url.sub(r"\1[hidden]", a) if isinstance(a, str) else a for a in record.args
+            )
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_HideTokensInAccessLog())
 
 app.add_middleware(
     CORSMiddleware,
@@ -217,6 +235,9 @@ def strip_outer_markdown_code_fence(text: str) -> str:
 
 REVIEWER_SOURCE_MAX_CHARS = 120_000
 LESSON_EXTRACT_MAX_CHARS = 120_000
+# Picture-only PDFs are sent to Gemini inline; the request must stay under ~20 MB after base64.
+LESSON_PDF_OCR_MAX_BYTES = 15 * 1024 * 1024
+LESSON_TEXT_AI_UNAVAILABLE = "The AI couldn't read this lesson's pages right now. Try again in a moment."
 LESSON_VISION_MAX_SLIDES = 15
 # Whole-file base64 is stored in Postgres; keep uploads reasonable for insert + JSON latency.
 LESSON_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024
@@ -427,7 +448,6 @@ def home():
 @app.post("/login")
 async def login_user(body: dict):
     print("LOGIN ENDPOINT HIT")
-    print(f"DEBUG: Login attempt - body: {body}")
     
     err = require_supabase()
     if err is not None:
@@ -482,9 +502,6 @@ async def login_user(body: dict):
                 "email": email,
                 "password": password
             })
-            print(f"DEBUG: Supabase auth response: {type(auth_response)}")
-            print(f"DEBUG: Auth user: {auth_response.user}")
-            print(f"DEBUG: Auth session: {auth_response.session}")
             print(f"LOGIN PASSWORD VALIDATION RESULT: {bool(auth_response.user)}")
         except Exception as auth_error:
             print(f"DEBUG: Supabase auth exception: {auth_error}")
@@ -497,7 +514,6 @@ async def login_user(body: dict):
         
         # Return safe user data with auth session
         print(f"DEBUG: Preparing successful response")
-        print(f"DEBUG: Raw user_profile from DB: {user_profile}")
         print(f"DEBUG: user_profile keys: {list(user_profile.keys()) if user_profile else 'None'}")
         print(f"DEBUG: user_profile.get('role'): {user_profile.get('role') if user_profile else 'None'}")
         print(f"DEBUG: Type of role: {type(user_profile.get('role')) if user_profile else 'None'}")
@@ -512,7 +528,6 @@ async def login_user(body: dict):
             safe_user["role"] = role_value.strip().lower() if role_value else "student"
             safe_user["access_token"] = auth_response.session.access_token
             safe_user["refresh_token"] = auth_response.session.refresh_token
-            print(f"DEBUG: Safe user data prepared: {safe_user}")
             print(f"DEBUG: Final role in safe_user: '{safe_user['role']}'")
             print(f"DEBUG: Final role type: {type(safe_user['role'])}")
         except Exception as response_error:
@@ -521,9 +536,6 @@ async def login_user(body: dict):
             return JSONResponse({"error": "Error preparing user response."}, status_code=500)
         
         print(f"DEBUG: Login successful for user: {email}")
-        print(f"FINAL LOGIN RESPONSE: {safe_user}")
-        print(f"FINAL RESPONSE STRUCTURE: {{'user': {safe_user}, 'message': 'Login successful'}}")
-        print(f"LOGIN RESPONSE PAYLOAD: {{'user': {safe_user}, 'message': 'Login successful'}}")
         return {"user": safe_user, "message": "Login successful"}
         
     except Exception as e:
@@ -1857,8 +1869,12 @@ def _pptx_slide_images(source: Path | bytes, max_slides: int = LESSON_VISION_MAX
     return images
 
 
-def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]]) -> str:
-    """Use Gemini vision to read text from slide/page images (picture-only decks)."""
+def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]], prompt: str | None = None) -> str | None:
+    """Use Gemini vision to read text from slide/page images or a picture-only PDF.
+
+    Returns the text ("" when there is none), or None when the AI call itself failed
+    (quota, network), so callers can say "try again" instead of "file can't be read".
+    """
     if not images or not API_KEY or not str(API_KEY).strip():
         return ""
 
@@ -1866,12 +1882,13 @@ def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]]) -> str:
         "https://generativelanguage.googleapis.com/v1beta/models/"
         f"gemini-2.5-flash:generateContent?key={API_KEY}"
     )
-    prompt = (
-        "These images are consecutive slides from a lesson presentation. "
-        "Extract ALL readable text in slide order. Use plain text only—keep headings, "
-        "bullets, and numbering. Separate slides with a blank line. "
-        "If a slide has no readable text, write [slide: no text]."
-    )
+    if prompt is None:
+        prompt = (
+            "These images are consecutive slides from a lesson presentation. "
+            "Extract ALL readable text in slide order. Use plain text only—keep headings, "
+            "bullets, and numbering. Separate slides with a blank line. "
+            "If a slide has no readable text, write [slide: no text]."
+        )
     parts: list[dict] = [{"text": prompt}]
     for mime, data in images:
         parts.append(
@@ -1891,11 +1908,11 @@ def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]]) -> str:
         result = response.json()
         if response.status_code != 200:
             print(f"_gemini_ocr_lesson_images status {response.status_code}: {result}")
-            return ""
+            return None
         return (gemini_text_from_result(result) or "").strip()
     except Exception as e:
         print(f"_gemini_ocr_lesson_images: {e}")
-        return ""
+        return None
 
 
 def extract_lesson_text_from_file(file_path: Path, filename: str | None = None) -> str:
@@ -1974,18 +1991,41 @@ def extract_lesson_text_from_bytes(data: bytes, filename: str | None = None) -> 
     return ""
 
 
-def extract_lesson_text_with_vision(source: Path | bytes, filename: str | None = None) -> str:
-    """OCR fallback for picture-only PPTX slides via Gemini vision."""
+def extract_lesson_text_with_vision(source: Path | bytes, filename: str | None = None) -> str | None:
+    """OCR fallback via Gemini vision: picture-only PPTX slides, and scanned / picture-only PDFs
+    (Gemini reads the PDF itself). Returns None when the AI call failed (try again later)."""
     name = (filename or (source.name if isinstance(source, Path) else "") or "").lower()
-    if not name.endswith(".pptx"):
+    label = filename or (str(source) if isinstance(source, Path) else "lesson-bytes")
+    if name.endswith(".pdf"):
+        try:
+            data = source.read_bytes() if isinstance(source, Path) else bytes(source)
+        except OSError as e:
+            print(f"extract_lesson_text_with_vision: can't read {label}: {e}")
+            return ""
+        if len(data) > LESSON_PDF_OCR_MAX_BYTES:
+            print(f"extract_lesson_text_with_vision: {label} is {len(data) // (1024 * 1024)} MB, too big to read as pictures")
+            return ""
+        print(f"extract_lesson_text_with_vision: reading PDF pages as pictures from {label}")
+        ocr = _gemini_ocr_lesson_images(
+            [("application/pdf", data)],
+            prompt=(
+                "This PDF is a lesson handout whose pages are scanned or pictures. "
+                "Extract ALL readable text in page order. Use plain text only—keep headings, "
+                "bullets, and numbering. Separate pages with a blank line. "
+                "If a page has no readable text, write [page: no text]."
+            ),
+        )
+    elif name.endswith(".pptx"):
+        images = _pptx_slide_images(source)
+        if not images:
+            return ""
+        print(f"extract_lesson_text_with_vision: {len(images)} slide image(s) from {label}")
+        ocr = _gemini_ocr_lesson_images(images)
+    else:
         return ""
-    images = _pptx_slide_images(source)
-    if not images:
-        return ""
-    label = filename or (str(source) if isinstance(source, Path) else "pptx-bytes")
-    print(f"extract_lesson_text_with_vision: {len(images)} slide image(s) from {label}")
-    ocr = _gemini_ocr_lesson_images(images)
-    return ocr[:LESSON_EXTRACT_MAX_CHARS] if ocr else ""
+    if ocr is None:
+        return None
+    return ocr[:LESSON_EXTRACT_MAX_CHARS]
 
 
 def _decode_lesson_file_bytes(lesson: dict) -> bytes | None:
@@ -2011,11 +2051,16 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
     lid = str(lesson.get("id") or "")
     fn = (lesson.get("filename") or "").lower()
     file_blob = _decode_lesson_file_bytes(lesson)
+    vision_tried = False  # the AI reads a picture-only file at most once per call
+    vision_unavailable = False
 
     if file_blob:
         fresh = extract_lesson_text_from_bytes(file_blob, lesson.get("filename"))
         if not fresh.strip() and allow_vision_fallback:
-            fresh = extract_lesson_text_with_vision(file_blob, lesson.get("filename"))
+            vision_tried = True
+            ocr = extract_lesson_text_with_vision(file_blob, lesson.get("filename"))
+            vision_unavailable = ocr is None
+            fresh = ocr or ""
         if fresh.strip():
             try:
                 db_supabase.update_lesson_extracted_text(lid, fresh)
@@ -2031,8 +2076,10 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
 
     if file_path:
         fresh = extract_lesson_text_from_file(file_path, lesson.get("filename"))
-        if not fresh.strip() and allow_vision_fallback:
-            fresh = extract_lesson_text_with_vision(file_path, lesson.get("filename"))
+        if not fresh.strip() and allow_vision_fallback and not vision_tried:
+            ocr = extract_lesson_text_with_vision(file_path, lesson.get("filename"))
+            vision_unavailable = ocr is None
+            fresh = ocr or ""
         if fresh.strip():
             try:
                 db_supabase.update_lesson_extracted_text(lid, fresh)
@@ -2048,6 +2095,9 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
             )
         return "", "No lesson file found. Upload a PDF or PowerPoint (.pptx) first."
 
+    if vision_unavailable:
+        return "", LESSON_TEXT_AI_UNAVAILABLE
+
     if fn.endswith(".pptx") or fn.endswith(".ppt"):
         return "", (
             "No readable text in this PowerPoint. Slides may be pictures only—we tried reading them "
@@ -2055,7 +2105,8 @@ def lesson_text_for_ai(lesson: dict, *, allow_vision_fallback: bool = False) -> 
         )
     if fn.endswith(".pdf"):
         return "", (
-            "No text found in this PDF. Use a file with selectable/copyable text (not a scanned photo PDF)."
+            "No readable text in this PDF. We also tried reading its pages as pictures but found nothing "
+            "usable. Upload a clearer PDF (under 15 MB) or one with selectable/copyable text."
         )
     return "", "No text extracted from this file. Upload a PDF with selectable text or a PPTX with slide text."
 
@@ -2481,7 +2532,7 @@ async def upload_file(
 
 
 @app.post("/generate-reviewer")
-async def generate_reviewer(body: dict, authorization: str | None = Header(default=None)):
+def generate_reviewer(body: dict, authorization: str | None = Header(default=None)):
     print("AI GENERATION REQUEST RECEIVED: /generate-reviewer")
     print("REQUEST PAYLOAD:", body)
     auth_err = _require_signed_in(authorization)
@@ -2546,7 +2597,7 @@ async def generate_reviewer(body: dict, authorization: str | None = Header(defau
 
 
 @app.post("/generate-question")
-async def generate_question(body: dict, authorization: str | None = Header(default=None)):
+def generate_question(body: dict, authorization: str | None = Header(default=None)):
     print("AI GENERATION REQUEST RECEIVED: /generate-question")
     print("REQUEST PAYLOAD:", body)
     auth_err = _require_signed_in(authorization)
@@ -2640,7 +2691,7 @@ async def generate_question(body: dict, authorization: str | None = Header(defau
 
 BATTLE_DIFFICULTIES = ("normal", "medium", "hard")
 
-# How each AI Battle Arena difficulty shapes its questions (see generate_battle_questions).
+# How each Word Clash difficulty shapes its questions (see _ai_battle_questions).
 BATTLE_DIFFICULTY_GUIDE = {
     "normal": (
         "DIFFICULTY: NORMAL. Straightforward recall. Ask for the main key terms of the lesson using "
@@ -2665,7 +2716,9 @@ def normalize_battle_difficulty(value: object) -> str:
     return d if d in BATTLE_DIFFICULTIES else "normal"
 
 
-def normalize_battle_questions(questions: object, difficulty: str = "normal") -> list[dict[str, str]]:
+def normalize_battle_questions(
+    questions: object, difficulty: str = "normal", limit: int = 12
+) -> list[dict[str, str]]:
     if not isinstance(questions, list):
         return []
     difficulty = normalize_battle_difficulty(difficulty)
@@ -2693,45 +2746,50 @@ def normalize_battle_questions(questions: object, difficulty: str = "normal") ->
         if difficulty != "normal":
             item["difficulty"] = difficulty  # untagged = normal (older saved questions)
         normalized.append(item)
-    return normalized[:12]
+    return normalized[: max(0, limit)]
 
 
-@app.post("/generate-battle-questions")
-async def generate_battle_questions(body: dict, authorization: str | None = Header(default=None)):
-    print("AI GENERATION REQUEST RECEIVED: /generate-battle-questions")
-    auth_err = _require_signed_in(authorization)
-    if auth_err is not None:
-        return auth_err
-    key_err = require_gemini_key()
-    if key_err is not None:
-        return key_err
-    db_err = require_supabase()
-    if db_err is not None:
-        return db_err
+# Word Clash question bank: one shared bank per lesson + difficulty in
+# lesson_content.battle_questions. The first player triggers the first batch; when a
+# student runs low on questions they haven't seen, the game asks for more ("more"
+# mode) and new ones are added in the background until BATTLE_BANK_MAX.
+BATTLE_MIN_TO_PLAY = 5
+BATTLE_FIRST_BATCH = 12
+BATTLE_MORE_BATCH = 10
+BATTLE_BANK_MAX = 60
+BATTLE_MORE_COOLDOWN_SEC = 60
+BATTLE_EXHAUSTED_SEC = 6 * 3600  # the AI found (almost) nothing new: stop asking for a while
 
-    file_id = body.get("file_id")
-    lesson = db_supabase.get_lesson_row(str(file_id)) if file_id else None
-    if not lesson:
-        return JSONResponse({"error": "File not found"}, status_code=404)
+# Only touched from the event loop (single process), so plain dicts are safe.
+_battle_gen_locks: dict[str, asyncio.Lock] = {}  # per lesson + difficulty: one AI batch at a time
+_battle_write_locks: dict[str, asyncio.Lock] = {}  # per lesson: battle_questions is one column for all difficulties
+_battle_more_until: dict[str, float] = {}  # "more" cooldown / exhausted, per lesson + difficulty
 
-    difficulty = normalize_battle_difficulty(body.get("difficulty"))
-    cooldown_kind = "battle_questions" if difficulty == "normal" else f"battle_questions_{difficulty}"
-    if not body.get("skip_cooldown"):
-        cd_err = check_ai_generation_cooldown(cooldown_kind, str(file_id))
-        if cd_err is not None:
-            return cd_err
 
-    text, text_err = lesson_text_for_ai(lesson, allow_vision_fallback=True)
-    if text_err:
-        return JSONResponse({"error": text_err}, status_code=400)
+def _battle_lock(table: dict[str, asyncio.Lock], key: str) -> asyncio.Lock:
+    lock = table.get(key)
+    if lock is None:
+        lock = table[key] = asyncio.Lock()
+    return lock
 
+
+def _ai_battle_questions(
+    text: str, difficulty: str, count: int, avoid_answers: list[str]
+) -> tuple[list[dict[str, str]], JSONResponse | None]:
+    """Blocking Gemini call (run it in a worker thread). Returns (questions, error)."""
+    avoid = ""
+    if avoid_answers:
+        avoid = (
+            "- These answer words are already in the game. Do NOT use any of them as an answer; "
+            "ask about other facts and terms from the lesson: " + ", ".join(sorted(set(avoid_answers))) + "\n"
+        )
     prompt = (
         "You are an educational game designer creating a quiz-battle game. The student reads a "
         "question, then must spell the answer using letter tiles to attack an opponent. A wrong "
         "answer lets the opponent attack the student instead, so questions must be answerable "
         "from the lesson text alone.\n"
-        "TASK: From the lesson text below, write 10 to 12 short questions, each with exactly ONE "
-        "single-word answer.\n"
+        f"TASK: From the lesson text below, write {max(count - 2, 1)} to {count} short questions, each with "
+        "exactly ONE single-word answer.\n"
         "Rules:\n"
         "- Each question must be answerable with exactly ONE word — no phrases, no multi-word answers.\n"
         "- The answer word must be letters only (no spaces/punctuation/numbers), "
@@ -2739,6 +2797,7 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
         "- Base every question only on facts, terms, or concepts that actually appear in the lesson text.\n"
         "- Keep each question under 20 words and unambiguous.\n"
         "- Also include a one-sentence meaning/explanation of the answer term.\n"
+        f"{avoid}"
         f"{BATTLE_DIFFICULTY_GUIDE[difficulty]}\n"
         "Return STRICT VALID JSON ONLY (no markdown, no explanations, no code fences) with this schema:\n"
         '{ "questions": [ { "question": "...", "answer": "...", "meaning": "..." } ] }\n\n'
@@ -2748,43 +2807,140 @@ async def generate_battle_questions(body: dict, authorization: str | None = Head
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    print("SENDING TO AI API (battle_questions)")
-    response = requests.post(url, json=payload, timeout=120)
-    result = response.json()
+    print(f"SENDING TO AI API (battle_questions, {difficulty}, {count}, avoiding {len(avoid_answers)})")
+    try:
+        response = requests.post(url, json=payload, timeout=120)
+    except requests.RequestException as e:
+        print("AI REQUEST FAILED (battle_questions):", str(e))
+        return [], JSONResponse({"error": "The AI is not responding right now. Try again in a moment."}, status_code=502)
+    try:
+        result = response.json()
+    except ValueError:
+        result = {}
     print("AI RAW RESPONSE STATUS (battle_questions):", response.status_code)
-
     if response.status_code != 200:
-        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
+        return [], JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
 
     raw_output = gemini_text_from_result(result)
     if not raw_output:
-        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
-
+        return [], JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
     try:
         parsed = parse_model_json(raw_output)
-        questions = normalize_battle_questions(
-            parsed.get("questions") if isinstance(parsed, dict) else None,
-            difficulty,
-        )
     except (json.JSONDecodeError, ValueError):
-        return JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=502)
+        return [], JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=502)
+    questions = normalize_battle_questions(
+        parsed.get("questions") if isinstance(parsed, dict) else None, difficulty, limit=count
+    )
+    return questions, None
 
-    if len(questions) < 5:
-        return JSONResponse({"error": "AI could not build enough usable questions from this lesson."}, status_code=502)
 
-    try:
-        db_supabase.replace_battle_questions_for_difficulty(str(file_id), difficulty, questions)
-    except Exception as e:
-        print("AI GENERATION ERROR (db write battle_questions):", str(e))
-        return JSONResponse({"error": str(e)}, status_code=502)
+async def _save_battle_bank(file_id: str, difficulty: str, questions: list[dict[str, str]]) -> None:
+    async with _battle_lock(_battle_write_locks, file_id):
+        await run_in_threadpool(db_supabase.replace_battle_questions_for_difficulty, file_id, difficulty, questions)
 
-    if not body.get("skip_cooldown"):
-        start_ai_generation_cooldown(cooldown_kind, str(file_id))
-    return {"questions": questions, "difficulty": difficulty}
+
+async def _add_more_battle_questions(lesson: dict, file_id: str, difficulty: str) -> None:
+    """Background job for mode "more": add up to BATTLE_MORE_BATCH new questions to the bank."""
+    key = f"{file_id}:{difficulty}"
+    async with _battle_lock(_battle_gen_locks, key):
+        try:
+            bank = await run_in_threadpool(db_supabase.get_battle_questions_for_difficulty, file_id, difficulty)
+            room = BATTLE_BANK_MAX - len(bank)
+            if room <= 0:
+                _battle_more_until[key] = time.time() + BATTLE_EXHAUSTED_SEC
+                return
+            text, text_err = await run_in_threadpool(lesson_text_for_ai, lesson, allow_vision_fallback=True)
+            if text_err:
+                print(f"Word Clash bank {key}: no lesson text ({text_err})")
+                return
+            known = [str(q.get("answer") or "") for q in bank if q.get("answer")]
+            new, err = await run_in_threadpool(
+                _ai_battle_questions, text, difficulty, min(BATTLE_MORE_BATCH, room), known
+            )
+            if err is not None:
+                print(f"Word Clash bank {key}: AI error, nothing added")
+                return
+            known_set = set(known)
+            fresh = [q for q in new if q["answer"] not in known_set][:room]
+            if len(fresh) < 3:
+                # The lesson's terms are used up; don't spend AI calls on it for a while.
+                _battle_more_until[key] = time.time() + BATTLE_EXHAUSTED_SEC
+            if fresh:
+                await _save_battle_bank(file_id, difficulty, bank + fresh)
+            print(f"Word Clash bank {key}: +{len(fresh)} -> {len(bank) + len(fresh)} questions")
+        except Exception as e:
+            print(f"Word Clash bank {key}: adding questions failed: {e}")
+
+
+@app.post("/generate-battle-questions")
+async def generate_battle_questions(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+):
+    """Word Clash questions for one lesson + difficulty (the shared bank).
+
+    - Bank already has questions: returned as they are (no AI call).
+    - Bank empty: the AI writes the first batch from the lesson text and it is saved. Requests
+      that arrive meanwhile wait for that batch instead of starting their own.
+    - mode "more": a student is running out of questions they haven't seen. New ones are added
+      in the background (the AI is told which answers exist) until BATTLE_BANK_MAX.
+    AI calls run in a worker thread, so the rest of the site keeps responding meanwhile.
+    """
+    print("AI GENERATION REQUEST RECEIVED: /generate-battle-questions")
+    auth_err = await run_in_threadpool(_require_signed_in, authorization)
+    if auth_err is not None:
+        return auth_err
+    key_err = require_gemini_key()
+    if key_err is not None:
+        return key_err
+    db_err = require_supabase()
+    if db_err is not None:
+        return db_err
+
+    file_id = str(body.get("file_id") or "").strip()
+    lesson = await run_in_threadpool(db_supabase.get_lesson_row, file_id) if file_id else None
+    if not lesson:
+        return JSONResponse({"error": "File not found"}, status_code=404)
+    difficulty = normalize_battle_difficulty(body.get("difficulty"))
+    key = f"{file_id}:{difficulty}"
+
+    if str(body.get("mode") or "").strip().lower() == "more":
+        gen_lock = _battle_lock(_battle_gen_locks, key)
+        if gen_lock.locked() or time.time() < _battle_more_until.get(key, 0.0):
+            return {"queued": False}
+        _battle_more_until[key] = time.time() + BATTLE_MORE_COOLDOWN_SEC
+        background_tasks.add_task(_add_more_battle_questions, lesson, file_id, difficulty)
+        return {"queued": True}
+
+    async with _battle_lock(_battle_gen_locks, key):
+        bank = await run_in_threadpool(db_supabase.get_battle_questions_for_difficulty, file_id, difficulty)
+        if len(bank) >= BATTLE_MIN_TO_PLAY:
+            return {"questions": bank, "difficulty": difficulty}
+
+        text, text_err = await run_in_threadpool(lesson_text_for_ai, lesson, allow_vision_fallback=True)
+        if text_err:
+            return JSONResponse({"error": text_err}, status_code=502 if text_err == LESSON_TEXT_AI_UNAVAILABLE else 400)
+        known = [str(q.get("answer") or "") for q in bank if q.get("answer")]
+        new, err = await run_in_threadpool(_ai_battle_questions, text, difficulty, BATTLE_FIRST_BATCH, known)
+        if err is not None:
+            return err
+        known_set = set(known)
+        merged = bank + [q for q in new if q["answer"] not in known_set]
+        if len(merged) < BATTLE_MIN_TO_PLAY:
+            return JSONResponse(
+                {"error": "AI could not build enough usable questions from this lesson."}, status_code=502
+            )
+        try:
+            await _save_battle_bank(file_id, difficulty, merged)
+        except Exception as e:
+            print("AI GENERATION ERROR (db write battle_questions):", str(e))
+            return JSONResponse({"error": str(e)}, status_code=502)
+        return {"questions": merged, "difficulty": difficulty}
 
 
 @app.post("/generate-activities")
-async def generate_activities(body: dict, authorization: str | None = Header(default=None)):
+def generate_activities(body: dict, authorization: str | None = Header(default=None)):
     print(f"[DEBUG] /generate-activities called with body: {body}")
     auth_err = _require_signed_in(authorization)
     if auth_err is not None:

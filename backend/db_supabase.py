@@ -814,6 +814,13 @@ def _battle_question_difficulty(entry: Any) -> str:
     return "normal"
 
 
+def get_battle_questions_for_difficulty(lesson_id: str, difficulty: str) -> list[dict[str, Any]]:
+    """One difficulty's Word Clash question bank for a lesson (shared by every student)."""
+    row = get_content_row(lesson_id) or {}
+    saved = row.get("battle_questions") if isinstance(row.get("battle_questions"), list) else []
+    return [q for q in saved if isinstance(q, dict) and _battle_question_difficulty(q) == difficulty]
+
+
 def replace_battle_questions_for_difficulty(lesson_id: str, difficulty: str, questions: list[Any]) -> None:
     """Swap one difficulty's questions in lesson_content.battle_questions, keeping the others."""
     row = get_content_row(lesson_id) or {}
