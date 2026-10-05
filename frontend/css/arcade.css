@@ -174,6 +174,407 @@
   border: 2px dashed var(--lq-border-accent);
 }
 
+/* Tic-Tac-Know: a classroom chalkboard in a wooden frame, like the game.
+   X is blue chalk and O is yellow chalk. */
+.arcade-cover--ttk {
+  color: #eef3ea;
+  background:
+    radial-gradient(ellipse 45% 35% at 20% 25%, rgba(255, 255, 255, 0.08), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 80% 75%, rgba(255, 255, 255, 0.06), transparent 70%),
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 10px),
+    #22412f;
+  box-shadow: inset 0 0 0 6px #8b5a2b, inset 0 0 0 8px #5c3816, inset 0 0 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Chalk tray along the bottom of the frame */
+.arcade-cover--ttk::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 8px;
+  height: 5px;
+  background: #5c3816;
+}
+
+.arcade-cover--ttk .arcade-cover-logo > span:first-child {
+  color: #eef3ea;
+  text-shadow: 0 0 2px rgba(238, 243, 234, 0.6), 2px 3px 0 rgba(238, 243, 234, 0.14);
+}
+
+.arcade-cover--ttk .arcade-cover-logo > span:last-child {
+  color: #ffe08a;
+  text-shadow: 0 0 2px rgba(255, 224, 138, 0.6), 3px 4px 0 rgba(255, 224, 138, 0.14);
+}
+
+.arcade-ttk-board {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  height: 46%;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  /* a # drawn in chalk */
+  background:
+    linear-gradient(90deg, transparent calc(33.33% - 1.5px), rgba(238, 243, 234, 0.85) calc(33.33% - 1.5px) calc(33.33% + 1.5px), transparent calc(33.33% + 1.5px)),
+    linear-gradient(90deg, transparent calc(66.67% - 1.5px), rgba(238, 243, 234, 0.85) calc(66.67% - 1.5px) calc(66.67% + 1.5px), transparent calc(66.67% + 1.5px)),
+    linear-gradient(180deg, transparent calc(33.33% - 1.5px), rgba(238, 243, 234, 0.85) calc(33.33% - 1.5px) calc(33.33% + 1.5px), transparent calc(33.33% + 1.5px)),
+    linear-gradient(180deg, transparent calc(66.67% - 1.5px), rgba(238, 243, 234, 0.85) calc(66.67% - 1.5px) calc(66.67% + 1.5px), transparent calc(66.67% + 1.5px));
+  transform: translateX(-50%) rotate(-1.5deg);
+}
+
+.arcade-ttk-board > span {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.arcade-ttk-board .is-x {
+  color: #a9d8ff;
+  text-shadow: 0 0 2px rgba(169, 216, 255, 0.6);
+}
+
+.arcade-ttk-board .is-o {
+  color: #ffe08a;
+  text-shadow: 0 0 2px rgba(255, 224, 138, 0.6);
+}
+
+.arcade-ttk-board .is-win {
+  background: rgba(255, 224, 138, 0.14);
+}
+
+/* Hero: the student's fighter, the board, then the bot */
+.arcade-cover--ttk .arcade-cover-fighter {
+  left: 7%;
+  bottom: 10%;
+}
+
+.arcade-cover-bot {
+  position: absolute;
+  right: 7%;
+  bottom: 10%;
+  z-index: 1;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 3.4rem;
+  line-height: 1;
+}
+
+.arcade-hero-cover .arcade-cover-bot {
+  font-size: 4rem;
+}
+
+.arcade-hero-cover:hover .arcade-cover-bot {
+  animation: arcade-bob 0.6s steps(2) infinite;
+}
+
+@keyframes arcade-bob {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ---- Larong Pinoy covers (the same art as each game) ---- */
+.arcade-sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The small "LARONG PINOY" line over the game's name */
+.arcade-cover--sungka .arcade-cover-logo > span:first-child,
+.arcade-cover--palosebo .arcade-cover-logo > span:first-child,
+.arcade-cover--patintero .arcade-cover-logo > span:first-child {
+  font-size: 0.55em;
+  letter-spacing: 0.16em;
+}
+
+/* Sungka: a wooden sungkaan on a woven banig */
+.arcade-cover--sungka {
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(43, 22, 8, 0.55) 100%),
+    repeating-linear-gradient(45deg, rgba(155, 44, 44, 0.5) 0 6px, transparent 6px 26px),
+    repeating-linear-gradient(-45deg, rgba(47, 107, 58, 0.45) 0 6px, transparent 6px 26px),
+    repeating-conic-gradient(#cfa86f 0% 25%, #b98f55 0% 50%) 0 0 / 8px 8px;
+}
+
+.arcade-cover--sungka .arcade-cover-logo > span:first-child {
+  color: #fff4dc;
+  text-shadow: 2px 2px 0 #9b2c2c, 3px 3px 0 #1e0f05;
+}
+
+.arcade-cover--sungka .arcade-cover-logo > span:last-child {
+  color: #f2c14e;
+  text-shadow: 2px 2px 0 #9b2c2c, 4px 4px 0 #1e0f05;
+}
+
+.arcade-sg-board {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  z-index: 1;
+  width: 72%;
+  height: 40%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8%;
+  padding: 3% 9%;
+  background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #a3582f 0 20%, #8a4523 20%);
+  border: 3px solid #3a1d0c;
+  border-radius: 999px / 50%;
+  box-shadow: 4px 4px 0 #1e0f05;
+  transform: translateX(-50%);
+}
+
+.arcade-sg-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8%;
+  min-height: 0;
+}
+
+.arcade-sg-row i {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #2a1308 0 58%, #4a2410 64%);
+}
+
+.arcade-sg-row i .arcade-sprite {
+  width: 55%;
+}
+
+/* Palosebo: fiesta sunset, banderitas and greasy poles */
+.arcade-cover--palosebo {
+  background: linear-gradient(180deg, #3b1e54 0 16%, #5a2659 16% 30%, #8e3a5e 30% 44%, #c4525a 44% 58%, #e8774a 58% 72%, #f6a54c 72% 86%, #fbd27f 86%);
+}
+
+.arcade-pb-flags {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 15%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='13' shape-rendering='crispEdges'%3E%3Cpath d='M1 1h8l-4 8z' fill='%23ff5ca8'/%3E%3Cpath d='M13 1h8l-4 8z' fill='%23ffd23f'/%3E%3Cpath d='M25 1h8l-4 8z' fill='%237fd4ff'/%3E%3Cpath d='M37 1h8l-4 8z' fill='%237cf29c'/%3E%3C/svg%3E") 0 4px / 48px 13px repeat-x,
+    linear-gradient(#fff4e0, #fff4e0) 0 4px / 100% 1px no-repeat;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo {
+  top: 16%;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo > span:first-child {
+  color: #fff4e0;
+  text-shadow: 2px 2px 0 #ff5ca8, 3px 3px 0 #1c0a24;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo > span:last-child {
+  color: #ffd23f;
+  text-shadow: 2px 2px 0 #ff5ca8, 4px 4px 0 #1c0a24;
+}
+
+.arcade-pb-poles {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 38%;
+  display: flex;
+  justify-content: center;
+  gap: 18%;
+}
+
+.arcade-pb-poles > i {
+  position: relative;
+  width: 3.4%;
+  min-width: 7px;
+  background:
+    repeating-linear-gradient(180deg, #8a8f2b 0 2px, transparent 2px 12px),
+    linear-gradient(90deg, #6f7322 0 20%, #d6d96a 20% 70%, #a7ab3e 70%);
+}
+
+.arcade-pb-poles > i > b {
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  width: 260%;
+  transform: translateX(-50%);
+}
+
+.arcade-pb-poles > i > span {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  width: 470%;
+  transform: translateX(-50%);
+}
+
+/* Patintero: a night court with chalk lines */
+.arcade-cover--patintero {
+  background:
+    radial-gradient(circle at 9% 68%, #fff7d6 0 8px, transparent 9px),
+    radial-gradient(1px 1px at 18% 24%, #ffffff, transparent 60%) 0 0 / 70px 50px,
+    linear-gradient(180deg, #0b1024 0 55%, #1a2350 55%);
+}
+
+.arcade-cover--patintero .arcade-cover-logo > span:first-child {
+  color: #eef2ff;
+  text-shadow: 2px 2px 0 #3b82f6, 3px 3px 0 #05081a;
+}
+
+.arcade-cover--patintero .arcade-cover-logo > span:last-child {
+  color: #ffd166;
+  text-shadow: 2px 2px 0 #3b82f6, 4px 4px 0 #05081a;
+}
+
+.arcade-pt-court {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 1;
+  width: 66%;
+  height: 46%;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 calc(33% - 2px), #f1f5f9 calc(33% - 2px) 33%),
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(241, 245, 249, 0.4) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 209, 102, 0.3), transparent 70%),
+    #6b7280;
+  border: 3px solid #f1f5f9;
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+
+.arcade-pt-kid {
+  position: absolute;
+  width: 12%;
+}
+
+.arcade-pt-kid.is-runner {
+  left: 24%;
+  bottom: 6%;
+}
+
+.arcade-pt-kid.is-taya {
+  left: 60%;
+  bottom: 30%;
+}
+
+/* Tumbang Preso: a sunny street, a can and a flying tsinelas */
+.arcade-cover--tumbang {
+  background:
+    radial-gradient(ellipse 34px 10px at 22% 64%, #ffffff 96%, transparent),
+    radial-gradient(ellipse 44px 11px at 80% 70%, #ffffff 96%, transparent),
+    linear-gradient(180deg, #3d97e6 0 30%, #5aaaf0 30% 55%, #7fc0f6 55% 72%);
+}
+
+.arcade-cover--tumbang .arcade-cover-logo > span:first-child {
+  color: #fffbea;
+  text-shadow: 2px 2px 0 #e5484d, 4px 4px 0 #0c1022;
+}
+
+.arcade-cover--tumbang .arcade-cover-logo > span:last-child {
+  color: #ffcf3f;
+  text-shadow: 2px 2px 0 #e5484d, 4px 4px 0 #0c1022;
+}
+
+.arcade-tp-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0 14px, transparent 14px 30px) 0 70% / 100% 2px no-repeat,
+    linear-gradient(180deg, #8d8170 0 12%, #5c5853 12%);
+}
+
+.arcade-tp-kid,
+.arcade-tp-can,
+.arcade-tp-slipper {
+  position: absolute;
+  z-index: 1;
+}
+
+.arcade-tp-kid {
+  left: 12%;
+  bottom: 10%;
+  width: 12%;
+}
+
+.arcade-tp-slipper {
+  left: 42%;
+  bottom: 40%;
+  width: 11%;
+  transform: rotate(-24deg);
+}
+
+.arcade-tp-can {
+  left: 66%;
+  bottom: 14%;
+  width: 7%;
+}
+
+/* Pinoy Henyo: a noontime show with red curtains */
+.arcade-cover--henyo {
+  background:
+    radial-gradient(ellipse 30% 55% at 25% -8%, rgba(255, 240, 200, 0.35), transparent 70%),
+    radial-gradient(ellipse 30% 55% at 75% -8%, rgba(255, 240, 200, 0.35), transparent 70%),
+    linear-gradient(180deg, transparent 0 80%, #ffcc33 80% 82%, #1e3a8a 82%),
+    repeating-linear-gradient(90deg, #7a0d1f 0 10px, #9c1529 10px 17px, #6b0b1b 17px 25px);
+}
+
+.arcade-cover--henyo .arcade-cover-logo > span:first-child {
+  color: #fff6e0;
+  text-shadow: 2px 2px 0 #8b1023, 4px 4px 0 #120206;
+}
+
+.arcade-cover--henyo .arcade-cover-logo > span:last-child {
+  color: #ffcc33;
+  text-shadow: 2px 2px 0 #8b1023, 4px 4px 0 #120206;
+}
+
+.arcade-ph-card {
+  position: absolute;
+  left: 50%;
+  bottom: 24%;
+  z-index: 1;
+  padding: 0.3em 0.7em;
+  font-size: 1.1em;
+  color: #22040b;
+  background: #fff6e0;
+  border: 3px solid #ffcc33;
+  box-shadow: 3px 3px 0 #120206;
+  transform: translateX(-50%);
+}
+
+.arcade-ph-bubble {
+  position: absolute;
+  bottom: 44%;
+  z-index: 1;
+  padding: 0.3em 0.45em;
+  font-size: 0.6em;
+  color: #22040b;
+  border: 2px solid #120206;
+  box-shadow: 2px 2px 0 #120206;
+}
+
+.arcade-ph-bubble.is-oo {
+  left: 12%;
+  background: #4ade80;
+  transform: rotate(-6deg);
+}
+
+.arcade-ph-bubble.is-pwede {
+  right: 10%;
+  background: #fcd34d;
+  transform: rotate(5deg);
+}
+
 /* ---- Continue playing (hero) ---- */
 .arcade-hero {
   container-type: inline-size;
@@ -395,6 +796,28 @@ a.arcade-game:focus-visible {
   font-size: 2rem;
 }
 
+/* Card: logo on the left, board on the right */
+.arcade-game .arcade-cover--ttk {
+  font-size: 0.75rem;
+}
+
+.arcade-game .arcade-cover--ttk .arcade-cover-logo {
+  top: 50%;
+  left: 8%;
+  right: auto;
+  justify-items: start;
+  transform: translateY(-50%);
+}
+
+.arcade-game .arcade-ttk-board {
+  left: auto;
+  right: 8%;
+  top: 50%;
+  bottom: auto;
+  height: 64%;
+  transform: translateY(-50%) rotate(-1.5deg);
+}
+
 .arcade-game-body {
   display: grid;
   gap: 0.3rem;
@@ -536,6 +959,16 @@ html[data-theme="dark"] .arcade-outcome.is-loss {
   background: rgba(239, 68, 68, 0.16);
 }
 
+.arcade-outcome.is-draw {
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+html[data-theme="dark"] .arcade-outcome.is-draw {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.16);
+}
+
 .arcade-rank {
   display: grid;
   place-items: center;
@@ -582,7 +1015,8 @@ html[data-theme="dark"] .arcade-outcome.is-loss {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arcade-hero-cover:hover .arcade-cover-monster {
+  .arcade-hero-cover:hover .arcade-cover-monster,
+  .arcade-hero-cover:hover .arcade-cover-bot {
     animation: none;
   }
 
@@ -592,6 +1026,7 @@ html[data-theme="dark"] .arcade-outcome.is-loss {
   }
 }
 
-html.reduce-motion .arcade-hero-cover:hover .arcade-cover-monster {
+html.reduce-motion .arcade-hero-cover:hover .arcade-cover-monster,
+html.reduce-motion .arcade-hero-cover:hover .arcade-cover-bot {
   animation: none;
 }

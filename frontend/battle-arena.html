@@ -9,205 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
-  <link rel="stylesheet" href="style.css?v=2026100202" />
-  <link rel="stylesheet" href="css/battle-arena.css?v=2026100204" />
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100401" />
+  <link rel="stylesheet" href="css/battle-arena.css?v=2026100401" />
   <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026100202" defer></script>
-  <script src="js/pages/battle-arena.entry.js?v=2026100204" defer></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/pages/battle-arena.entry.js?v=2026100401" defer></script>
 </head>
-<!-- Word Clash: a full-screen game (no LMS sidebar). Students reach it from the
-     Arcade page (arcade.html) or the dashboard launcher. -->
-<body class="battle-arena-page battle-fullscreen-active">
-  <main class="wc-app" id="wc-app" aria-label="Word Clash">
-    <!-- PRESS START: also unlocks audio (browsers block sound until the first tap) -->
-    <section class="wc-screen wc-splash" id="wc-splash" aria-labelledby="wc-splash-title">
-      <h1 class="wc-logo" id="wc-splash-title">
-        <span class="wc-logo-word">WORD</span>
-        <span class="wc-logo-clash">CLASH</span>
-      </h1>
-      <p class="wc-tagline">Spell the answer. Defeat the monsters.</p>
-      <button type="button" class="wc-press-start" id="wc-press-start">PRESS START</button>
-      <p class="wc-hint">Click, tap or press Enter</p>
-    </section>
-
-    <!-- MAIN MENU -->
-    <section class="wc-screen wc-menu" id="wc-menu" hidden aria-labelledby="wc-menu-title">
-      <h1 class="wc-logo is-small" id="wc-menu-title">
-        <span class="wc-logo-word">WORD</span>
-        <span class="wc-logo-clash">CLASH</span>
-      </h1>
-      <div class="wc-player-card">
-        <div class="wc-player-sprite" id="wc-player-sprite" aria-hidden="true"></div>
-        <div class="wc-player-info">
-          <strong class="wc-player-name" id="wc-player-name">PLAYER</strong>
-          <span class="wc-player-level" id="wc-player-level">LV 0</span>
-          <div class="wc-exp-bar" aria-hidden="true"><div class="wc-exp-fill" id="wc-player-exp-fill"></div></div>
-          <span class="wc-player-meta" id="wc-player-meta">0 WINS · BEST 0</span>
-        </div>
-      </div>
-      <nav class="wc-menu-list" aria-label="Main menu">
-        <button type="button" class="wc-menu-item" data-wc-action="start">START</button>
-        <button type="button" class="wc-menu-item" data-wc-action="log">BATTLE LOG</button>
-        <button type="button" class="wc-menu-item" data-wc-action="settings">SETTINGS</button>
-        <button type="button" class="wc-menu-item" data-wc-action="quit">QUIT</button>
-      </nav>
-      <p class="wc-hint">↑ ↓ select · Enter confirm</p>
-    </section>
-
-    <!-- WORLD SELECT: one world per subject -->
-    <section class="wc-screen wc-worlds" id="wc-worlds" hidden aria-labelledby="wc-worlds-title">
-      <header class="wc-screen-head">
-        <button type="button" class="wc-back" data-wc-back><i class="fa-solid fa-caret-left" aria-hidden="true"></i> BACK</button>
-        <h2 class="wc-screen-title" id="wc-worlds-title">SELECT WORLD</h2>
-        <span class="wc-head-spacer" aria-hidden="true"></span>
-      </header>
-      <p class="wc-screen-sub">Each world is one of your subjects.</p>
-      <p class="wc-status" id="wc-worlds-status" role="status">Loading worlds…</p>
-      <div class="wc-world-grid" id="wc-world-grid"></div>
-    </section>
-
-    <!-- STAGE SELECT: one stage per lesson in the chosen subject -->
-    <section class="wc-screen wc-stages" id="wc-stages" hidden aria-labelledby="wc-stages-title">
-      <header class="wc-screen-head">
-        <button type="button" class="wc-back" data-wc-back><i class="fa-solid fa-caret-left" aria-hidden="true"></i> BACK</button>
-        <h2 class="wc-screen-title" id="wc-stages-title">WORLD 1</h2>
-        <span class="wc-head-spacer" aria-hidden="true"></span>
-      </header>
-      <p class="wc-screen-sub" id="wc-stages-sub"></p>
-      <div class="wc-stage-layout">
-        <ol class="wc-stage-list" id="wc-stage-list" aria-label="Stages"></ol>
-        <aside class="wc-stage-panel" aria-label="Battle setup">
-          <div class="wc-setup">
-            <p class="wc-setup-label" id="wc-diff-label">DIFFICULTY</p>
-            <div class="battle-difficulty-picker wc-seg" role="radiogroup" aria-labelledby="wc-diff-label">
-              <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="normal" aria-checked="true">NORMAL</button>
-              <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="medium" aria-checked="false">MEDIUM</button>
-              <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="hard" aria-checked="false">HARD</button>
-            </div>
-            <p class="wc-setup-note" id="wc-diff-note">15:00 on the clock</p>
-          </div>
-          <div class="wc-setup wc-setup-row">
-            <div class="wc-fighter-sprite" id="wc-fighter-sprite" aria-hidden="true"></div>
-            <div class="wc-setup-body">
-              <p class="wc-setup-label">FIGHTER</p>
-              <button type="button" class="wc-btn wc-btn-small" id="wc-change-fighter">CHANGE</button>
-            </div>
-          </div>
-          <div class="wc-setup wc-setup-row">
-            <div class="wc-opponent-sprite" id="wc-opponent-sprite" aria-hidden="true"></div>
-            <div class="wc-setup-body">
-              <p class="wc-setup-label">NEXT OPPONENT</p>
-              <p class="wc-opponent-name" id="wc-opponent-name">—</p>
-            </div>
-          </div>
-          <p class="wc-selected-stage" id="wc-selected-stage">Pick a stage</p>
-          <p class="wc-stage-alert" id="wc-stage-alert" role="alert" hidden></p>
-          <button type="button" class="wc-btn wc-btn-primary wc-btn-block" id="wc-fight-btn" disabled>FIGHT!</button>
-        </aside>
-      </div>
-    </section>
-
-    <!-- RESULTS: after every battle -->
-    <section class="wc-screen wc-results" id="wc-results" hidden aria-labelledby="wc-results-title">
-      <h2 class="wc-results-title" id="wc-results-title">VICTORY!</h2>
-      <p class="wc-results-sub" id="wc-results-sub"></p>
-      <div class="wc-card wc-results-card">
-        <div class="battle-result-progress" id="battle-result-progress" hidden></div>
-      </div>
-      <div class="wc-card wc-review">
-        <h3 class="wc-card-title">REVIEW ANSWERS</h3>
-        <ol class="wc-review-list" id="wc-results-review"></ol>
-      </div>
-      <div class="wc-btn-row">
-        <button type="button" class="wc-btn wc-btn-primary" id="wc-play-again">PLAY AGAIN</button>
-        <button type="button" class="wc-btn" id="wc-results-stages">STAGE SELECT</button>
-        <button type="button" class="wc-btn" id="wc-results-menu">MENU</button>
-      </div>
-    </section>
-
-    <!-- BATTLE LOG: past battles, each with its answers -->
-    <section class="wc-screen wc-log" id="wc-log" hidden aria-labelledby="wc-log-title">
-      <header class="wc-screen-head">
-        <button type="button" class="wc-back" data-wc-back><i class="fa-solid fa-caret-left" aria-hidden="true"></i> BACK</button>
-        <h2 class="wc-screen-title" id="wc-log-title">BATTLE LOG</h2>
-        <span class="wc-head-spacer" aria-hidden="true"></span>
-      </header>
-      <p class="wc-status" id="wc-log-status" role="status">Loading…</p>
-      <ol class="wc-log-list" id="wc-log-list"></ol>
-    </section>
-
-    <section class="wc-screen wc-log-detail" id="wc-log-detail" hidden aria-labelledby="wc-log-detail-title">
-      <header class="wc-screen-head">
-        <button type="button" class="wc-back" data-wc-back><i class="fa-solid fa-caret-left" aria-hidden="true"></i> BACK</button>
-        <h2 class="wc-screen-title" id="wc-log-detail-title">BATTLE</h2>
-        <span class="wc-head-spacer" aria-hidden="true"></span>
-      </header>
-      <div class="wc-card" id="wc-log-detail-summary"></div>
-      <div class="wc-card wc-review">
-        <h3 class="wc-card-title">YOUR ANSWERS</h3>
-        <ol class="wc-review-list" id="wc-log-detail-review"></ol>
-      </div>
-    </section>
-
-    <!-- SETTINGS -->
-    <section class="wc-screen wc-settings" id="wc-settings" hidden aria-labelledby="wc-settings-title">
-      <header class="wc-screen-head">
-        <button type="button" class="wc-back" data-wc-back><i class="fa-solid fa-caret-left" aria-hidden="true"></i> BACK</button>
-        <h2 class="wc-screen-title" id="wc-settings-title">SETTINGS</h2>
-        <span class="wc-head-spacer" aria-hidden="true"></span>
-      </header>
-      <div class="wc-card wc-settings-card">
-        <label class="wc-setting">
-          <span class="wc-setting-name">MUSIC</span>
-          <input type="range" class="wc-volume" data-sound-kind="music" min="0" max="100" step="5" value="50" />
-          <output class="wc-volume-value" data-sound-kind="music">50</output>
-        </label>
-        <label class="wc-setting">
-          <span class="wc-setting-name">SOUND FX</span>
-          <input type="range" class="wc-volume" data-sound-kind="sfx" min="0" max="100" step="5" value="50" />
-          <output class="wc-volume-value" data-sound-kind="sfx">50</output>
-        </label>
-        <label class="wc-setting wc-has-toggle">
-          <span class="wc-setting-name">REDUCE MOTION</span>
-          <input type="checkbox" class="wc-toggle" id="wc-reduce-motion" />
-        </label>
-        <div class="wc-setting wc-setting-stack">
-          <span class="wc-setting-name" id="wc-default-diff-label">DEFAULT DIFFICULTY</span>
-          <div class="battle-difficulty-picker wc-seg" role="radiogroup" aria-labelledby="wc-default-diff-label">
-            <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="normal" aria-checked="true">NORMAL</button>
-            <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="medium" aria-checked="false">MEDIUM</button>
-            <button type="button" class="battle-difficulty-option" role="radio" data-difficulty="hard" aria-checked="false">HARD</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <section class="battle-loading-screen" id="battle-loading-screen" hidden>
-    <div class="battle-loading-inner">
-      <div class="battle-loading-sprite" id="battle-loading-sprite" aria-hidden="true">🧑‍🎓</div>
-      <p class="battle-loading-title">LOADING<span class="battle-loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></p>
-      <div class="battle-loading-bar" role="status" aria-label="Loading">
-        <span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span>
-      </div>
-      <p class="battle-loading-hint" id="battle-loading-hint">Preparing your battle…</p>
-    </div>
-  </section>
-
-  <div class="battle-character-dialog" id="battle-character-dialog" hidden>
-    <div class="battle-character-panel" role="dialog" aria-modal="true" aria-labelledby="battle-character-title">
-      <div class="battle-character-head">
-        <h3 id="battle-character-title">Choose Your Fighter</h3>
-        <button type="button" class="battle-character-close" id="battle-character-close" aria-label="Close">
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
-      <div class="battle-character-grid" id="battle-character-grid" role="radiogroup" aria-label="Choose your character"></div>
-    </div>
-  </div>
+<!-- Word Clash: a full-screen Arcade game (no LMS sidebar). Students reach it from the
+     Arcade page (arcade.html) or the dashboard launcher. The menus, loading screen,
+     fighter picker and pause menu are built by js/arcade/arcade-shell.js. -->
+<body class="battle-arena-page battle-fullscreen-active arcade-game">
+  <main class="wc-app" id="wc-app" aria-label="Word Clash"></main>
 
   <section class="battle-fight-screen" id="battle-fight-screen" hidden>
     <div class="battle-fight-inner">
@@ -321,18 +137,5 @@
       </div>
     </div>
   </section>
-
-  <!-- PAUSE: Esc or the Pause button during a battle; the clock stops while open -->
-  <div class="wc-pause" id="wc-pause" hidden role="dialog" aria-modal="true" aria-labelledby="wc-pause-title">
-    <div class="wc-pause-panel">
-      <h2 class="wc-pause-title" id="wc-pause-title">PAUSED</h2>
-      <nav class="wc-menu-list" aria-label="Pause menu">
-        <button type="button" class="wc-menu-item" data-wc-pause="resume">RESUME</button>
-        <button type="button" class="wc-menu-item" data-wc-pause="restart">RESTART</button>
-        <button type="button" class="wc-menu-item" data-wc-pause="settings">SETTINGS</button>
-        <button type="button" class="wc-menu-item" data-wc-pause="quit">QUIT TO MENU</button>
-      </nav>
-    </div>
-  </div>
 </body>
 </html>

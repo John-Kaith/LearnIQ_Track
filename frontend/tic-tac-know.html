@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic-Tac-Know | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/tic-tac-know.css?v=2026100501" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/pages/tic-tac-know.entry.js?v=2026100501" defer></script>
+</head>
+<!-- Tic-Tac-Know: answer a question from the lesson to claim a square; three in a
+     row wins the round, best of 3. A full-screen Arcade game: the menus, loading
+     screen, player picker and pause menu come from js/arcade/arcade-shell.js.
+     Classroom chalkboard look (css/tic-tac-know.css); music from js/arcade/chiptune.js. -->
+<body class="ttk-page arcade-game">
+  <main class="wc-app" id="wc-app" aria-label="Tic-Tac-Know"></main>
+
+  <section class="ttk-screen" id="ttk-play-screen" hidden>
+    <div class="ttk-inner">
+      <header class="ttk-top">
+        <button type="button" class="ttk-pause-btn" id="ttk-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+          <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+        </button>
+        <p class="ttk-round" id="ttk-round">ROUND 1 OF 3</p>
+        <span class="ttk-top-spacer" aria-hidden="true"></span>
+      </header>
+
+      <div class="ttk-scoreboard">
+        <div class="ttk-player is-x" id="ttk-player-x">
+          <div class="ttk-avatar" id="ttk-avatar-x" aria-hidden="true"></div>
+          <div class="ttk-player-info">
+            <strong class="ttk-player-name" id="ttk-name-x">YOU</strong>
+            <span class="ttk-player-mark">X</span>
+          </div>
+          <span class="ttk-score" id="ttk-score-x" role="img" aria-label="0 rounds won"></span>
+        </div>
+        <span class="ttk-vs" aria-hidden="true">VS</span>
+        <div class="ttk-player is-o" id="ttk-player-o">
+          <span class="ttk-score" id="ttk-score-o" role="img" aria-label="0 rounds won"></span>
+          <div class="ttk-player-info">
+            <strong class="ttk-player-name" id="ttk-name-o">BOT</strong>
+            <span class="ttk-player-mark">O</span>
+          </div>
+          <div class="ttk-avatar" id="ttk-avatar-o" aria-hidden="true">🤖</div>
+        </div>
+      </div>
+
+      <div class="ttk-board-wrap">
+        <div class="ttk-board" id="ttk-board" role="group" aria-label="Tic-Tac-Know board">
+          <button type="button" class="ttk-cell" data-cell="0"></button>
+          <button type="button" class="ttk-cell" data-cell="1"></button>
+          <button type="button" class="ttk-cell" data-cell="2"></button>
+          <button type="button" class="ttk-cell" data-cell="3"></button>
+          <button type="button" class="ttk-cell" data-cell="4"></button>
+          <button type="button" class="ttk-cell" data-cell="5"></button>
+          <button type="button" class="ttk-cell" data-cell="6"></button>
+          <button type="button" class="ttk-cell" data-cell="7"></button>
+          <button type="button" class="ttk-cell" data-cell="8"></button>
+          <!-- Three in a row: a chalk line through the winning squares -->
+          <span class="ttk-strike" id="ttk-strike" aria-hidden="true" hidden></span>
+        </div>
+        <!-- Round result over the board -->
+        <p class="ttk-banner" id="ttk-banner" hidden></p>
+      </div>
+
+      <p class="ttk-status" id="ttk-status" role="status" aria-live="polite"></p>
+
+      <!-- Ready: before the match starts -->
+      <div class="ttk-ready" id="ttk-ready" hidden>
+        <p class="ttk-ready-title">Ready?</p>
+        <p class="ttk-ready-text">
+          Pick a square and answer its question to claim it. A wrong answer leaves it open.
+          <strong>Three in a row</strong> wins the round &mdash; <strong>best of 3</strong>.
+        </p>
+        <button type="button" class="ttk-btn ttk-btn-primary" id="ttk-start-btn">
+          <i class="fa-solid fa-play" aria-hidden="true"></i> START
+        </button>
+      </div>
+    </div>
+
+    <!-- The question for the chosen square -->
+    <div class="ttk-question" id="ttk-question" hidden>
+      <div class="ttk-q-panel" role="dialog" aria-modal="true" aria-labelledby="ttk-q-text">
+        <div class="ttk-q-head">
+          <span class="ttk-q-label" id="ttk-q-label">SQUARE 1</span>
+          <span class="ttk-q-time" id="ttk-q-time" role="timer" aria-live="off"></span>
+        </div>
+        <div class="ttk-q-bar" aria-hidden="true"><span id="ttk-q-bar-fill"></span></div>
+        <p class="ttk-q-text" id="ttk-q-text"></p>
+        <div class="ttk-choices" id="ttk-choices" role="group" aria-label="Answers"></div>
+        <p class="ttk-q-feedback" id="ttk-q-feedback" hidden></p>
+        <p class="ttk-q-continue" id="ttk-q-continue" hidden>Tap to continue</p>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

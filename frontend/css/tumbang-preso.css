@@ -1,0 +1,480 @@
+/**
+ * Tumbang Preso (tumbang-preso.html): a barangay street on a sunny afternoon —
+ * a sari-sari store, a power post, the can (lata) on its chalk circle, the taya
+ * guarding it and your tsinelas. Uses css/arcade-skin.css for the shared screens
+ * (load it first). Same look in light and dark mode.
+ */
+
+body.tumbang-page {
+  --tp-cream: #fffbea;
+  --tp-navy: #151b33;
+  --tp-night: #0c1022;
+  --tp-yellow: #ffcf3f;
+  --tp-red: #e5484d;
+  --tp-sky: linear-gradient(180deg, #3d97e6 0 26%, #5aaaf0 26% 48%, #7fc0f6 48% 68%, #a9d6fa 68% 84%, #cfe9fd 84%);
+  --tp-clouds:
+    radial-gradient(ellipse 70px 20px at 16% 20%, #ffffff 96%, transparent 100%),
+    radial-gradient(ellipse 42px 26px at 19% 15%, #ffffff 96%, transparent 100%),
+    radial-gradient(ellipse 90px 22px at 72% 30%, #ffffff 96%, transparent 100%),
+    radial-gradient(ellipse 50px 28px at 75% 24%, #f2f9ff 96%, transparent 100%);
+
+  --sk-ink: var(--tp-cream);
+  --sk-ink-soft: rgba(255, 251, 234, 0.86);
+  --sk-ink-faint: rgba(255, 251, 234, 0.5);
+  --sk-bg:
+    var(--tp-clouds),
+    linear-gradient(180deg, transparent 0 84%, #6b6560 84% 86%, #57524e 86%),
+    var(--tp-sky);
+  --sk-deep: var(--tp-navy);
+  --sk-mid: #222b4d;
+  --sk-panel: rgba(21, 27, 51, 0.84);
+  --sk-btn: rgba(21, 27, 51, 0.82);
+  --sk-hover-bg: rgba(255, 207, 63, 0.16);
+  --sk-dim: rgba(12, 16, 34, 0.74);
+  --sk-line: var(--tp-cream);
+  --sk-line-soft: rgba(255, 251, 234, 0.6);
+  --sk-ghost: var(--tp-night);
+  --sk-shadow: 4px 4px 0 var(--tp-night);
+  --sk-title-shadow: 3px 3px 0 var(--tp-night);
+  --sk-select: #ff7a59;
+  --sk-accent: var(--tp-yellow);
+  --sk-accent-fill: var(--tp-yellow);
+  --sk-accent-ink: var(--tp-navy);
+  --sk-good: #8ee68a;
+  --sk-bad: #ff7b7b;
+  --sk-info: #8fd6ff;
+  --sk-logo-top: var(--tp-cream);
+  --sk-logo-main: var(--tp-yellow);
+  --sk-logo-shadow: 4px 4px 0 var(--tp-red), 8px 8px 0 var(--tp-night);
+  --sk-cursor: ">";
+}
+
+body.tumbang-page .wc-tagline,
+body.tumbang-page .wc-hint,
+body.tumbang-page .wc-screen-sub,
+body.tumbang-page .wc-status:not([hidden]) {
+  padding: 0.35rem 0.65rem;
+  background: rgba(21, 27, 51, 0.78);
+}
+
+/* ============================================================
+ * Play screen
+ * ============================================================ */
+.tp-scoreboard {
+  position: relative;
+  z-index: 1;
+  width: min(46rem, 100%);
+  margin: 0.6rem auto 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.tp-player {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.55rem;
+  background: var(--sk-panel);
+  border: 3px solid var(--sk-line-soft);
+  box-shadow: 3px 3px 0 var(--sk-ghost);
+}
+
+.tp-player strong {
+  font-weight: 400;
+}
+
+.tp-player.is-turn {
+  border-color: var(--sk-accent);
+}
+
+.tp-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  font-size: 1.3rem;
+  line-height: 1;
+  background: var(--sk-deep);
+  border: 2px solid var(--sk-line-soft);
+}
+
+.tp-avatar img,
+.tp-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.tp-cans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 2rem;
+  max-width: 9rem;
+}
+
+.tp-mini-can {
+  display: block;
+  width: 10px;
+  height: 14px;
+  background: linear-gradient(180deg, #cbd5e1 0 3px, var(--tp-red) 3px 11px, #cbd5e1 11px);
+  box-shadow: 1px 1px 0 var(--sk-ghost);
+}
+
+/* The street */
+.tp-scene {
+  position: relative;
+  z-index: 1;
+  width: min(46rem, 100%);
+  aspect-ratio: 16 / 8;
+  max-width: 100%;
+  margin: 0.6rem auto 0;
+  overflow: hidden;
+  border: 4px solid var(--sk-line);
+  box-shadow: var(--sk-shadow);
+  background: var(--tp-clouds), var(--tp-sky);
+}
+
+.tp-store {
+  position: absolute;
+  left: 3%;
+  bottom: 30%;
+  width: 30%;
+  height: 44%;
+  background:
+    linear-gradient(90deg, transparent 0 58%, #3b2a1a 58% 60%, transparent 60%) 0 62% / 100% 38% no-repeat,
+    repeating-linear-gradient(90deg, #6b4a2b 0 4px, #5a3e24 4px 8px) 10% 64% / 44% 30% no-repeat,
+    linear-gradient(#e9d6a9, #e9d6a9);
+  border: 3px solid #3b2a1a;
+  box-shadow: inset 0 14px 0 #c94b3b, inset 0 18px 0 #3b2a1a;
+}
+
+.tp-store-sign {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  padding: 0.25rem 0.35rem;
+  font-size: clamp(0.35rem, 1.2vw, 0.55rem);
+  white-space: nowrap;
+  color: var(--tp-navy);
+  background: var(--tp-yellow);
+  border: 2px solid #3b2a1a;
+  transform: translateX(-50%);
+}
+
+.tp-post {
+  position: absolute;
+  right: 4%;
+  bottom: 30%;
+  width: 2.2%;
+  height: 66%;
+  background: linear-gradient(90deg, #5a3e24 0 50%, #43301c 50%);
+}
+
+.tp-post::before {
+  content: "";
+  position: absolute;
+  top: 6%;
+  left: -260%;
+  width: 620%;
+  height: 4px;
+  background: #43301c;
+}
+
+.tp-post::after {
+  content: "";
+  position: absolute;
+  top: 7%;
+  right: 100%;
+  width: 1200%;
+  height: 2px;
+  background: #1b1b1b;
+  transform: rotate(-4deg);
+  transform-origin: right;
+}
+
+.tp-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 31%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0 24px, transparent 24px 52px) 0 72% / 100% 3px no-repeat,
+    linear-gradient(180deg, #8d8170 0 8%, #6b6560 8% 12%, #5c5853 12%);
+}
+
+/* Throwing line and the can's chalk circle */
+.tp-line {
+  position: absolute;
+  left: 20%;
+  bottom: 12%;
+  width: 1%;
+  height: 16%;
+  background: rgba(255, 255, 255, 0.85);
+  transform: skewX(-24deg);
+}
+
+.tp-circle {
+  position: absolute;
+  left: 60.5%;
+  bottom: 13%;
+  width: 11%;
+  height: 9%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+.tp-thrower,
+.tp-taya {
+  position: absolute;
+  bottom: 13%;
+  width: 8%;
+  filter: drop-shadow(2px 2px 0 var(--tp-night));
+}
+
+.tp-thrower {
+  left: 9%;
+}
+
+.tp-thrower.is-bot {
+  width: 7%;
+  bottom: 15%;
+}
+
+.tp-taya {
+  left: 78%;
+}
+
+.tp-can {
+  position: absolute;
+  left: 64%;
+  bottom: 16%;
+  width: 4%;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(2px 2px 0 var(--tp-night));
+}
+
+.tp-can.is-down {
+  animation: tp-tumble 0.5s steps(5) forwards;
+}
+
+@keyframes tp-tumble {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  40% {
+    transform: translate(60%, -60%) rotate(50deg);
+  }
+  100% {
+    transform: translate(130%, 0) rotate(90deg);
+  }
+}
+
+/* The flying tsinelas (moved by the script), and where a missed one lands */
+.tp-flight,
+.tp-landed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5%;
+  pointer-events: none;
+  visibility: hidden;
+  filter: drop-shadow(2px 2px 0 var(--tp-night));
+}
+
+.tp-landed {
+  transform: translate(-50%, -50%) rotate(12deg);
+}
+
+.tp-flight.is-flying,
+.tp-landed.is-shown {
+  visibility: visible;
+}
+
+.tp-shout {
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  margin: 0;
+  font-size: clamp(1rem, 4vw, 2rem);
+  white-space: nowrap;
+  color: var(--tp-yellow);
+  text-shadow: 3px 3px 0 var(--tp-red), 6px 6px 0 var(--tp-night);
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tp-shout.is-bad {
+  color: var(--tp-cream);
+  text-shadow: 3px 3px 0 #475569, 6px 6px 0 var(--tp-night);
+}
+
+.tp-shout.is-shown {
+  animation: tp-shout 1.2s steps(6) forwards;
+}
+
+@keyframes tp-shout {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) scale(0.6);
+  }
+  25% {
+    transform: translateX(-50%) scale(1.15);
+  }
+  40%,
+  80% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* Aiming: stop the arrow in the green */
+.tp-aim {
+  position: relative;
+  z-index: 4;
+  width: min(36rem, 100%);
+  box-sizing: border-box;
+  margin: 0.7rem auto 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  background: var(--sk-panel);
+  border: 3px solid var(--sk-line);
+  box-shadow: var(--sk-shadow);
+}
+
+.tp-aim[hidden] {
+  display: none;
+}
+
+.tp-meter {
+  position: relative;
+  width: 100%;
+  height: 28px;
+  background: repeating-linear-gradient(90deg, var(--tp-red) 0 8px, #c93a3f 8px 16px);
+  border: 3px solid var(--tp-cream);
+}
+
+.tp-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.tp-zone.is-near {
+  background: var(--tp-yellow);
+}
+
+.tp-zone.is-hit {
+  background: #4cd964;
+}
+
+.tp-needle {
+  position: absolute;
+  top: -9px;
+  bottom: -9px;
+  left: 0;
+  width: 6px;
+  margin-left: -3px;
+  background: var(--tp-cream);
+  box-shadow: 2px 0 0 var(--tp-night), -2px 0 0 var(--tp-night);
+}
+
+.tp-throw-btn {
+  min-width: 12rem;
+}
+
+.tp-aim-hint {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: var(--sk-ink-soft);
+}
+
+.tp-play .sk-status {
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  color: var(--sk-ink);
+  background: rgba(21, 27, 51, 0.84);
+}
+
+.tp-play .sk-status:empty {
+  visibility: hidden;
+}
+
+.tp-play .sk-ready {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(30rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+}
+
+.tp-play.is-waiting .tp-scene {
+  opacity: 0.6;
+}
+
+html.reduce-motion .tp-can.is-down,
+html.reduce-motion .tp-shout.is-shown {
+  animation-duration: 0.01s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-can.is-down,
+  .tp-shout.is-shown {
+    animation-duration: 0.01s;
+  }
+}
+
+@media (max-width: 720px) {
+  .tp-scene {
+    aspect-ratio: 4 / 3;
+  }
+
+  .tp-store {
+    width: 34%;
+  }
+
+  .tp-thrower,
+  .tp-taya {
+    width: 11%;
+  }
+
+  .tp-can {
+    width: 6%;
+  }
+
+  .tp-flight,
+  .tp-landed {
+    width: 7%;
+  }
+
+  .tp-player {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.48rem;
+  }
+
+  .tp-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tp-cans {
+    max-width: 5rem;
+  }
+}

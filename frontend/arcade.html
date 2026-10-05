@@ -9,17 +9,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
-  <link rel="stylesheet" href="style.css?v=2026100202" />
-  <link rel="stylesheet" href="css/arcade.css?v=2026100202" />
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade.css?v=2026100601" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026100202" defer></script>
-  <script src="js/pages/arcade.entry.js?v=2026100202" defer></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/pages/arcade.entry.js?v=2026100601" defer></script>
 </head>
 <!-- Arcade: the game library. Pick a game here; each game opens full screen
-     (Word Clash = battle-arena.html). -->
+     (battle-arena.html, tic-tac-know.html, sungka.html, palosebo.html, patintero.html,
+     tumbang-preso.html, pinoy-henyo.html). -->
 <body class="arcade-page" data-sidebar-active="arcade">
   <div class="dashboard-shell container">
     <aside class="sidebar lq-sidebar">
@@ -77,10 +79,11 @@
         </div>
       </section>
 
-      <!-- Continue playing: the game you played last (or the newest game) -->
+      <!-- Continue playing: the game you played last (or the newest game).
+           arcade.entry.js swaps the cover, text, stats and link per game. -->
       <section class="glass-card arcade-hero" aria-labelledby="arcade-hero-title">
         <div class="arcade-hero-grid">
-          <a class="arcade-cover arcade-cover--wordclash arcade-hero-cover" href="battle-arena.html" tabindex="-1" aria-hidden="true">
+          <a class="arcade-cover arcade-cover--wordclash arcade-hero-cover" id="arcade-hero-cover" href="battle-arena.html" tabindex="-1" aria-hidden="true">
             <span class="arcade-cover-logo"><span>WORD</span><span>CLASH</span></span>
             <span class="arcade-cover-fighter" id="arcade-hero-fighter">🧑‍🎓</span>
             <span class="arcade-cover-vs">VS</span>
@@ -89,16 +92,16 @@
           <div class="arcade-hero-body">
             <p class="arcade-eyebrow" id="arcade-hero-eyebrow">Continue playing</p>
             <h2 id="arcade-hero-title">Word Clash</h2>
-            <p class="arcade-hero-desc">Spell the answer to attack. Every subject is a world and every lesson is a stage.</p>
+            <p class="arcade-hero-desc" id="arcade-hero-desc">Spell the answer to attack. Every subject is a world and every lesson is a stage.</p>
             <p class="arcade-hero-last" id="arcade-hero-last">&nbsp;</p>
-            <dl class="arcade-stats">
+            <dl class="arcade-stats" id="arcade-stats">
               <div class="arcade-stat"><dt>Battles</dt><dd id="arcade-stat-battles">–</dd></div>
               <div class="arcade-stat"><dt>Wins</dt><dd id="arcade-stat-wins">–</dd></div>
               <div class="arcade-stat"><dt>Best score</dt><dd id="arcade-stat-best">–</dd></div>
               <div class="arcade-stat"><dt>Stages cleared</dt><dd id="arcade-stat-cleared">–</dd></div>
             </dl>
             <div class="arcade-hero-actions">
-              <a class="btn btn-primary arcade-play-btn" href="battle-arena.html">
+              <a class="btn btn-primary arcade-play-btn" id="arcade-hero-play" href="battle-arena.html">
                 <i class="fa-solid fa-play" aria-hidden="true"></i> Play
               </a>
             </div>
@@ -110,22 +113,9 @@
         <div class="arcade-section-head">
           <h2 id="arcade-games-title">All games</h2>
         </div>
-        <ul class="arcade-games">
-          <li>
-            <a class="arcade-game" href="battle-arena.html">
-              <span class="arcade-cover arcade-cover--wordclash" aria-hidden="true">
-                <span class="arcade-cover-logo"><span>WORD</span><span>CLASH</span></span>
-                <span class="arcade-cover-monster">🐲</span>
-              </span>
-              <span class="arcade-game-body">
-                <span class="arcade-game-name">Word Clash</span>
-                <span class="arcade-game-desc">Spell the answer to defeat the monster.</span>
-                <span class="arcade-game-tags"><span>Spelling</span><span>Solo</span><span>All subjects</span></span>
-              </span>
-              <span class="arcade-game-cta">Play <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
-            </a>
-          </li>
-          <li>
+        <!-- The game cards come from GAMES in js/pages/arcade.entry.js -->
+        <ul class="arcade-games" id="arcade-games">
+          <li class="is-soon">
             <div class="arcade-game is-locked">
               <span class="arcade-cover arcade-cover--soon" aria-hidden="true"><i class="fa-solid fa-lock"></i></span>
               <span class="arcade-game-body">
@@ -141,7 +131,7 @@
         <section class="glass-card arcade-section" aria-labelledby="arcade-recent-title">
           <div class="arcade-section-head">
             <h2 id="arcade-recent-title">Recent plays</h2>
-            <a class="arcade-link" href="history.html?tab=battle">See all <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+            <a class="arcade-link" href="history.html?tab=arcade">See all <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
           </div>
           <ol class="arcade-list" id="arcade-recent">
             <li class="arcade-list-note">Loading…</li>

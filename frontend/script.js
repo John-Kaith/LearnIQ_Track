@@ -1869,20 +1869,22 @@ function setupLeaderboardPage() {
     if (retryBtn) retryBtn.hidden = false;
   }
 
-  // "quiz" = ranked by quiz points (default); "arena" = ranked by Word Clash level.
-  // The Arcade links here with ?rank=arena.
+  // "quiz" = ranked by quiz points (default); "arena" = ranked by Arcade level
+  // (EXP from every Arcade game). The Arcade links here with ?rank=arena.
   let rankMode = new URLSearchParams(window.location.search).get("rank") === "arena" ? "arena" : "quiz";
   let lastEntries = [];
+  const arcadeExp = (e) => Number(e.arcade_total_exp ?? e.battle_total_exp ?? 0) || 0;
+  const arcadeLevel = (e) => Number(e.arcade_level ?? e.battle_level ?? 0) || 0;
 
   function rankedEntries(entries) {
     const list =
       rankMode === "arena"
         ? entries
-            .filter((e) => Number(e.battle_total_exp || 0) > 0)
+            .filter((e) => arcadeExp(e) > 0)
             .sort(
               (a, b) =>
-                Number(b.battle_level || 0) - Number(a.battle_level || 0) ||
-                Number(b.battle_total_exp || 0) - Number(a.battle_total_exp || 0) ||
+                arcadeLevel(b) - arcadeLevel(a) ||
+                arcadeExp(b) - arcadeExp(a) ||
                 Number(b.battle_best_score || 0) - Number(a.battle_best_score || 0),
             )
         : entries.filter((e) => Number(e.quiz_attempts || 0) > 0);
@@ -1911,11 +1913,9 @@ function setupLeaderboardPage() {
           <div class="rank-badge">#${e.rank}</div>
           <h3>${escapeHtml(e.display_name || getProfileDisplayName(e) || "Student")}</h3>
           <p>${
-            rankMode === "arena"
-              ? `Level ${fmtInt(e.battle_level || 0)} · ${fmtInt(e.battle_best_score || 0)} best`
-              : `${fmtInt(e.total_points)} points`
+            rankMode === "arena" ? `Arcade level ${fmtInt(arcadeLevel(e))}` : `${fmtInt(e.total_points)} points`
           }</p>
-          <small>${escapeHtml(rankMode === "arena" ? `${fmtInt(e.battle_total_exp || 0)} total EXP` : e.tagline || "")}</small>
+          <small>${escapeHtml(rankMode === "arena" ? `${fmtInt(arcadeExp(e))} total EXP` : e.tagline || "")}</small>
         </article>`;
       })
       .join("");
@@ -1934,7 +1934,7 @@ function setupLeaderboardPage() {
           <td>${fmtInt(e.total_points)}</td>
           <td>${fmtInt(e.quiz_attempts)}</td>
           <td>${fmtPct(e.progress_pct)}</td>
-          <td><span class="leaderboard-level-cell"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Lv ${fmtInt(e.battle_level || 0)}</span></td>
+          <td><span class="leaderboard-level-cell"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Lv ${fmtInt(arcadeLevel(e))}</span></td>
           <td>${fmtInt(e.battle_best_score || 0)}</td>
         </tr>`;
       })
@@ -1975,11 +1975,11 @@ function setupLeaderboardPage() {
   function renderRankings(entries) {
     if (tableNote) {
       const sortedBy =
-        rankMode === "arena" ? "Sorted by Word Clash level, then EXP." : "Sorted by total points, then accuracy.";
+        rankMode === "arena" ? "Sorted by Arcade level, then EXP." : "Sorted by total points, then accuracy.";
       tableNote.textContent =
         entries.length === 0
           ? rankMode === "arena"
-            ? "No Word Clash games played yet."
+            ? "No Arcade games played yet."
             : "No submitted quiz attempts yet."
           : `Showing ${entries.length} student${entries.length === 1 ? "" : "s"} · ${sortedBy}`;
     }
@@ -10130,7 +10130,7 @@ async function renderAiResultPage() {
 }
 
 // =====================================================================
-// Student History (Quiz / Reviewer / Activity)
+// Student History (Quiz / Reviewer / Activity / Arcade)
 // =====================================================================
 
 const STUDENT_HISTORY_KEYS = {
@@ -10138,8 +10138,33 @@ const STUDENT_HISTORY_KEYS = {
   reviewer: "learniq_history_reviewer",
   activity: "learniq_history_activity",
   battle: "learniq_history_battle",
+  game: "learniq_history_game",
 };
 const STUDENT_HISTORY_MAX_PER_TYPE = 100;
+/** History tabs. Arcade lists Word Clash ("battle") and every other game ("game") together. */
+const STUDENT_HISTORY_TABS = {
+  quiz: ["quiz"],
+  reviewer: ["reviewer"],
+  activity: ["activity"],
+  arcade: ["battle", "game"],
+};
+const ARCADE_GAME_NAMES = {
+  "word-clash": "Word Clash",
+  "tic-tac-know": "Tic-Tac-Know",
+  sungka: "Sungka",
+  palosebo: "Palosebo",
+  patintero: "Patintero",
+  "tumbang-preso": "Tumbang Preso",
+  "pinoy-henyo": "Pinoy Henyo",
+};
+const ARCADE_GAME_ICONS = {
+  "tic-tac-know": "fa-table-cells",
+  sungka: "fa-circle-dot",
+  palosebo: "fa-flag",
+  patintero: "fa-person-running",
+  "tumbang-preso": "fa-bullseye",
+  "pinoy-henyo": "fa-circle-question",
+};
 let activeHistoryTab = "quiz";
 let currentHistoryDetailContext = null;
 /** Server-backed history (Supabase); localStorage remains as fallback/cache. */
@@ -10150,6 +10175,7 @@ let studentHistoryServerCache = {
   reviewer: [],
   activity: [],
   battle: [],
+  game: [],
 };
 
 function getStudentHistoryUserKey() {
@@ -10238,6 +10264,7 @@ async function fetchStudentHistoryFromServer() {
     studentHistoryServerCache.reviewer = Array.isArray(data.reviewer) ? data.reviewer : [];
     studentHistoryServerCache.activity = Array.isArray(data.activity) ? data.activity : [];
     studentHistoryServerCache.battle = Array.isArray(data.battle) ? data.battle : [];
+    studentHistoryServerCache.game = Array.isArray(data.game) ? data.game : [];
     studentHistoryServerCache.loaded = true;
     syncServerHistoryToLocalStorage();
     if (typeof updateStudentHistoryTabCounts === "function") updateStudentHistoryTabCounts();
@@ -10252,7 +10279,7 @@ async function fetchStudentHistoryFromServer() {
 }
 
 function syncServerHistoryToLocalStorage() {
-  ["quiz", "reviewer", "activity", "battle"].forEach((type) => {
+  Object.keys(STUDENT_HISTORY_KEYS).forEach((type) => {
     const merged = readStudentHistoryList(type);
     if (merged.length) writeStudentHistoryList(type, merged);
   });
@@ -10287,8 +10314,8 @@ function writeStudentHistoryList(type, list) {
     if (!baseKey) return;
     const key = `${baseKey}${getStudentHistoryUserKey()}`;
     let capped = Array.isArray(list) ? list.slice(0, STUDENT_HISTORY_MAX_PER_TYPE) : [];
-    if (type === "battle") {
-      // Word Clash answers make entries large; the server keeps every battle's answers.
+    if (type === "battle" || type === "game") {
+      // Arcade answers make entries large; the server keeps every game's answers.
       capped = capped.map((item, i) => (i < 10 || !item?.answers ? item : { ...item, answers: undefined }));
     }
     localStorage.setItem(key, JSON.stringify(capped));
@@ -10310,8 +10337,8 @@ function recordStudentHistory(type, payload) {
 
   // For reviewer/activity, avoid spam by collapsing repeat opens of the same
   // lesson within a 5-minute window into the most recent entry. Quizzes and
-  // battles are real results, so every one is kept.
-  if (type !== "quiz" && type !== "battle" && list.length > 0) {
+  // Arcade games are real results, so every one is kept.
+  if (type !== "quiz" && type !== "battle" && type !== "game" && list.length > 0) {
     const last = list[0];
     const sameLesson = String(last.lesson_id || "") === String(payload?.lesson_id || "");
     const lastTime = last.timestamp ? new Date(last.timestamp).getTime() : 0;
@@ -10340,11 +10367,24 @@ function formatHistoryTimestamp(iso) {
   }
 }
 
+function arcadeGameName(type, item) {
+  const id = type === "battle" ? "word-clash" : String(item?.game || "").trim().toLowerCase();
+  if (ARCADE_GAME_NAMES[id]) return ARCADE_GAME_NAMES[id];
+  return id ? id.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Arcade game";
+}
+
+function historyEntryTime(item) {
+  const t = item?.timestamp ? new Date(item.timestamp).getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
+}
+
 function buildHistoryItemHtml(type, item, index) {
   const title = escapeHtml(String(item.lesson_title || item.title || "Lesson"));
   const subject = item.subject_name
     ? `<span class="history-pill">${escapeHtml(item.subject_name)}</span>`
     : "";
+  const gameName = type === "battle" || type === "game" ? arcadeGameName(type, item) : "";
+  const gameTag = gameName ? `<span class="history-pill is-game">${escapeHtml(gameName)}</span>` : "";
   const when = formatHistoryTimestamp(item.timestamp);
   let iconHtml = "";
   let summary = "";
@@ -10377,14 +10417,28 @@ function buildHistoryItemHtml(type, item, index) {
     summary = `<span class="history-summary-pill${won ? "" : " is-bad"}">${won ? "Victory" : "Defeat"} <span class="small-note">(${correct} word${correct === 1 ? "" : "s"} correct · ${escapeHtml(extras.join(" · "))})</span></span>${
       item.new_best ? ' <span class="history-summary-pill is-ok">New best</span>' : ""
     }${item.leveled_up ? ' <span class="history-summary-pill is-ok">Level up</span>' : ""}`;
+  } else if (type === "game") {
+    const outcome = String(item.outcome || "").toLowerCase();
+    const correct = Number(item.correct_answers || 0);
+    const extras = [`${correct} correct`];
+    if (item.opponent === "friend" || item.opponent === "bot") extras.unshift(item.opponent === "friend" ? "vs Friend" : "vs Bot");
+    if (item.difficulty) extras.unshift(String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1));
+    if (item.exp_gained != null) extras.push(`+${Number(item.exp_gained)} EXP`);
+    const label = outcome === "win" ? "Victory" : outcome === "draw" ? "Draw" : "Defeat";
+    const tone = outcome === "win" ? "" : outcome === "draw" ? " is-draw" : " is-bad";
+    const score = item.match_score ? ` <strong>${escapeHtml(String(item.match_score))}</strong>` : "";
+    const icon = ARCADE_GAME_ICONS[String(item.game || "").toLowerCase()] || "fa-gamepad";
+    iconHtml = `<i class="fa-solid ${icon}" aria-hidden="true"></i>`;
+    summary = `<span class="history-summary-pill${tone}">${label}${score} <span class="small-note">(${escapeHtml(extras.join(" · "))})</span></span>`;
   }
 
   return `
-    <button type="button" class="history-item" data-history-type="${escapeHtml(type)}" data-history-index="${index}" aria-label="View ${escapeHtml(type)} details for ${title}">
+    <button type="button" class="history-item" data-history-type="${escapeHtml(type)}" data-history-index="${index}" aria-label="View ${escapeHtml(gameName || type)} details for ${title}">
       <span class="history-item-icon">${iconHtml}</span>
       <span class="history-item-body">
         <span class="history-item-header">
           <span class="history-item-title">${title}</span>
+          ${gameTag}
           ${subject}
         </span>
         <span class="history-item-summary-line">${summary}</span>
@@ -10400,11 +10454,22 @@ function buildHistoryItemHtml(type, item, index) {
   `;
 }
 
-function renderStudentHistoryList(type) {
+/** Rows of one tab, newest first. Each keeps its own type and index for the detail view. */
+function readStudentHistoryTab(tab) {
+  const types = STUDENT_HISTORY_TABS[tab] || [];
+  const entries = [];
+  types.forEach((type) => {
+    readStudentHistoryList(type).forEach((item, index) => entries.push({ type, item, index }));
+  });
+  if (types.length > 1) entries.sort((a, b) => historyEntryTime(b.item) - historyEntryTime(a.item));
+  return entries;
+}
+
+function renderStudentHistoryList(tab) {
   const host = document.getElementById("history-list-host");
   if (!host) return;
-  const list = readStudentHistoryList(type);
-  if (!list.length) {
+  const entries = readStudentHistoryTab(tab);
+  if (!entries.length) {
     const labels = {
       quiz: {
         title: "No quiz history yet",
@@ -10418,12 +10483,12 @@ function renderStudentHistoryList(type) {
         title: "No activity history yet",
         body: "Generate or open activities from My lesson and they will appear here.",
       },
-      battle: {
-        title: "No Word Clash games yet",
-        body: "Play Word Clash in the Arcade. Every battle, with your answers, will appear here.",
+      arcade: {
+        title: "No Arcade games yet",
+        body: "Play a game in the Arcade, like Word Clash or Tic-Tac-Know. Every game, with your answers, will appear here.",
       },
     };
-    const l = labels[type] || labels.quiz;
+    const l = labels[tab] || labels.quiz;
     host.innerHTML = `
       <article class="glass-card content-card history-empty">
         <h3>${l.title}</h3>
@@ -10432,7 +10497,7 @@ function renderStudentHistoryList(type) {
     `;
     return;
   }
-  host.innerHTML = list.map((item, idx) => buildHistoryItemHtml(type, item, idx)).join("");
+  host.innerHTML = entries.map((e) => buildHistoryItemHtml(e.type, e.item, e.index)).join("");
 }
 
 // --- History detail modal ---
@@ -10637,6 +10702,8 @@ function openHistoryItemDetail(type, index) {
     void renderActivityDetailIntoModal(item);
   } else if (type === "battle") {
     renderBattleDetailIntoModal(item);
+  } else if (type === "game") {
+    renderGameDetailIntoModal(item);
   } else {
     setHistoryDetailBody('<p class="small-note">Nothing to show.</p>');
   }
@@ -10686,13 +10753,52 @@ function renderBattleDetailIntoModal(item) {
   `);
 }
 
-/** Word Clash: every question of the battle, what the student typed, and the answer. */
-function buildBattleAnswersHtml(answers) {
+/** Arcade games other than Word Clash (Tic-Tac-Know): the match result and every answer. */
+function renderGameDetailIntoModal(item) {
+  const outcome = String(item.outcome || "").toLowerCase();
+  const tone = outcome === "win" ? "is-ok" : outcome === "draw" ? "is-draw" : "is-bad";
+  const icon = outcome === "win" ? "fa-trophy" : outcome === "draw" ? "fa-handshake" : "fa-skull";
+  const label = outcome === "win" ? "Victory" : outcome === "draw" ? "Draw" : "Defeated";
+  const correct = Number(item.correct_answers || 0);
+  const rows = [
+    ["Game", arcadeGameName("game", item)],
+    item.difficulty ? ["Difficulty", String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1)] : null,
+    item.opponent === "friend" || item.opponent === "bot" ? ["Opponent", item.opponent === "friend" ? "Friend (same device)" : "Bot"] : null,
+    item.match_score ? ["Final score", String(item.match_score)] : null,
+    ["Correct answers", item.questions_answered != null ? `${correct} of ${Number(item.questions_answered)}` : String(correct)],
+    item.exp_gained != null ? ["EXP earned", `+${Number(item.exp_gained)}`] : null,
+  ]
+    .filter(Boolean)
+    .map(
+      ([name, value]) => `
+        <div class="battle-info-row">
+          <dt>${escapeHtml(name)}</dt>
+          <dd>${escapeHtml(value)}</dd>
+        </div>`,
+    )
+    .join("");
+  setHistoryDetailBody(`
+    <article class="history-battle-detail">
+      <p class="history-summary-pill ${tone}">
+        <i class="fa-solid ${icon}" aria-hidden="true"></i>
+        ${label}
+      </p>
+      <dl class="battle-info-list">${rows}</dl>
+      ${buildBattleAnswersHtml(item.answers, { noun: "match", triedLabel: "You picked" })}
+    </article>
+  `);
+}
+
+/** Every question of an Arcade game, what the student answered, and the answer. */
+function buildBattleAnswersHtml(answers, opts = {}) {
+  const noun = opts.noun || "battle";
   if (!Array.isArray(answers)) {
-    return '<p class="small-note">Answers weren\'t saved for this battle. Battles from now on keep every answer.</p>';
+    return noun === "battle"
+      ? '<p class="small-note">Answers weren\'t saved for this battle. Battles from now on keep every answer.</p>'
+      : `<p class="small-note">Answers weren't saved for this ${noun}.</p>`;
   }
   if (!answers.length) {
-    return '<p class="small-note">No questions were answered in this battle.</p>';
+    return `<p class="small-note">No questions were answered in this ${noun}.</p>`;
   }
   const rows = answers
     .map((row, i) => {
@@ -10715,7 +10821,7 @@ function buildBattleAnswersHtml(answers) {
       const hints = Number(row?.hints || 0);
       const details = [
         tries.length
-          ? `You tried: <strong>${escapeHtml(tries.map((w) => String(w).toUpperCase()).join(", "))}</strong>`
+          ? `${opts.triedLabel || "You tried"}: <strong>${escapeHtml(tries.map((w) => String(w).toUpperCase()).join(", "))}</strong>`
           : "",
         `Answer: <strong>${escapeHtml(String(row?.answer || "").toUpperCase())}</strong>`,
         hints ? `${hints} hint${hints === 1 ? "" : "s"} used` : "",
@@ -10746,7 +10852,8 @@ async function downloadHistoryDetailAsPdf() {
   const type = ctx.type || "history";
   const item = ctx.item || {};
   const lessonTitle = String(item.lesson_title || titleEl?.textContent || "history").trim();
-  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const typeLabel =
+    type === "battle" || type === "game" ? arcadeGameName(type, item) : type.charAt(0).toUpperCase() + type.slice(1);
   const baseName = `${typeLabel}_${lessonTitle}`;
 
   const sanitizedTitle = escapeHtml(lessonTitle);
@@ -10791,23 +10898,27 @@ async function downloadHistoryDetailAsPdf() {
 }
 
 function updateStudentHistoryTabCounts() {
-  ["quiz", "reviewer", "activity", "battle"].forEach((type) => {
-    const el = document.getElementById(`history-tab-count-${type}`);
-    if (el) el.textContent = String(readStudentHistoryList(type).length);
+  Object.keys(STUDENT_HISTORY_TABS).forEach((tab) => {
+    const el = document.getElementById(`history-tab-count-${tab}`);
+    if (el) el.textContent = String(readStudentHistoryTab(tab).length);
   });
 }
 
-function setStudentHistoryActiveTab(type) {
-  const valid = ["quiz", "reviewer", "activity", "battle"];
-  if (!valid.includes(type)) type = "quiz";
-  activeHistoryTab = type;
+/** "battle" and "game" open the Arcade tab (older links use ?tab=battle). */
+function normalizeHistoryTab(tab) {
+  if (tab === "battle" || tab === "game") return "arcade";
+  return STUDENT_HISTORY_TABS[tab] ? tab : "";
+}
+
+function setStudentHistoryActiveTab(tab) {
+  tab = normalizeHistoryTab(tab) || "quiz";
+  activeHistoryTab = tab;
   document.querySelectorAll(".workspace-tab[data-history-tab]").forEach((btn) => {
-    const tab = btn.getAttribute("data-history-tab");
-    const isActive = tab === type;
+    const isActive = btn.getAttribute("data-history-tab") === tab;
     btn.classList.toggle("is-active", isActive);
     btn.setAttribute("aria-selected", isActive ? "true" : "false");
   });
-  renderStudentHistoryList(type);
+  renderStudentHistoryList(tab);
 }
 
 function setupStudentHistoryPage() {
@@ -10816,8 +10927,8 @@ function setupStudentHistoryPage() {
     void hydrateSidebarProfileFromDatabase();
   }
   updateStudentHistoryTabCounts();
-  const tabFromUrl = new URLSearchParams(window.location.search).get("tab");
-  if (tabFromUrl && STUDENT_HISTORY_KEYS[tabFromUrl]) activeHistoryTab = tabFromUrl;
+  const tabFromUrl = normalizeHistoryTab(new URLSearchParams(window.location.search).get("tab"));
+  if (tabFromUrl) activeHistoryTab = tabFromUrl;
   setStudentHistoryActiveTab(activeHistoryTab);
   void fetchStudentHistoryFromServer();
 

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sungka | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/arcade-skin.css?v=2026100601" />
+  <link rel="stylesheet" href="css/sungka.css?v=2026100601" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/arcade/quiz-card.js?v=2026100601" defer></script>
+  <script src="js/pages/sungka.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Sungka (Larong Pinoy): the Filipino shell board game. Answer a question at the start of
+     each move: right = you pick the bahay to play, wrong = the game picks one for you.
+     Menus, results and pause come from js/arcade/arcade-shell.js. -->
+<body class="sungka-page arcade-game arcade-skin">
+  <main class="wc-app" id="wc-app" aria-label="Sungka"></main>
+
+  <section class="sk-play sg-play" id="sg-play-screen" hidden>
+    <header class="sk-top">
+      <button type="button" class="sk-pause-btn" id="sg-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+        <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+      </button>
+      <p class="sk-top-title" id="sg-turn">YOUR TURN</p>
+      <span class="sk-top-right" id="sg-moves">MOVE 1</span>
+    </header>
+
+    <div class="sg-table">
+      <div class="sg-player is-o" id="sg-player-o">
+        <span class="sg-avatar" id="sg-avatar-o" aria-hidden="true"></span>
+        <strong class="sg-name" id="sg-name-o">BOT</strong>
+        <span class="sg-store-label">ULO <b id="sg-score-o">0</b></span>
+      </div>
+
+      <div class="sg-board" id="sg-board" role="group" aria-label="Sungka board"></div>
+
+      <div class="sg-player is-x" id="sg-player-x">
+        <span class="sg-avatar" id="sg-avatar-x" aria-hidden="true"></span>
+        <strong class="sg-name" id="sg-name-x">YOU</strong>
+        <span class="sg-store-label">ULO <b id="sg-score-x">0</b></span>
+      </div>
+    </div>
+
+    <p class="sk-status" id="sg-status" role="status" aria-live="polite"></p>
+
+    <div class="sk-ready" id="sg-ready" hidden>
+      <p class="sk-ready-title">Ready?</p>
+      <p class="sk-ready-text">
+        Answer a question before each move. <strong>Right:</strong> you pick the bahay to play.
+        <strong>Wrong:</strong> the game picks one for you. Drop the shells one by one; landing in your
+        <strong>ulo</strong> gives another move. Most shells in your ulo wins!
+      </p>
+      <button type="button" class="sk-btn sk-btn-primary" id="sg-start-btn">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> START
+      </button>
+    </div>
+
+    <p class="sk-toast" id="sg-toast" hidden></p>
+    <div id="sg-quiz"></div>
+  </section>
+</body>
+</html>

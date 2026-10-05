@@ -1400,8 +1400,9 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
             a["last_ts"] = ts
 
     battle_stats = get_all_battle_stats()
-    for sid in battle_stats:
-        agg[sid]  # students who only played the AI Battle Arena still appear
+    game_exp = get_all_game_exp()
+    for sid in list(battle_stats) + list(game_exp):
+        agg[sid]  # students who only played Arcade games still appear
 
     if not agg:
         return {"updated_at": now_iso, "entries": []}
@@ -1448,6 +1449,8 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
                 "battle_level": int(bstats.get("level") or 0),
                 "battle_best_score": int(bstats.get("best_score") or 0),
                 "battle_total_exp": int(bstats.get("total_exp") or 0),
+                "arcade_total_exp": int(bstats.get("total_exp") or 0) + int(game_exp.get(sid) or 0),
+                "arcade_level": (int(bstats.get("total_exp") or 0) + int(game_exp.get(sid) or 0)) // BATTLE_EXP_PER_LEVEL,
             }
         )
 
@@ -4444,8 +4447,8 @@ def insert_student_learning_event(
     """Persist reviewer / activity history event."""
     idn = (student_id_number or "").strip()
     et = (event_type or "").strip().lower()
-    if et not in ("reviewer", "activity", "battle"):
-        raise ValueError("event_type must be reviewer, activity, or battle")
+    if et not in ("reviewer", "activity", "battle", "game"):
+        raise ValueError("event_type must be reviewer, activity, battle, or game")
     student_uuid = profile_uuid_for_id_number(idn) if idn else None
     lesson_id = payload.get("lesson_id")
     meta = {
@@ -4664,6 +4667,12 @@ def summarize_battle_events(metas: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _battle_event_rows(student_uuid: str | None = None, student_id_number: str | None = None) -> list[dict[str, Any]]:
     """All battle events (optionally for one student), paged past Supabase's 1000-row cap."""
+    return _learning_event_rows("battle", student_uuid, student_id_number)
+
+
+def _learning_event_rows(
+    event_type: str, student_uuid: str | None = None, student_id_number: str | None = None
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     page = 1000
     start = 0
@@ -4672,7 +4681,7 @@ def _battle_event_rows(student_uuid: str | None = None, student_id_number: str |
             _sb()
             .table("student_learning_events")
             .select("student_id, student_id_number, metadata")
-            .eq("event_type", "battle")
+            .eq("event_type", event_type)
         )
         if student_uuid:
             q = q.eq("student_id", student_uuid)
@@ -4721,17 +4730,94 @@ def get_all_battle_stats() -> dict[str, dict[str, Any]]:
     return {sid: summarize_battle_events(metas) for sid, metas in by_student.items()}
 
 
+# ---------- Arcade: games after Word Clash ("game" events, metadata.game = which game) ----------
+# Every Arcade game uses the same EXP rule: 10 for a win, 6 for a draw, 4 for a loss,
+# +1 per correct answer (max +5). Arcade level = Word Clash EXP + all game EXP, 100 per level.
+# Keep in sync with GAME_EXP in frontend/js/arcade/arcade-shell.js.
+
+
+def game_exp_for_result(outcome: Any, correct_answers: Any) -> int:
+    result = str(outcome or "").strip().lower()
+    base = 10 if result == "win" else 6 if result == "draw" else 4
+    return base + min(5, max(0, _int_or_zero(correct_answers)))
+
+
+def summarize_game_events(metas: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Per game: matches, wins, draws, losses and EXP."""
+    games: dict[str, dict[str, Any]] = {}
+    for meta in metas:
+        name = str(meta.get("game") or "game").strip().lower() or "game"
+        g = games.setdefault(name, {"matches": 0, "wins": 0, "draws": 0, "losses": 0, "total_exp": 0})
+        result = str(meta.get("outcome") or "").strip().lower()
+        g["matches"] += 1
+        if result == "win":
+            g["wins"] += 1
+        elif result == "draw":
+            g["draws"] += 1
+        else:
+            g["losses"] += 1
+        g["total_exp"] += game_exp_for_result(result, meta.get("correct_answers"))
+    return games
+
+
+def _student_rows(event_type: str, student_id_number: str) -> list[dict[str, Any]]:
+    idn = (student_id_number or "").strip()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid and not idn:
+        return []
+    try:
+        return _learning_event_rows(event_type, student_uuid=student_uuid, student_id_number=idn)
+    except Exception as e:
+        print(f"_student_rows {event_type}: {e}")
+        return []
+
+
+def get_student_arcade_stats(student_id_number: str) -> dict[str, Any]:
+    """Arcade level (EXP from every game) plus each game's own record."""
+    word_clash = summarize_battle_events([_event_meta(r) for r in _student_rows("battle", student_id_number)])
+    games = summarize_game_events([_event_meta(r) for r in _student_rows("game", student_id_number)])
+    total_exp = int(word_clash["total_exp"]) + sum(int(g["total_exp"]) for g in games.values())
+    return {
+        "level": total_exp // BATTLE_EXP_PER_LEVEL,
+        "total_exp": total_exp,
+        "exp_into_level": total_exp % BATTLE_EXP_PER_LEVEL,
+        "exp_per_level": BATTLE_EXP_PER_LEVEL,
+        "games": {"word-clash": word_clash, **games},
+    }
+
+
+def get_all_game_exp() -> dict[str, int]:
+    """Total EXP from "game" events for every student, keyed by profile uuid."""
+    try:
+        rows = _learning_event_rows("game")
+    except Exception as e:
+        print(f"get_all_game_exp: {e}")
+        return {}
+    exp: dict[str, int] = defaultdict(int)
+    for r in rows:
+        sid = str(r.get("student_id") or "").strip()
+        if not sid or sid == ZERO_UUID:
+            sid = profile_uuid_for_id_number(str(r.get("student_id_number") or "").strip()) or ""
+        if not sid:
+            continue
+        meta = _event_meta(r)
+        exp[sid] += game_exp_for_result(meta.get("outcome"), meta.get("correct_answers"))
+    return dict(exp)
+
+
 def get_student_learning_history(student_id_number: str) -> dict[str, list[dict[str, Any]]]:
     quiz = list_student_quiz_history(student_id_number)
     reviewer = list_student_learning_events(student_id_number, "reviewer")
     activity = list_student_learning_events(student_id_number, "activity")
     battle = list_student_learning_events(student_id_number, "battle")
+    game = list_student_learning_events(student_id_number, "game")
     backfill = backfill_student_history_from_lessons(student_id_number)
     return {
         "quiz": _merge_history_by_lesson(quiz, backfill.get("quiz") or []),
         "reviewer": _merge_history_by_lesson(reviewer, backfill.get("reviewer") or []),
         "activity": _merge_history_by_lesson(activity, backfill.get("activity") or []),
         "battle": battle,
+        "game": game,
     }
 
 

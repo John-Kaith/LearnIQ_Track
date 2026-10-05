@@ -3184,11 +3184,13 @@ def student_learning_history_endpoint(
             "reviewer": data.get("reviewer") or [],
             "activity": data.get("activity") or [],
             "battle": data.get("battle") or [],
+            "game": data.get("game") or [],
             "counts": {
                 "quiz": len(data.get("quiz") or []),
                 "reviewer": len(data.get("reviewer") or []),
                 "activity": len(data.get("activity") or []),
                 "battle": len(data.get("battle") or []),
+                "game": len(data.get("game") or []),
             },
         }
     except Exception as e:
@@ -3216,6 +3218,27 @@ def student_battle_stats_endpoint(
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.get("/student/arcade-stats")
+def student_arcade_stats_endpoint(
+    student_id_number: str = Query(...),
+    authorization: str | None = Header(default=None),
+):
+    """Arcade level (EXP from every Arcade game) and each game's record."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    sid = str(student_id_number or "").strip()
+    if not sid:
+        return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    allowed, _, bad = _can_view_student_data(authorization, sid)
+    if not allowed:
+        return bad
+    try:
+        return {"student_id_number": sid, **db_supabase.get_student_arcade_stats(sid)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.post("/student/learning-history")
 async def student_learning_history_post_endpoint(
     body: dict = Body(...),
@@ -3232,9 +3255,9 @@ async def student_learning_history_post_endpoint(
     event_type = str(payload.get("event_type") or payload.get("type") or "").strip().lower()
     if not sid:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
-    if event_type not in ("reviewer", "activity", "battle"):
+    if event_type not in ("reviewer", "activity", "battle", "game"):
         return JSONResponse(
-            {"error": "event_type must be reviewer, activity, or battle"},
+            {"error": "event_type must be reviewer, activity, battle, or game"},
             status_code=400,
         )
     try:
@@ -3249,6 +3272,12 @@ async def student_learning_history_post_endpoint(
                 {
                     "error": "Run backend/migrations/student_learning_events.sql in Supabase first.",
                 },
+                status_code=503,
+            )
+        if "event_type_check" in msg:
+            # The database doesn't allow this event type yet (e.g. 'game' for Tic-Tac-Know).
+            return JSONResponse(
+                {"error": "Run backend/migrations/student_learning_events_game.sql in Supabase first."},
                 status_code=503,
             )
         return JSONResponse({"error": msg}, status_code=502)

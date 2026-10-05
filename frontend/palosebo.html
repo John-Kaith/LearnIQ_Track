@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Palosebo | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/arcade-skin.css?v=2026100601" />
+  <link rel="stylesheet" href="css/palosebo.css?v=2026100601" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/arcade/quiz-card.js?v=2026100601" defer></script>
+  <script src="js/pages/palosebo.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Palosebo (Larong Pinoy): a fiesta race up greasy bamboo poles. Everyone gets the
+     same question; a right answer climbs (faster = higher), a wrong one slides down.
+     First to the prize wins. Menus, results and pause come from js/arcade/arcade-shell.js. -->
+<body class="palosebo-page arcade-game arcade-skin">
+  <main class="wc-app" id="wc-app" aria-label="Palosebo"></main>
+
+  <section class="sk-play pb-play" id="pb-play-screen" hidden>
+    <header class="sk-top">
+      <button type="button" class="sk-pause-btn" id="pb-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+        <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+      </button>
+      <p class="sk-top-title" id="pb-round">QUESTION 1</p>
+      <span class="sk-top-right">FIRST TO THE PRIZE</span>
+    </header>
+
+    <div class="pb-stage">
+      <div class="pb-flags" aria-hidden="true"></div>
+      <ol class="pb-lanes" id="pb-lanes" aria-label="Climbers"></ol>
+      <div class="pb-crowd" aria-hidden="true"></div>
+    </div>
+
+    <p class="sk-status" id="pb-status" role="status" aria-live="polite"></p>
+
+    <div class="sk-ready" id="pb-ready" hidden>
+      <p class="sk-ready-title">Ready?</p>
+      <p class="sk-ready-text">
+        Everyone gets the same question. Answer right to climb: <strong>the faster you answer, the higher you go</strong>.
+        A wrong answer makes you slide down. First to grab the prize wins!
+      </p>
+      <button type="button" class="sk-btn sk-btn-primary" id="pb-start-btn">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> START
+      </button>
+    </div>
+
+    <div class="pb-quiz" id="pb-quiz"></div>
+  </section>
+</body>
+</html>

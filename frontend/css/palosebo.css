@@ -1,0 +1,365 @@
+/**
+ * Palosebo (palosebo.html): a fiesta at sunset — banderitas over the plaza,
+ * greasy bamboo poles and a cheering crowd. Uses css/arcade-skin.css for the
+ * shared screens (load it first). Same look in light and dark mode.
+ */
+
+body.palosebo-page {
+  --pb-plum: #2a1236;
+  --pb-plum-2: #3d1a4a;
+  --pb-night: #1c0a24;
+  --pb-cream: #fff4e0;
+  --pb-gold: #ffd23f;
+  --pb-pink: #ff5ca8;
+  --pb-sky: linear-gradient(
+    180deg,
+    #3b1e54 0 16%,
+    #5a2659 16% 30%,
+    #8e3a5e 30% 44%,
+    #c4525a 44% 58%,
+    #e8774a 58% 72%,
+    #f6a54c 72% 86%,
+    #fbd27f 86% 100%
+  );
+  --pb-flags: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='26' shape-rendering='crispEdges'%3E%3Cpath d='M2 2h16l-8 16z' fill='%23ff5ca8'/%3E%3Cpath d='M26 2h16l-8 16z' fill='%23ffd23f'/%3E%3Cpath d='M50 2h16l-8 16z' fill='%237fd4ff'/%3E%3Cpath d='M74 2h16l-8 16z' fill='%237cf29c'/%3E%3C/svg%3E");
+  --pb-crowd:
+    radial-gradient(circle at 11px 11px, var(--pb-night) 9px, transparent 10px) 0 100% / 26px 30px repeat-x,
+    radial-gradient(circle at 11px 11px, #2c1236 9px, transparent 10px) 13px calc(100% - 10px) / 26px 30px repeat-x,
+    linear-gradient(var(--pb-night), var(--pb-night)) 0 100% / 100% 12px no-repeat;
+
+  --sk-ink: var(--pb-cream);
+  --sk-ink-soft: rgba(255, 244, 224, 0.84);
+  --sk-ink-faint: rgba(255, 244, 224, 0.45);
+  --sk-glow: none;
+  --sk-bg: radial-gradient(circle at 80% 78%, rgba(255, 233, 160, 0.9) 0 42px, rgba(255, 233, 160, 0.25) 43px 70px, transparent 71px), var(--pb-sky);
+  --sk-deep: var(--pb-night);
+  --sk-mid: var(--pb-plum-2);
+  --sk-panel: rgba(42, 18, 54, 0.74);
+  --sk-btn: rgba(42, 18, 54, 0.66);
+  --sk-hover-bg: rgba(255, 92, 168, 0.2);
+  --sk-decor:
+    var(--pb-flags) 0 14px / 96px 26px repeat-x,
+    linear-gradient(var(--pb-cream), var(--pb-cream)) 0 14px / 100% 2px no-repeat,
+    var(--pb-crowd);
+  --sk-dim: rgba(28, 10, 36, 0.78);
+  --sk-line: var(--pb-cream);
+  --sk-line-soft: rgba(255, 244, 224, 0.55);
+  --sk-ghost: var(--pb-night);
+  --sk-shadow: 4px 4px 0 var(--pb-night);
+  --sk-title-shadow: 3px 3px 0 var(--pb-night);
+  --sk-select: var(--pb-pink);
+  --sk-accent: var(--pb-gold);
+  --sk-accent-fill: var(--pb-gold);
+  --sk-accent-ink: var(--pb-plum);
+  --sk-good: #7cf29c;
+  --sk-bad: #ff7a7a;
+  --sk-info: #7fd4ff;
+  --sk-logo-top: var(--pb-cream);
+  --sk-logo-main: var(--pb-gold);
+  --sk-logo-shadow: 4px 4px 0 var(--pb-pink), 8px 8px 0 var(--pb-night);
+  --sk-cursor: ">";
+}
+
+/* The long name fits on phones */
+body.palosebo-page .wc-logo-top {
+  font-size: clamp(1rem, 4vw, 1.9rem);
+  letter-spacing: 0.14em;
+}
+
+body.palosebo-page .wc-logo-main {
+  font-size: clamp(2rem, 8.5vw, 5.2rem);
+}
+
+/* ============================================================
+ * Play screen
+ * ============================================================ */
+.pb-play {
+  background: var(--sk-bg);
+}
+
+.pb-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: min(46rem, 100%);
+  min-height: 15rem;
+  margin: 0.4rem auto 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pb-flags {
+  height: 30px;
+  flex-shrink: 0;
+  background:
+    var(--pb-flags) 0 4px / 96px 26px repeat-x,
+    linear-gradient(var(--pb-cream), var(--pb-cream)) 0 4px / 100% 2px no-repeat;
+}
+
+.pb-lanes {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.25rem;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  min-height: 12rem;
+}
+
+.pb-lane {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  gap: 0.3rem;
+}
+
+.pb-prize {
+  width: 30px;
+  filter: drop-shadow(2px 2px 0 var(--pb-night));
+}
+
+.pb-prize-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pb-lane.is-top .pb-prize {
+  animation: pb-shine 0.4s steps(2) infinite;
+}
+
+@keyframes pb-shine {
+  50% {
+    transform: translateY(-3px) scale(1.1);
+  }
+}
+
+/* Bamboo: pixel bands, nodes every 2.2rem, a greasy shine down the middle */
+.pb-pole {
+  position: relative;
+  width: 22px;
+  min-height: 9rem;
+  background:
+    linear-gradient(90deg, transparent 0 9px, rgba(255, 255, 255, 0.55) 9px 12px, transparent 12px),
+    repeating-linear-gradient(180deg, #8a8f2b 0 3px, transparent 3px 2.2rem),
+    linear-gradient(90deg, #6f7322 0 3px, #b9bd4a 3px 8px, #d6d96a 8px 15px, #a7ab3e 15px 19px, #6f7322 19px 22px);
+  box-shadow: 3px 0 0 var(--pb-night);
+}
+
+.pb-climber {
+  --h: 0;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--h) * (100% - 3.3rem));
+  width: 2.8rem;
+  transform: translateX(-50%);
+  transition: bottom 0.8s steps(8);
+  filter: drop-shadow(2px 2px 0 var(--pb-night));
+}
+
+.pb-climber-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* +18 / −6 after each question */
+.pb-delta {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 2px;
+  font-size: 0.6rem;
+  white-space: nowrap;
+  opacity: 0;
+  text-shadow: 2px 2px 0 var(--pb-night);
+}
+
+.pb-delta.is-up {
+  color: var(--sk-good);
+}
+
+.pb-delta.is-down {
+  color: var(--sk-bad);
+}
+
+.pb-delta.is-shown {
+  animation: pb-delta 1.4s steps(7) forwards;
+}
+
+@keyframes pb-delta {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+/* A bot has locked in its answer */
+.pb-lock {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  margin-right: 2px;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  font-size: 0.65rem;
+  color: var(--pb-plum);
+  background: var(--pb-cream);
+  box-shadow: 2px 2px 0 var(--pb-night);
+}
+
+.pb-lock[hidden] {
+  display: none;
+}
+
+.pb-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.5rem;
+  color: var(--pb-cream);
+  background: var(--pb-plum);
+  box-shadow: 2px 2px 0 var(--pb-night);
+}
+
+.pb-lane.is-player .pb-name {
+  color: var(--pb-plum);
+  background: var(--pb-gold);
+}
+
+.pb-avatar {
+  display: grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.pb-avatar img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.pb-meters {
+  font-size: 0.48rem;
+  color: var(--pb-cream);
+  text-shadow: 2px 2px 0 var(--pb-night);
+}
+
+.pb-crowd {
+  height: 40px;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  background: var(--pb-crowd);
+}
+
+.pb-play .sk-status {
+  margin-top: 0.35rem;
+  color: var(--pb-cream);
+  text-shadow: 2px 2px 0 var(--pb-night);
+}
+
+/* Before the race: the rules over the poles */
+.pb-play .sk-ready {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: min(30rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+}
+
+.pb-play.is-waiting .pb-lanes {
+  opacity: 0.55;
+}
+
+/* The question sits under the race (the poles stay in view) and keeps its space between questions */
+.pb-play .aq-host {
+  width: min(40rem, 100%);
+  min-height: 15.5rem;
+  margin: 0.5rem auto 0;
+}
+
+.pb-play .aq-card {
+  width: 100%;
+  gap: 0.6rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.pb-play .aq-text {
+  font-size: 1rem;
+}
+
+.pb-play .aq-choice {
+  padding: 0.65rem 0.6rem;
+}
+
+html.reduce-motion .pb-climber,
+html.reduce-motion .pb-lane.is-top .pb-prize {
+  transition: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-climber,
+  .pb-lane.is-top .pb-prize {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .pb-lanes {
+    gap: 0.2rem;
+  }
+
+  .pb-climber {
+    width: 2.2rem;
+    bottom: calc(var(--h) * (100% - 2.7rem));
+  }
+
+  .pb-pole {
+    width: 18px;
+    min-height: 7rem;
+  }
+
+  .pb-name {
+    font-size: 0.42rem;
+    padding: 0.25rem 0.3rem;
+  }
+
+  .pb-crowd {
+    height: 30px;
+  }
+
+  .pb-play .aq-host {
+    min-height: 16.5rem;
+  }
+
+  .pb-play .aq-card {
+    padding: 0.7rem;
+  }
+
+  .pb-play .sk-top-right {
+    display: none;
+  }
+
+  .pb-play .aq-text {
+    font-size: 0.92rem;
+  }
+}

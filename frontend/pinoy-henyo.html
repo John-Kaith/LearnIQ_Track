@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pinoy Henyo | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/arcade-skin.css?v=2026100601" />
+  <link rel="stylesheet" href="css/pinoy-henyo.css?v=2026100601" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/pages/pinoy-henyo.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Pinoy Henyo (Larong Pinoy): the word from the lesson is on your forehead. Ask your
+     ka-Henyo yes-or-no questions (Oo / Hindi / Pwede), then guess it. As many words as you
+     can in 2 minutes. Menus, results and pause come from js/arcade/arcade-shell.js. -->
+<body class="henyo-page arcade-game arcade-skin">
+  <main class="wc-app" id="wc-app" aria-label="Pinoy Henyo"></main>
+
+  <section class="sk-play ph-play" id="ph-play-screen" hidden>
+    <header class="sk-top">
+      <button type="button" class="sk-pause-btn" id="ph-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+        <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+      </button>
+      <p class="sk-top-title ph-clock" id="ph-clock" role="timer" aria-live="off">2:00</p>
+      <span class="sk-top-right" id="ph-score">HENYO 0 / 3</span>
+    </header>
+
+    <div class="ph-stage">
+      <div class="ph-you">
+        <div class="ph-band" aria-hidden="true"><span id="ph-band-text">?</span></div>
+        <span class="ph-avatar" id="ph-avatar" aria-hidden="true"></span>
+        <strong>YOU</strong>
+      </div>
+      <div class="ph-word-num" id="ph-word-num">WORD 1</div>
+      <div class="ph-partner">
+        <p class="ph-bubble" id="ph-bubble" aria-live="polite">Ask me anything!</p>
+        <span class="ph-partner-art" id="ph-partner-art" aria-hidden="true"></span>
+        <strong>KA-HENYO</strong>
+      </div>
+    </div>
+
+    <div class="ph-board">
+      <section class="ph-asks" aria-labelledby="ph-asks-title">
+        <h2 class="ph-section-title" id="ph-asks-title">ASK: OO, HINDI O PWEDE?</h2>
+        <div class="ph-ask-group" id="ph-ask-meaning" role="group" aria-label="About the meaning"></div>
+        <div class="ph-ask-group ph-ask-letters" id="ph-ask-letters" role="group" aria-label="About the letters"></div>
+      </section>
+
+      <section class="ph-guess" aria-labelledby="ph-guess-title">
+        <h2 class="ph-section-title" id="ph-guess-title">YOUR GUESS</h2>
+        <form class="ph-guess-form" id="ph-guess-form" autocomplete="off">
+          <input type="text" class="ph-input" id="ph-input" maxlength="16" placeholder="Type the word" aria-label="Your guess" spellcheck="false" />
+          <button type="submit" class="sk-btn sk-btn-primary" id="ph-guess-btn">HULA!</button>
+        </form>
+        <div class="ph-extra">
+          <button type="button" class="sk-btn ph-small" id="ph-clue-btn"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> CLUE <span>−10s</span></button>
+          <button type="button" class="sk-btn ph-small" id="ph-pass-btn"><i class="fa-solid fa-forward" aria-hidden="true"></i> PASS</button>
+        </div>
+        <p class="ph-clue" id="ph-clue" hidden></p>
+        <ol class="ph-asked" id="ph-asked" aria-label="Your questions so far"></ol>
+      </section>
+    </div>
+
+    <p class="sk-status" id="ph-status" role="status" aria-live="polite"></p>
+
+    <div class="sk-ready" id="ph-ready" hidden>
+      <p class="sk-ready-title">Ready?</p>
+      <p class="sk-ready-text">
+        A word from the lesson is on your forehead. Ask your ka-Henyo questions: they can only say
+        <strong>OO</strong>, <strong>HINDI</strong> or <strong>PWEDE</strong>. Type your guess any time.
+        Guess as many words as you can in <strong>2 minutes</strong>!
+      </p>
+      <button type="button" class="sk-btn sk-btn-primary" id="ph-start-btn">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> START
+      </button>
+    </div>
+
+    <p class="ph-henyo" id="ph-henyo" aria-hidden="true">HENYO!</p>
+    <p class="sk-toast" id="ph-toast" hidden></p>
+  </section>
+</body>
+</html>
