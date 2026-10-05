@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arcade | LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade.css?v=2026100601" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/pages/arcade.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Arcade: the game library. Pick a game here; each game opens full screen
+     (battle-arena.html, tic-tac-know.html, sungka.html, palosebo.html, patintero.html,
+     tumbang-preso.html, pinoy-henyo.html). -->
+<body class="arcade-page" data-sidebar-active="arcade">
+  <div class="dashboard-shell container">
+    <aside class="sidebar lq-sidebar">
+      <div class="sidebar-header">
+        <a class="brand" href="login.html">
+          <span class="brand-mark">LQ</span>
+          <span>
+            <strong>LearnIQ Track</strong>
+            <small>LearnIQ Module</small>
+          </span>
+        </a>
+        <button type="button" class="sidebar-join-btn" data-action="join-class" aria-label="Join a class" title="Join a class">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <nav class="side-links">
+        <a href="learniq-dashboard.html" data-nav-id="learniq-dashboard"><i class="fa-solid fa-graduation-cap"></i> LearnIQ Dashboard</a>
+        <a href="subjects.html" data-nav-id="subjects"><i class="fa-solid fa-book-open"></i> My lesson</a>
+        <a href="student-archived.html" data-nav-id="archived"><i class="fa-solid fa-box-archive"></i> Archived</a>
+        <a href="arcade.html" data-nav-id="arcade" class="active"><i class="fa-solid fa-gamepad"></i> Arcade</a>
+        <a href="leaderboard.html" data-nav-id="leaderboard"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+        <a href="history.html" data-nav-id="history"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+        <a href="module-selection.html" data-nav-id="module"><i class="fa-solid fa-th-large"></i> Module Selection</a>
+        <a href="student-settings.html" data-nav-id="settings"><i class="fa-solid fa-gear"></i> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="student-profile.html" class="user-chip user-chip-profile-link" id="student-profile-chip-link" aria-label="Open your profile">
+          <div class="avatar" id="student-avatar-initials"></div>
+          <div class="user-chip-text">
+            <span id="student-display-name">&nbsp;</span>
+            <div class="small-note" id="student-display-track">&nbsp;</div>
+          </div>
+        </a>
+        <button type="button" class="btn btn-secondary btn-block sidebar-logout-btn" onclick="confirmAndLogout()">
+          <i class="fa-solid fa-sign-out-alt" aria-hidden="true"></i> Logout
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <section class="glass-card panel-header">
+        <div class="panel-title">
+          <h1>Arcade</h1>
+          <p>Play games made from your own lessons. Every win earns EXP.</p>
+          <div class="arcade-level" id="arcade-level">
+            <span class="arcade-level-badge" id="arcade-level-num">LV –</span>
+            <span class="arcade-level-body">
+              <span class="arcade-level-label">Arcade level</span>
+              <span class="arcade-level-bar" aria-hidden="true"><span id="arcade-level-fill"></span></span>
+              <span class="arcade-level-exp" id="arcade-level-exp">– / 100 EXP</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Continue playing: the game you played last (or the newest game).
+           arcade.entry.js swaps the cover, text, stats and link per game. -->
+      <section class="glass-card arcade-hero" aria-labelledby="arcade-hero-title">
+        <div class="arcade-hero-grid">
+          <a class="arcade-cover arcade-cover--wordclash arcade-hero-cover" id="arcade-hero-cover" href="battle-arena.html" tabindex="-1" aria-hidden="true">
+            <span class="arcade-cover-logo"><span>WORD</span><span>CLASH</span></span>
+            <span class="arcade-cover-fighter" id="arcade-hero-fighter">🧑‍🎓</span>
+            <span class="arcade-cover-vs">VS</span>
+            <span class="arcade-cover-monster">🐲</span>
+          </a>
+          <div class="arcade-hero-body">
+            <p class="arcade-eyebrow" id="arcade-hero-eyebrow">Continue playing</p>
+            <h2 id="arcade-hero-title">Word Clash</h2>
+            <p class="arcade-hero-desc" id="arcade-hero-desc">Spell the answer to attack. Every subject is a world and every lesson is a stage.</p>
+            <p class="arcade-hero-last" id="arcade-hero-last">&nbsp;</p>
+            <dl class="arcade-stats" id="arcade-stats">
+              <div class="arcade-stat"><dt>Battles</dt><dd id="arcade-stat-battles">–</dd></div>
+              <div class="arcade-stat"><dt>Wins</dt><dd id="arcade-stat-wins">–</dd></div>
+              <div class="arcade-stat"><dt>Best score</dt><dd id="arcade-stat-best">–</dd></div>
+              <div class="arcade-stat"><dt>Stages cleared</dt><dd id="arcade-stat-cleared">–</dd></div>
+            </dl>
+            <div class="arcade-hero-actions">
+              <a class="btn btn-primary arcade-play-btn" id="arcade-hero-play" href="battle-arena.html">
+                <i class="fa-solid fa-play" aria-hidden="true"></i> Play
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="glass-card arcade-section" aria-labelledby="arcade-games-title">
+        <div class="arcade-section-head">
+          <h2 id="arcade-games-title">All games</h2>
+        </div>
+        <!-- The game cards come from GAMES in js/pages/arcade.entry.js -->
+        <ul class="arcade-games" id="arcade-games">
+          <li class="is-soon">
+            <div class="arcade-game is-locked">
+              <span class="arcade-cover arcade-cover--soon" aria-hidden="true"><i class="fa-solid fa-lock"></i></span>
+              <span class="arcade-game-body">
+                <span class="arcade-game-name">More games coming soon</span>
+                <span class="arcade-game-desc">New ways to practice your lessons are on the way.</span>
+              </span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <div class="arcade-columns">
+        <section class="glass-card arcade-section" aria-labelledby="arcade-recent-title">
+          <div class="arcade-section-head">
+            <h2 id="arcade-recent-title">Recent plays</h2>
+            <a class="arcade-link" href="history.html?tab=arcade">See all <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+          </div>
+          <ol class="arcade-list" id="arcade-recent">
+            <li class="arcade-list-note">Loading…</li>
+          </ol>
+        </section>
+
+        <section class="glass-card arcade-section" aria-labelledby="arcade-top-title">
+          <div class="arcade-section-head">
+            <h2 id="arcade-top-title">Top players</h2>
+            <a class="arcade-link" href="leaderboard.html?rank=arena">Leaderboard <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+          </div>
+          <ol class="arcade-list" id="arcade-top">
+            <li class="arcade-list-note">Loading…</li>
+          </ol>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

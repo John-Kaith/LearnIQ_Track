@@ -1,46 +1,33 @@
 /**
- * AI Battle Arena — Phase 2 lobby + Phase 3 battle (frontend only).
- * Loads published lessons via /student/lessons, lesson content via
- * /get-content/{file_id}. Battle vocabulary/grid/HP are all client-side —
- * no new backend endpoints, no persistence.
+ * Word Clash (battle-arena.html) — the Arcade's spelling battle game.
+ *
+ * The menus (PRESS START, worlds and stages, results, Battle Log, settings,
+ * pause) and the question bank come from the shared Arcade shell
+ * (js/arcade/arcade-shell.js). This file is the battle itself: spell the
+ * answer with letter tiles to hit the monster before your HP or the clock
+ * runs out. Every battle is saved as a "battle" learning event with its
+ * question-by-question answers.
  */
 (function () {
   "use strict";
 
-  var selectedLessonId = null;
-  var selectedLesson = null;
-  var selectedMode = "ai";
-  var lessonsById = {};
+  var S = window.ArcadeShell;
+  var esc = S.esc;
+  var sound = S.sound;
+  var shell = null; // ArcadeShell.create(...) for this page
 
   var GRID_SIZE = 20;
   var PLAYER_MAX_HP = 100;
   var AI_MAX_HP = 100;
-  var FALLBACK_QUESTIONS = [
-    { question: "What word means breaking something down into its parts to understand it?", answer: "analysis", meaning: "Examining something closely by studying its parts." },
-    { question: "What word means an idea or principle behind something?", answer: "concept", meaning: "A general idea behind a topic or theory." },
-    { question: "What word means information that supports a claim?", answer: "evidence", meaning: "Facts or information showing something is true." },
-    { question: "What word means a series of steps to reach a result?", answer: "process", meaning: "A series of actions taken to achieve a result." },
-    { question: "What word means the arrangement of parts within something?", answer: "structure", meaning: "The way parts are arranged to form a whole." },
-    { question: "What word means a set of ideas explaining how something works?", answer: "theory", meaning: "An explanation based on general principles." },
-    { question: "What word means the setting or background of a situation?", answer: "context", meaning: "The circumstances surrounding an idea or event." },
-    { question: "What word means a brief overview of the main points?", answer: "summary", meaning: "A short statement of the main points." },
-    { question: "What word means something that contributes to a result?", answer: "factor", meaning: "Something that contributes to a result." },
-    { question: "What word means a particular way of doing something?", answer: "method", meaning: "A particular way of doing something." },
-    { question: "What word means a fundamental rule or belief?", answer: "principle", meaning: "A fundamental rule or belief guiding behavior." },
-    { question: "What word means a response triggered by something else?", answer: "reaction", meaning: "A response triggered by an action or event." },
-    { question: "What word means something that can change or vary?", answer: "variable", meaning: "Something that can change or vary." },
-    { question: "What word means an educated guess to be tested?", answer: "hypothesis", meaning: "A proposed explanation to be tested." },
-    { question: "What word means a set of connected parts working together?", answer: "system", meaning: "A set of connected parts working as a whole." },
-  ];
+  var QUESTIONS_PER_BATTLE = 12;
   var LETTER_FILLER =
     "eeeeeeeeeeeeaaaaaaaaaiiiiiiiiiooooooooonnnnnnnrrrrrrrttttttllllssssuuuu" +
     "ddddggg" + "bbccmmppffhhvvwwyykjxqz";
 
   var fight = null;
-  var audioCtx = null;
 
   /* ----------------------------------------------------------
-   * Arena progression: every finished battle earns 5–15 EXP;
+   * Word Clash level: every finished battle earns 5–15 EXP;
    * 100 EXP = 1 level (starts at level 0). Keep in sync with
    * battle_exp_for_result() in backend/db_supabase.py, which
    * recomputes level / EXP / best score from saved history.
@@ -62,17 +49,11 @@
   }
 
   async function loadBattleStats() {
-    var sid = studentId();
-    if (!sid || typeof apiUrl !== "function") return null;
+    var sid = S.studentId();
+    if (!sid || typeof apiUrl !== "function") return battleStats;
     try {
-      var headers = typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {};
-      var res = await fetch(
-        apiUrl("/student/battle-stats?student_id_number=" + encodeURIComponent(sid)),
-        { headers: headers }
-      );
-      if (!res.ok) return battleStats;
-      battleStats = await res.json();
-      if (typeof renderNextOpponent === "function") renderNextOpponent();
+      battleStats = await S.fetchJson("/student/battle-stats?student_id_number=" + encodeURIComponent(sid));
+      renderNextOpponent();
       try {
         sessionStorage.setItem("learniq-battle-stats", JSON.stringify(battleStats));
       } catch (e) {
@@ -82,86 +63,6 @@
       console.warn("loadBattleStats failed:", e);
     }
     return battleStats;
-  }
-
-  /* ----------------------------------------------------------
-   * Retro sound effects — synthesized with Web Audio, no audio
-   * files needed. Lazily created on first use (autoplay policies
-   * require a user gesture, and every caller here fires from a
-   * click handler already).
-   * ---------------------------------------------------------- */
-
-  /* ----------------------------------------------------------
-   * Game menu (☰, top-right on the loading / battle screens):
-   * arena level, AI defeated, best score, and separate volume +
-   * mute for music and for sound effects (saved in localStorage).
-   * 50% = the original loudness.
-   * ---------------------------------------------------------- */
-  var AUDIO_STORAGE_KEY = "learniq-battle-audio";
-  var OLD_VOLUME_STORAGE_KEY = "learniq-battle-volume";
-  var audioSettings = {
-    music: { volume: 0.5, muted: false },
-    sfx: { volume: 0.5, muted: false },
-  };
-
-  (function loadAudioSettings() {
-    try {
-      var saved = JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY) || "null");
-      if (!saved) {
-        // Carry over the earlier single volume setting to both channels.
-        var old = JSON.parse(localStorage.getItem(OLD_VOLUME_STORAGE_KEY) || "null");
-        if (old && typeof old.volume === "number") {
-          saved = {
-            music: { volume: old.volume, muted: !!old.muted },
-            sfx: { volume: old.volume, muted: !!old.muted },
-          };
-        }
-      }
-      ["music", "sfx"].forEach(function (kind) {
-        var ch = saved && saved[kind];
-        if (ch && typeof ch.volume === "number") audioSettings[kind].volume = Math.max(0, Math.min(1, ch.volume));
-        if (ch && typeof ch.muted === "boolean") audioSettings[kind].muted = ch.muted;
-      });
-    } catch (e) {
-      /* keep defaults */
-    }
-  })();
-
-  function effectiveVolume(kind) {
-    var ch = audioSettings[kind === "music" ? "music" : "sfx"];
-    return ch.muted ? 0 : ch.volume;
-  }
-
-  function saveAudioSettings() {
-    try {
-      localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(audioSettings));
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  function applyVolume() {
-    ALL_TRACKS.forEach(function (t) {
-      if (t && t.el) t.el.volume = effectiveVolume(t.kind);
-    });
-    ["music", "sfx"].forEach(function (kind) {
-      var vol = effectiveVolume(kind);
-      var name = kind === "music" ? "music" : "sound effects";
-      document.querySelectorAll('.battle-sound-mute[data-sound-kind="' + kind + '"]').forEach(function (btn) {
-        var icon = btn.querySelector("i");
-        if (icon) {
-          icon.className =
-            "fa-solid " + (vol === 0 ? "fa-volume-xmark" : vol < 0.5 ? "fa-volume-low" : "fa-volume-high");
-        }
-        var label = audioSettings[kind].muted ? "Unmute " + name : "Mute " + name;
-        btn.setAttribute("aria-label", label);
-        btn.setAttribute("title", label);
-        btn.setAttribute("aria-pressed", audioSettings[kind].muted ? "true" : "false");
-      });
-      document.querySelectorAll('.battle-sound-slider[data-sound-kind="' + kind + '"]').forEach(function (slider) {
-        slider.value = String(Math.round(vol * 100));
-      });
-    });
   }
 
   /** Stats for the menu: server numbers when available, else this browser's battle history. */
@@ -187,391 +88,54 @@
     return { level: Math.floor(totalExp / EXP_PER_LEVEL), totalExp: totalExp, wins: wins, best: best };
   }
 
-  function renderBattleMenuStats() {
-    var st = menuStats();
-    var into = st.totalExp % EXP_PER_LEVEL;
-    var set = function (id, text) {
-      var el = document.getElementById(id);
-      if (el) el.textContent = text;
-    };
-    set("battle-menu-level", String(st.level));
-    set("battle-menu-wins", String(st.wins));
-    set("battle-menu-best", String(st.best));
-    set("battle-menu-exp-text", into + " / " + EXP_PER_LEVEL + " EXP to Level " + (st.level + 1));
-    var fill = document.getElementById("battle-menu-exp-fill");
-    if (fill) fill.style.width = Math.round((into / EXP_PER_LEVEL) * 100) + "%";
+  /* ----------------------------------------------------------
+   * Sound: shared volume settings and tones come from the shell.
+   * Music: intro.mp3 (shell) loops on the menus and the Ready screen;
+   * "game start.mp3" loops once Start is pressed and stops when the
+   * battle ends; gameover.mp3 plays once on a loss.
+   * ---------------------------------------------------------- */
+  var battleMusic = sound.createTrack("audio/game%20start.mp3", true, "music");
+  var gameOverSound = sound.createTrack("audio/gameover.mp3", false, "sfx");
+  var sfxTimerRunsOut = sound.createTrack("audio/timer%20runsout.mp3", false);
+  var sfxWrong = sound.createTrack("audio/wrong.mp3", false);
+  var sfxTryAgain = sound.createTrack("audio/try%20again.mp3", false);
+  var sfxAttack = sound.createTrack("audio/attack.mp3", false);
+  var sfxCorrect = sound.createTrack("audio/correct%20answer.mp3", false);
+  var sfxWinStreak = sound.createTrack("audio/5%20win%20streak.mp3", false);
+
+  function playTrack(track) {
+    sound.play(track);
   }
 
-  function setBattleMenuOpen(open) {
-    var panel = document.getElementById("battle-menu-panel");
-    var toggle = document.getElementById("battle-menu-toggle");
-    if (open) renderBattleMenuStats();
-    if (panel) panel.hidden = !open;
-    if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  function stopTrack(track) {
+    sound.stop(track);
   }
 
-  function setupBattleMenu() {
-    var toggle = document.getElementById("battle-menu-toggle");
-    var wrap = document.getElementById("battle-menu");
-    toggle?.addEventListener("click", function () {
-      var panel = document.getElementById("battle-menu-panel");
-      setBattleMenuOpen(!!(panel && panel.hidden));
-    });
-    document.addEventListener("click", function (e) {
-      if (wrap && !wrap.contains(e.target)) setBattleMenuOpen(false);
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") setBattleMenuOpen(false);
-    });
-    document.querySelectorAll(".battle-sound-slider").forEach(function (slider) {
-      slider.addEventListener("input", function () {
-        var kind = slider.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
-        audioSettings[kind].volume = Math.max(0, Math.min(1, Number(slider.value) / 100));
-        audioSettings[kind].muted = false;
-        applyVolume();
-        saveAudioSettings();
-      });
-    });
-    document.querySelectorAll(".battle-sound-mute").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var kind = btn.getAttribute("data-sound-kind") === "music" ? "music" : "sfx";
-        var ch = audioSettings[kind];
-        if (ch.muted || ch.volume === 0) {
-          ch.muted = false;
-          if (ch.volume === 0) ch.volume = 0.5;
-        } else {
-          ch.muted = true;
-        }
-        applyVolume();
-        saveAudioSettings();
-      });
-    });
-    applyVolume();
-  }
-
-  function getAudioCtx() {
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
-    if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    return audioCtx;
-  }
-
-  function playTone(freq, duration, type, delay) {
-    var vol = effectiveVolume("sfx");
-    if (vol <= 0) return;
-    var ctx = getAudioCtx();
-    if (!ctx) return;
-    var startAt = ctx.currentTime + (delay || 0) / 1000;
-    var osc = ctx.createOscillator();
-    var gain = ctx.createGain();
-    osc.type = type || "square";
-    osc.frequency.setValueAtTime(freq, startAt);
-    gain.gain.setValueAtTime(0.18 * vol, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(startAt);
-    osc.stop(startAt + duration);
+  function stopIntroMusic() {
+    sound.stopIntro();
   }
 
   function playClickSound() {
-    playTone(720, 0.05, "square");
+    sound.click();
   }
 
   function playScrambleSound() {
-    playTone(500, 0.05, "square");
-    playTone(650, 0.05, "square", 40);
+    sound.tone(500, 0.05, "square");
+    sound.tone(650, 0.05, "square", 40);
   }
 
   function playAttackSound(who) {
     if (who === "ai") {
-      playTone(330, 0.07, "square");
-      playTone(220, 0.09, "square", 60);
+      sound.tone(330, 0.07, "square");
+      sound.tone(220, 0.09, "square", 60);
     } else {
-      playTone(440, 0.06, "square");
-      playTone(660, 0.09, "square", 50);
+      sound.tone(440, 0.06, "square");
+      sound.tone(660, 0.09, "square", 50);
     }
   }
 
   function playHitSound() {
-    playTone(160, 0.14, "square");
-  }
-
-  function playVictorySound() {
-    playTone(523, 0.12, "square", 0);
-    playTone(659, 0.12, "square", 120);
-    playTone(784, 0.22, "square", 240);
-  }
-
-  function esc(text) {
-    if (typeof escapeHtml === "function") return escapeHtml(text);
-    return String(text == null ? "" : text)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
-  function studentId() {
-    if (typeof getStudentIdNumberForApi === "function") {
-      return getStudentIdNumberForApi();
-    }
-    try {
-      var u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
-      return String((u && u.id_number) || "").trim();
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function formatDate(value) {
-    if (!value) return "—";
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch (e) {
-      return "—";
-    }
-  }
-
-  function lessonTitle(lesson) {
-    if (!lesson) return "—";
-    return String(lesson.filename || lesson.title || "Untitled lesson");
-  }
-
-  function lessonFileType(lesson) {
-    if (!lesson) return "—";
-    return String(lesson.file_type || "file").toUpperCase();
-  }
-
-  function modeLabel() {
-    return selectedMode === "player" ? "Battle Player" : "Battle AI";
-  }
-
-  function isLobbyReady() {
-    return !!(selectedLessonId && selectedMode === "ai");
-  }
-
-  function setStartEnabled(on) {
-    var btn = document.getElementById("battle-arena-start-btn");
-    var label = document.getElementById("battle-arena-start-label");
-    var hint = document.getElementById("battle-arena-start-hint");
-    if (btn) {
-      btn.disabled = !on;
-      btn.classList.toggle("is-ready", !!on);
-    }
-    if (label) label.textContent = on ? "Ready to Battle" : "Start Battle";
-    if (hint) {
-      hint.textContent = on
-        ? "Ready to Battle — review Step 3, then click to continue."
-        : "Select a lesson and battle mode to continue.";
-    }
-  }
-
-  function renderSelectedPanel() {
-    var emptyEl = document.getElementById("battle-selected-empty");
-    var detailsEl = document.getElementById("battle-selected-details");
-    var nameEl = document.getElementById("battle-info-name");
-    var typeEl = document.getElementById("battle-info-type");
-    var dateEl = document.getElementById("battle-info-date");
-
-    if (!selectedLesson) {
-      if (emptyEl) emptyEl.hidden = false;
-      if (detailsEl) detailsEl.hidden = true;
-      return;
-    }
-
-    if (emptyEl) emptyEl.hidden = true;
-    if (detailsEl) detailsEl.hidden = false;
-    if (nameEl) nameEl.textContent = lessonTitle(selectedLesson);
-    if (typeEl) typeEl.textContent = lessonFileType(selectedLesson);
-    if (dateEl) dateEl.textContent = formatDate(selectedLesson.created_at);
-  }
-
-  function syncSelectionUi() {
-    document.querySelectorAll("#battle-arena-lesson-list .battle-arena-lesson-card").forEach(function (card) {
-      var id = card.getAttribute("data-lesson-id");
-      var isOn = id && id === selectedLessonId;
-      card.classList.toggle("selected", !!isOn);
-      card.setAttribute("aria-pressed", isOn ? "true" : "false");
-      var selectBtn = card.querySelector("[data-select-lesson]");
-      if (selectBtn) {
-        selectBtn.textContent = isOn ? "Unselect" : "Select Lesson";
-        selectBtn.classList.toggle("btn-primary", !isOn);
-        selectBtn.classList.toggle("btn-secondary", !!isOn);
-      }
-    });
-    renderSelectedPanel();
-    setStartEnabled(isLobbyReady());
-  }
-
-  function selectLesson(lessonId) {
-    var id = String(lessonId || "").trim();
-    if (!id || !lessonsById[id]) return;
-    // Clicking the already-selected lesson unselects it.
-    if (id === selectedLessonId) {
-      selectedLessonId = null;
-      selectedLesson = null;
-    } else {
-      selectedLessonId = id;
-      selectedLesson = lessonsById[id];
-    }
-    syncSelectionUi();
-  }
-
-  function buildLessonCard(lesson) {
-    var id = String(lesson.file_id || lesson.lesson_id || "").trim();
-    if (!id) return "";
-    var title = esc(lessonTitle(lesson));
-    var fileType = esc(lessonFileType(lesson));
-    var createdLabel = formatDate(lesson.created_at);
-    var createdHtml =
-      createdLabel !== "—"
-        ? '<span class="lesson-card-pill"><i class="fa-solid fa-calendar"></i> ' + esc(createdLabel) + "</span>"
-        : "";
-
-    return (
-      '<article class="lesson-card battle-arena-lesson-card" data-lesson-id="' +
-      esc(id) +
-      '" aria-pressed="false">' +
-      '<div class="lesson-card-icon"><i class="fa-solid fa-file-lines" aria-hidden="true"></i></div>' +
-      '<div class="lesson-info">' +
-      "<h4>" +
-      title +
-      "</h4>" +
-      '<div class="lesson-card-meta-row">' +
-      '<span class="lesson-card-pill"><i class="fa-solid fa-tag"></i> ' +
-      fileType +
-      "</span>" +
-      createdHtml +
-      "</div>" +
-      "</div>" +
-      '<div class="lesson-actions">' +
-      '<button type="button" class="btn btn-primary btn-small" data-select-lesson="' +
-      esc(id) +
-      '">Select Lesson</button>' +
-      "</div>" +
-      "</article>"
-    );
-  }
-
-  async function loadLessons() {
-    var listEl = document.getElementById("battle-arena-lesson-list");
-    var emptyEl = document.getElementById("battle-arena-lessons-empty");
-    var statusEl = document.getElementById("battle-arena-lessons-status");
-    if (!listEl) return;
-
-    selectedLessonId = null;
-    selectedLesson = null;
-    lessonsById = {};
-    syncSelectionUi();
-
-    if (statusEl) {
-      statusEl.hidden = false;
-      statusEl.textContent = "Loading lessons…";
-    }
-    if (emptyEl) emptyEl.hidden = true;
-    listEl.hidden = true;
-    listEl.innerHTML = "";
-
-    var sid = studentId();
-    if (!sid) {
-      if (statusEl) statusEl.textContent = "Sign in as a student to load published lessons.";
-      return;
-    }
-    if (typeof apiUrl !== "function") {
-      if (statusEl) statusEl.textContent = "API helper missing. Check js/core/api.js.";
-      return;
-    }
-
-    try {
-      var url = apiUrl("/student/lessons?student_id_number=" + encodeURIComponent(sid));
-      var res = await fetch(url, {
-        headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
-      });
-      var data = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        data = {};
-      }
-      if (!res.ok) {
-        throw new Error((data && data.error) || "Could not load lessons.");
-      }
-      var lessons = Array.isArray(data.lessons) ? data.lessons : [];
-      if (statusEl) statusEl.hidden = true;
-
-      if (!lessons.length) {
-        if (emptyEl) emptyEl.hidden = false;
-        return;
-      }
-
-      lessons.forEach(function (lesson) {
-        var id = String(lesson.file_id || lesson.lesson_id || "").trim();
-        if (id) lessonsById[id] = lesson;
-      });
-
-      listEl.innerHTML = lessons.map(buildLessonCard).filter(Boolean).join("");
-      listEl.hidden = false;
-      syncSelectionUi();
-    } catch (err) {
-      if (statusEl) {
-        statusEl.hidden = false;
-        statusEl.textContent = (err && err.message) || "Could not load lessons.";
-      }
-      if (typeof showToast === "function") {
-        showToast((err && err.message) || "Could not load lessons.", "error");
-      }
-    }
-  }
-
-  function onLessonListClick(event) {
-    var selectBtn = event.target.closest("[data-select-lesson]");
-    if (selectBtn) {
-      event.preventDefault();
-      selectLesson(selectBtn.getAttribute("data-select-lesson"));
-      return;
-    }
-    var card = event.target.closest(".battle-arena-lesson-card[data-lesson-id]");
-    if (!card || !document.getElementById("battle-arena-lesson-list").contains(card)) return;
-    selectLesson(card.getAttribute("data-lesson-id"));
-  }
-
-  function onModeChange(event) {
-    var input = event.target;
-    if (!input || input.name !== "battle-mode") return;
-    selectedMode = input.value === "player" ? "player" : "ai";
-    document.querySelectorAll(".battle-mode-card").forEach(function (card) {
-      var radio = card.querySelector('input[name="battle-mode"]');
-      card.classList.toggle("is-selected", !!(radio && radio.checked));
-    });
-    setStartEnabled(isLobbyReady());
-  }
-
-  function openBattleModal() {
-    if (!isLobbyReady() || !selectedLesson) return;
-    var modal = document.getElementById("battle-arena-modal");
-    var lessonEl = document.getElementById("battle-modal-lesson");
-    var modeEl = document.getElementById("battle-modal-mode");
-    if (lessonEl) lessonEl.textContent = lessonTitle(selectedLesson);
-    if (modeEl) modeEl.textContent = modeLabel();
-    renderDifficultyPicker();
-    if (modal) {
-      modal.hidden = false;
-      document.body.classList.add("lq-modal-open");
-    }
-  }
-
-  function closeBattleModal() {
-    var modal = document.getElementById("battle-arena-modal");
-    if (modal) modal.hidden = true;
-    document.body.classList.remove("lq-modal-open");
-  }
-
-  function onStartClick() {
-    if (!isLobbyReady()) return;
-    openBattleModal();
+    sound.tone(160, 0.14, "square");
   }
 
   /* ----------------------------------------------------------
@@ -597,122 +161,6 @@
     return letters.map(function (ch) {
       return { letter: ch };
     });
-  }
-
-  function shuffleArray(arr) {
-    var a = arr.slice();
-    for (var i = a.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = a[i];
-      a[i] = a[j];
-      a[j] = tmp;
-    }
-    return a;
-  }
-
-  /* ----------------------------------------------------------
-   * Phase 3 — content load + battle lifecycle
-   * ---------------------------------------------------------- */
-
-  async function loadLessonContentAndVocab(fileId) {
-    if (typeof apiUrl !== "function") {
-      throw new Error("API helper missing. Check js/core/api.js.");
-    }
-    var res = await fetch(apiUrl("/get-content/" + encodeURIComponent(fileId)));
-    var data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = {};
-    }
-    if (!res.ok) {
-      throw new Error((data && data.error) || "Could not load lesson content.");
-    }
-    return {
-      battleQuestions: Array.isArray(data.battle_questions) ? data.battle_questions : [],
-    };
-  }
-
-  async function generateBattleQuestionsWithAi(fileId, difficulty) {
-    if (typeof apiUrl !== "function") {
-      throw new Error("API helper missing. Check js/core/api.js.");
-    }
-    var res = await fetch(apiUrl("/generate-battle-questions"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
-      },
-      body: JSON.stringify({ file_id: fileId, difficulty: difficulty || "normal" }),
-    });
-    var data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = {};
-    }
-    if (!res.ok) {
-      throw new Error((data && data.error) || "Could not generate battle questions.");
-    }
-    return Array.isArray(data.questions) ? data.questions : [];
-  }
-
-  function normalizeQuestionEntries(rawEntries) {
-    var out = [];
-    (Array.isArray(rawEntries) ? rawEntries : []).forEach(function (entry) {
-      if (!entry || typeof entry !== "object") return;
-      var questionText = String(entry.question || "").trim();
-      var answer = String(entry.answer || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z]/g, "");
-      if (!questionText || answer.length < 4 || answer.length > 12) return;
-      var difficulty = String(entry.difficulty || "normal").toLowerCase();
-      out.push({
-        question: questionText,
-        answer: answer,
-        meaning: String(entry.meaning || "").trim(),
-        difficulty: BATTLE_DIFFICULTIES[difficulty] ? difficulty : "normal",
-      });
-    });
-    return out;
-  }
-
-  function showLobbyScreen() {
-    document.querySelector(".dashboard-shell")?.removeAttribute("hidden");
-    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
-    document.body.classList.remove("battle-fullscreen-active");
-  }
-
-  function showFightScreenEl() {
-    document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
-    document.getElementById("battle-loading-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.removeAttribute("hidden");
-    document.body.classList.add("battle-fullscreen-active");
-  }
-
-  function showLoadingScreen() {
-    document.querySelector(".dashboard-shell")?.setAttribute("hidden", "");
-    document.getElementById("battle-fight-screen")?.setAttribute("hidden", "");
-    document.getElementById("battle-loading-screen")?.removeAttribute("hidden");
-    document.body.classList.add("battle-fullscreen-active");
-  }
-
-  function setLoadingHint(text) {
-    var hint = document.getElementById("battle-loading-hint");
-    if (hint) hint.textContent = text;
-  }
-
-  function renderVocabNote() {
-    var note = document.getElementById("battle-vocab-note");
-    if (!note || !fight) return;
-    if (fight.usingFallback) {
-      note.hidden = false;
-      note.textContent = "Using general questions — no AI content yet for this lesson.";
-    } else {
-      note.hidden = true;
-    }
   }
 
   function renderHpSide(hp, maxHp, fillId, valueId, heartsId) {
@@ -848,6 +296,7 @@
 
   function onNextClick() {
     if (!fight || !fight.questions.length) return;
+    logAnswer("skipped");
     fight.selected = [];
     advanceToQuestion(fight.questionIndex + 1);
   }
@@ -858,148 +307,21 @@
    * Battle timer + streak: time set by difficulty, -5s per wrong answer,
    * +3s per correct answer; every 5 correct answers in a row
    * heals +5 HP. Time running out ends the battle as a defeat.
+   * Difficulty (picked in the shell): Normal 15 / Medium 10 / Hard 5 min.
    * ---------------------------------------------------------- */
-  /* Difficulty: sets the battle time (Normal 15 / Medium 10 / Hard 5 min) and which
-     AI questions are used (the backend writes recall / apply / analyze questions). */
-  var BATTLE_DIFFICULTIES = {
-    normal: { label: "Normal", seconds: 15 * 60 },
-    medium: { label: "Medium", seconds: 10 * 60 },
-    hard: { label: "Hard", seconds: 5 * 60 },
-  };
-  var DIFFICULTY_STORAGE_KEY = "learniq-battle-difficulty";
-  var selectedDifficulty = (function () {
-    try {
-      var saved = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
-      return BATTLE_DIFFICULTIES[saved] ? saved : "normal";
-    } catch (e) {
-      return "normal";
-    }
-  })();
-
-  function difficultyConfig(key) {
-    return BATTLE_DIFFICULTIES[key] || BATTLE_DIFFICULTIES.normal;
-  }
+  var BATTLE_SECONDS = { normal: 15 * 60, medium: 10 * 60, hard: 5 * 60 };
 
   function battleStartSeconds() {
-    return difficultyConfig(fight ? fight.difficulty : selectedDifficulty).seconds;
+    var key = fight ? fight.difficulty : shell ? shell.difficulty() : "normal";
+    return BATTLE_SECONDS[key] || BATTLE_SECONDS.normal;
   }
 
-  function saveSelectedDifficulty(key) {
-    selectedDifficulty = key;
-    try {
-      localStorage.setItem(DIFFICULTY_STORAGE_KEY, key);
-    } catch (e) {
-      /* ignore */
-    }
-    renderDifficultyPicker();
-  }
-
-  function renderDifficultyPicker() {
-    document.querySelectorAll(".battle-difficulty-option").forEach(function (btn) {
-      var on = btn.getAttribute("data-difficulty") === selectedDifficulty;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      btn.tabIndex = on ? 0 : -1;
-    });
-    var modalEl = document.getElementById("battle-modal-difficulty");
-    if (modalEl) modalEl.textContent = difficultyConfig(selectedDifficulty).label;
-  }
-
-  function setupDifficultyPicker() {
-    var picker = document.querySelector(".battle-difficulty-picker");
-    if (!picker) return;
-    picker.addEventListener("click", function (e) {
-      var btn = e.target.closest(".battle-difficulty-option");
-      var key = btn && btn.getAttribute("data-difficulty");
-      if (key && BATTLE_DIFFICULTIES[key]) saveSelectedDifficulty(key);
-    });
-    // Arrow keys move between options (radio group behaviour).
-    picker.addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      var keys = Object.keys(BATTLE_DIFFICULTIES);
-      var idx = keys.indexOf(selectedDifficulty);
-      idx = (idx + (e.key === "ArrowRight" ? 1 : keys.length - 1)) % keys.length;
-      saveSelectedDifficulty(keys[idx]);
-      picker.querySelector('[data-difficulty="' + selectedDifficulty + '"]')?.focus();
-      e.preventDefault();
-    });
-    renderDifficultyPicker();
-  }
   var TIME_PENALTY_WRONG = 5;
   var TIME_BONUS_CORRECT = 3;
   var STREAK_FOR_HEAL = 5;
   var STREAK_HEAL_HP = 5;
   var battleTimerId = null;
   var battleTimerLastTick = 0;
-
-  /* Music: intro.mp3 loops from "Start Battle" (lobby) through loading and the
-     Ready screen; "game start.mp3" loops once the in-game Start is pressed and
-     stops when the battle ends; gameover.mp3 plays once on a loss. */
-  var introMusic = createTrack("audio/intro.mp3", true, "music");
-  var battleMusic = createTrack("audio/game%20start.mp3", true, "music");
-  var gameOverSound = createTrack("audio/gameover.mp3", false, "sfx");
-
-  // One-shot sound effects (frontend/audio).
-  var sfxTimerRunsOut = createTrack("audio/timer%20runsout.mp3", false);
-  var sfxWrong = createTrack("audio/wrong.mp3", false);
-  var sfxTryAgain = createTrack("audio/try%20again.mp3", false);
-  var sfxAttack = createTrack("audio/attack.mp3", false);
-  var sfxCorrect = createTrack("audio/correct%20answer.mp3", false);
-  var sfxWinStreak = createTrack("audio/5%20win%20streak.mp3", false);
-  var ALL_TRACKS = [
-    introMusic,
-    battleMusic,
-    gameOverSound,
-    sfxTimerRunsOut,
-    sfxWrong,
-    sfxTryAgain,
-    sfxAttack,
-    sfxCorrect,
-    sfxWinStreak,
-  ];
-
-  function createTrack(src, loop, kind) {
-    return { src: src, loop: loop, kind: kind || "sfx", el: null };
-  }
-
-  function playTrack(track) {
-    try {
-      if (!track.el) {
-        track.el = new Audio(track.src);
-        track.el.loop = track.loop;
-      }
-      track.el.volume = effectiveVolume(track.kind);
-      track.el.currentTime = 0;
-      var playing = track.el.play();
-      if (playing && typeof playing.catch === "function") {
-        playing.catch(function (e) {
-          console.warn("Could not play " + track.src + ":", e);
-        });
-      }
-    } catch (e) {
-      console.warn("Audio unavailable (" + track.src + "):", e);
-    }
-  }
-
-  function stopTrack(track) {
-    if (!track.el) return;
-    track.el.pause();
-    track.el.currentTime = 0;
-  }
-
-  function playIntroMusic() {
-    stopTrack(battleMusic);
-    stopTrack(gameOverSound);
-    playTrack(introMusic);
-  }
-
-  function stopIntroMusic() {
-    stopTrack(introMusic);
-  }
-
-  function stopAllMusic() {
-    ALL_TRACKS.forEach(stopTrack);
-  }
 
   /* Plays timer runsout.mp3 once when the clock reaches 3 seconds. If a +3s bonus
      lifts it back above 3s, the warning stops and can play again later. */
@@ -1160,6 +482,7 @@
 
     fight.selected.push(tileIdx);
     fight.hintsLeft -= 1;
+    logAnswer("hint");
     playClickSound();
     renderGrid();
     renderWordPreview();
@@ -1196,9 +519,44 @@
     fight.currentMeaning = current.meaning || "";
     fight.grid = buildAnswerGrid(fight.currentAnswer, GRID_SIZE);
     fight.selected = [];
+    logQuestionShown(current);
     renderQuestion();
     renderGrid();
     renderWordPreview();
+  }
+
+  /* ----------------------------------------------------------
+   * Answer log: one entry per question shown, saved with the battle so
+   * the results screen and the Battle Log can show what was answered.
+   * result: "correct" | "skipped" | "unanswered" (still on screen when
+   * the battle ended); attempts = wrong words tried first.
+   * ---------------------------------------------------------- */
+  var MAX_LOGGED_QUESTIONS = 60;
+
+  function logQuestionShown(question) {
+    if (!fight) return;
+    fight.answerLog = fight.answerLog || [];
+    fight.currentLog = {
+      question: String(question.question || "").slice(0, 240),
+      answer: String(question.answer || ""),
+      meaning: String(question.meaning || "").slice(0, 200),
+      result: "unanswered",
+      attempts: [],
+      hints: 0,
+    };
+    if (fight.answerLog.length < MAX_LOGGED_QUESTIONS) fight.answerLog.push(fight.currentLog);
+  }
+
+  function logAnswer(kind, word) {
+    var entry = fight && fight.currentLog;
+    if (!entry || entry.result !== "unanswered") return;
+    if (kind === "wrong") {
+      if (entry.attempts.length < 5) entry.attempts.push(String(word || "").slice(0, 24));
+    } else if (kind === "hint") {
+      entry.hints += 1;
+    } else {
+      entry.result = kind; // "correct" | "skipped"
+    }
   }
 
   function damageForWordLength(len) {
@@ -1246,129 +604,6 @@
         popup.remove();
       }, 900);
     }
-  }
-
-  /* ----------------------------------------------------------
-   * Characters: pixel-art fighters (DiceBear "Pixel Art" avatars,
-   * generated from a fixed seed). The choice is saved per browser.
-   * ---------------------------------------------------------- */
-  var CHARACTER_SEEDS = [
-    "Aiden", "Bella", "Carlo", "Dana", "Elio", "Faye", "Gabe", "Hana", "Ivan", "Jade",
-    "Kai", "Luna", "Milo", "Nina", "Omar", "Pia", "Quinn", "Rico", "Sofia", "Theo",
-    "Uma", "Vince", "Wren", "Xian", "Yuri", "Zara", "Axel", "Bea", "Cruz", "Dom",
-  ];
-  var CHARACTER_STORAGE_KEY = "learniq-battle-character";
-  var selectedCharacter = (function () {
-    try {
-      var saved = localStorage.getItem(CHARACTER_STORAGE_KEY);
-      return CHARACTER_SEEDS.indexOf(saved) !== -1 ? saved : CHARACTER_SEEDS[0];
-    } catch (e) {
-      return CHARACTER_SEEDS[0];
-    }
-  })();
-
-  function characterAvatarUrl(seed) {
-    return "https://api.dicebear.com/9.x/pixel-art/svg?seed=" + encodeURIComponent(seed);
-  }
-
-  /** Puts the chosen fighter into a sprite box; falls back to 🧑‍🎓 if the image can't load. */
-  function renderCharacterInto(el, seed) {
-    if (!el) return;
-    el.innerHTML = "";
-    var img = document.createElement("img");
-    img.className = "battle-avatar-img";
-    img.alt = "";
-    img.src = characterAvatarUrl(seed || selectedCharacter);
-    img.addEventListener("error", function () {
-      el.textContent = "🧑‍🎓";
-    });
-    el.appendChild(img);
-  }
-
-  function renderCharacterPicker() {
-    var grid = document.getElementById("battle-character-grid");
-    if (!grid) return;
-    if (!grid.childElementCount) {
-      grid.innerHTML = CHARACTER_SEEDS.map(function (seed) {
-        return (
-          '<button type="button" class="battle-character-option" role="radio" data-character="' +
-          esc(seed) +
-          '" aria-label="Fighter ' +
-          esc(seed) +
-          '"><img src="' +
-          characterAvatarUrl(seed) +
-          '" alt="" loading="lazy" /></button>'
-        );
-      }).join("");
-    }
-    grid.querySelectorAll(".battle-character-option").forEach(function (btn) {
-      var on = btn.getAttribute("data-character") === selectedCharacter;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      btn.tabIndex = on ? 0 : -1;
-    });
-  }
-
-  function setCharacterDialogOpen(open) {
-    var dialog = document.getElementById("battle-character-dialog");
-    var sprite = document.getElementById("battle-player-sprite");
-    if (!dialog) return;
-    if (open) renderCharacterPicker();
-    dialog.hidden = !open;
-    // Don't let the clock run while choosing mid-battle.
-    if (fight && fight.started && !fight.ended) {
-      fight.paused = open;
-      if (!open) battleTimerLastTick = Date.now();
-    }
-    if (sprite) sprite.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      dialog.querySelector(".battle-character-option.is-active")?.focus();
-    } else if (sprite) {
-      sprite.focus();
-    }
-  }
-
-  /** Click your fighter in the arena to open the picker; picking one swaps it right away. */
-  function setupCharacterPicker() {
-    var grid = document.getElementById("battle-character-grid");
-    var dialog = document.getElementById("battle-character-dialog");
-    var sprite = document.getElementById("battle-player-sprite");
-    if (!grid || !dialog) return;
-
-    sprite?.addEventListener("click", function () {
-      setCharacterDialogOpen(true);
-    });
-    sprite?.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        setCharacterDialogOpen(true);
-      }
-    });
-    document.getElementById("battle-character-close")?.addEventListener("click", function () {
-      setCharacterDialogOpen(false);
-    });
-    dialog.addEventListener("click", function (e) {
-      if (e.target === dialog) setCharacterDialogOpen(false);
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !dialog.hidden) setCharacterDialogOpen(false);
-    });
-
-    grid.addEventListener("click", function (e) {
-      var btn = e.target.closest(".battle-character-option");
-      var seed = btn && btn.getAttribute("data-character");
-      if (!seed) return;
-      selectedCharacter = seed;
-      try {
-        localStorage.setItem(CHARACTER_STORAGE_KEY, seed);
-      } catch (err) {
-        /* ignore */
-      }
-      renderCharacterPicker();
-      renderCharacterInto(document.getElementById("battle-player-sprite"), seed);
-      playClickSound();
-      setCharacterDialogOpen(false);
-    });
   }
 
   /* ----------------------------------------------------------
@@ -1432,18 +667,13 @@
     if (levelEl) levelEl.textContent = "Lv " + monster.level;
   }
 
+  /** Stage select panel: the monster the next battle will be against. */
   function renderNextOpponent() {
-    var el = document.getElementById("battle-next-opponent");
-    if (!el) return;
     var m = monsterForStage(currentStage());
-    el.innerHTML =
-      '<span class="battle-next-opponent-label">Next opponent</span> ' +
-      '<span class="battle-next-opponent-sprite" aria-hidden="true">' +
-      (m.boss ? "🐲" : esc(m.sprite)) +
-      "</span> <strong>" +
-      esc(m.name) +
-      "</strong> · Lv " +
-      m.level;
+    var sprite = document.getElementById("wc-opponent-sprite");
+    var name = document.getElementById("wc-opponent-name");
+    if (sprite) sprite.textContent = m.boss ? "🐲" : m.sprite;
+    if (name) name.textContent = m.name.toUpperCase() + " · LV " + m.level;
   }
 
   /* ----------------------------------------------------------
@@ -1506,6 +736,7 @@
     var word = fight.selected.map(function (idx) { return fight.grid[idx].letter; }).join("").toLowerCase();
 
     if (word === fight.currentAnswer) {
+      logAnswer("correct");
       var dmg = damageForWordLength(word.length);
       var meaning = fight.currentMeaning || "";
       fight.aiHp = Math.max(0, fight.aiHp - dmg);
@@ -1557,6 +788,7 @@
       return;
     }
 
+    logAnswer("wrong", word);
     playTrack(sfxWrong);
     var counterDmg = 6 + Math.floor(Math.random() * 9) + (fight.monster ? fight.monster.power : 0);
     fight.playerHp = Math.max(0, fight.playerHp - counterDmg);
@@ -1596,36 +828,6 @@
     return count + " correct answer" + (count === 1 ? "" : "s") + ", " + totalDamage + " total damage dealt.";
   }
 
-  function openResultModal(outcome) {
-    var modal = document.getElementById("battle-result-modal");
-    var titleEl = document.getElementById("battle-result-modal-title");
-    var bodyEl = document.getElementById("battle-result-modal-body");
-    var primaryBtn = document.getElementById("battle-result-primary-btn");
-    if (!modal) return;
-
-    if (titleEl) titleEl.textContent = outcome === "win" ? "Victory!" : "Defeated";
-    if (bodyEl) {
-      bodyEl.textContent =
-        (outcome === "win"
-          ? "You defeated the " + (fight && fight.monster ? fight.monster.name : "AI opponent") + "! "
-          : fight && fight.endReason === "time"
-          ? "Time's up! "
-          : "The " + (fight && fight.monster ? fight.monster.name : "AI opponent") + " defeated you. ") +
-        battleResultSummary();
-    }
-    if (primaryBtn) primaryBtn.textContent = outcome === "win" ? "Battle Again" : "Try Again";
-
-    modal.hidden = false;
-    document.body.classList.add("lq-modal-open");
-  }
-
-  function closeResultModal() {
-    var modal = document.getElementById("battle-result-modal");
-    if (modal) modal.hidden = true;
-    renderResultProgress(null);
-    document.body.classList.remove("lq-modal-open");
-  }
-
   /** Points, EXP and level change for the battle that just ended. */
   function computeBattleProgress(outcome) {
     var correct = fight ? fight.wordsUsed.length : 0;
@@ -1650,16 +852,10 @@
     };
   }
 
-  function renderResultProgress(progress) {
-    var el = document.getElementById("battle-result-progress");
-    if (!el) return;
-    if (!progress) {
-      el.hidden = true;
-      el.innerHTML = "";
-      return;
-    }
+  function resultProgressHtml(progress) {
+    if (!progress) return "";
     var pct = Math.round((progress.expIntoLevel / EXP_PER_LEVEL) * 100);
-    el.innerHTML =
+    return (
       '<div class="battle-result-stats">' +
       '<div class="battle-result-stat"><span>Points</span><strong>' + progress.points + "</strong></div>" +
       '<div class="battle-result-stat"><span>EXP</span><strong>+' + progress.exp + "</strong></div>" +
@@ -1675,26 +871,52 @@
         : "") +
       (progress.newBest
         ? '<p class="battle-result-flag is-best"><i class="fa-solid fa-star" aria-hidden="true"></i> New personal best: ' + progress.points + " points</p>"
-        : "");
-    el.hidden = false;
+        : "")
+    );
+  }
+
+  function showBattleResults(outcome, progress) {
+    var monster = fight && fight.monster ? fight.monster.name : "monster";
+    var timeUp = fight && fight.endReason === "time";
+    shell.showResults({
+      outcome: outcome,
+      title: outcome === "win" ? "VICTORY!" : timeUp ? "TIME'S UP!" : "DEFEAT",
+      sub:
+        (outcome === "win"
+          ? "You defeated the " + monster + "! "
+          : timeUp
+          ? "The clock ran out. "
+          : "The " + monster + " won this time. ") + battleResultSummary(),
+      progressHtml: resultProgressHtml(progress),
+      answers: fight ? fight.answerLog || [] : [],
+      againLabel: outcome === "win" ? "PLAY AGAIN" : "TRY AGAIN",
+    });
   }
 
   function endBattle(outcome) {
     if (!fight || fight.ended) return;
     fight.ended = true;
+    shell.closePause(true);
     stopBattleTimer();
     stopTrack(battleMusic);
     stopTrack(sfxTimerRunsOut);
     fight.lastOutcome = outcome;
     if (outcome === "win") {
-      playVictorySound();
+      sound.victory();
     } else {
       playTrack(gameOverSound);
     }
     var progress = computeBattleProgress(outcome);
-    openResultModal(outcome);
-    renderResultProgress(progress);
-    saveBattleResultToHistory(outcome, progress);
+    saveBattleResult(outcome, progress);
+    shell.requestMoreIfLow({
+      lessonId: fight.lessonId,
+      difficulty: fight.difficulty,
+      bankSize: fight.bankSize,
+      unseenKeys: fight.unseenKeys,
+      shownAnswers: (fight.answerLog || []).map(function (e) {
+        return e.answer;
+      }),
+    });
 
     // Update locally right away; the server copy is refreshed once history is saved.
     var prevStats = battleStats || {};
@@ -1708,15 +930,20 @@
       battleStats.wins = prevStats.wins + (outcome === "win" ? 1 : 0);
       battleStats.battles = Number(prevStats.battles || 0) + 1;
     }
-    setTimeout(loadBattleStats, 1500);
+
+    // Let the last hit and the victory / game-over sound play before the results screen.
+    var endedFight = fight;
+    setTimeout(function () {
+      if (fight === endedFight) showBattleResults(outcome, progress);
+    }, 1100);
   }
 
-  function saveBattleResultToHistory(outcome, progress) {
-    if (!fight || typeof recordStudentHistory !== "function") return;
+  /** Saved with every answer, so the results screen, Battle Log and History can replay it. */
+  function saveBattleResult(outcome, progress) {
+    if (!fight) return;
     var p = progress || computeBattleProgress(outcome);
-    recordStudentHistory("battle", {
+    shell.saveResult({
       lesson_id: fight.lessonId || null,
-      lesson_title: selectedLesson ? lessonTitle(selectedLesson) : "Battle Arena",
       outcome: outcome,
       difficulty: fight.difficulty || "normal",
       correct_answers: p.correct,
@@ -1727,6 +954,16 @@
       total_exp_after: p.totalExp,
       leveled_up: p.leveledUp,
       new_best: p.newBest,
+      answers: (fight.answerLog || []).map(function (e) {
+        return {
+          question: e.question,
+          answer: e.answer,
+          meaning: e.meaning,
+          result: e.result,
+          attempts: e.attempts.slice(),
+          hints: e.hints,
+        };
+      }),
     });
   }
 
@@ -1737,139 +974,69 @@
     fight.playerHp = PLAYER_MAX_HP;
     fight.aiHp = AI_MAX_HP;
     fight.wordsUsed = [];
+    fight.answerLog = [];
+    fight.currentLog = null;
     fight.hintsLeft = HINTS_PER_BATTLE;
     renderHintButton();
-    fight.questions = shuffleArray(fight.questions);
+    var pick = shell.pickQuestions(fight.bank || fight.questions, fight.lessonId, QUESTIONS_PER_BATTLE);
+    fight.questions = pick.questions;
+    fight.unseenKeys = pick.unseenKeys;
     renderHp();
     renderWordsUsed();
     advanceToQuestion(0);
     resetBattleClock();
   }
 
-  function exitToLobby() {
-    stopBattleTimer();
-    stopAllMusic();
-    renderNextOpponent();
-    setBattleWaiting(false);
-    fight = null;
-    closeResultModal();
-    showLobbyScreen();
+  /* ----------------------------------------------------------
+   * Battle lifecycle (called by the shell)
+   * ---------------------------------------------------------- */
+  async function startBattle(api, ctx) {
+    var loaded = await Promise.all([api.loadBank(ctx.lessonId, ctx.difficulty), api.ensureHistory()]);
+    var bank = loaded[0];
+    var pick = api.pickQuestions(bank, ctx.lessonId, QUESTIONS_PER_BATTLE);
+
+    fight = {
+      lessonId: ctx.lessonId,
+      bank: bank,
+      bankSize: bank.length,
+      unseenKeys: pick.unseenKeys,
+      questions: pick.questions,
+      questionIndex: 0,
+      currentAnswer: "",
+      currentMeaning: "",
+      grid: [],
+      selected: [],
+      playerHp: PLAYER_MAX_HP,
+      aiHp: AI_MAX_HP,
+      wordsUsed: [],
+      answerLog: [],
+      currentLog: null,
+      hintsLeft: HINTS_PER_BATTLE,
+      difficulty: ctx.difficulty,
+      monster: monsterForStage(currentStage()),
+    };
+    renderMonster(fight.monster);
+    S.renderCharacterInto(document.getElementById("battle-player-sprite"));
+    renderHintButton();
+
+    var playerNameEl = document.getElementById("battle-fight-player-name");
+    if (playerNameEl) playerNameEl.textContent = S.playerName();
+
+    api.showPlayScreen();
+    renderHp();
+    renderWordsUsed();
+    advanceToQuestion(0);
+    resetBattleClock();
   }
 
-  async function startBattle() {
-    if (!isLobbyReady() || !selectedLesson) return;
-
-    var fileId = selectedLessonId;
-    closeBattleModal();
-    playIntroMusic();
-    renderCharacterInto(document.getElementById("battle-loading-sprite"), selectedCharacter);
-    showLoadingScreen();
-    setLoadingHint("Preparing your battle…");
-
-    try {
-      var difficulty = selectedDifficulty;
-      var content = await loadLessonContentAndVocab(fileId);
-      var questions = normalizeQuestionEntries(content.battleQuestions).filter(function (q) {
-        return q.difficulty === difficulty;
-      });
-      var usingAi = questions.length >= 5;
-      var usingFallback = false;
-
-      if (!usingAi) {
-        setLoadingHint("Generating " + difficultyConfig(difficulty).label.toLowerCase() + " battle questions with AI…");
-        try {
-          var aiQuestions = await generateBattleQuestionsWithAi(fileId, difficulty);
-          questions = normalizeQuestionEntries(aiQuestions);
-          usingAi = questions.length >= 5;
-        } catch (aiErr) {
-          if (typeof showToast === "function") {
-            showToast((aiErr && aiErr.message) || "Could not generate AI battle questions.", "error");
-          }
-        }
-      }
-
-      if (!usingAi) {
-        questions = FALLBACK_QUESTIONS.slice();
-        usingFallback = true;
-      }
-      questions = shuffleArray(questions).slice(0, 12);
-
-      fight = {
-        lessonId: fileId,
-        questions: questions,
-        questionIndex: 0,
-        currentAnswer: "",
-        currentMeaning: "",
-        grid: [],
-        selected: [],
-        playerHp: PLAYER_MAX_HP,
-        aiHp: AI_MAX_HP,
-        wordsUsed: [],
-        usingFallback: usingFallback,
-        hintsLeft: HINTS_PER_BATTLE,
-        difficulty: difficulty,
-        monster: monsterForStage(currentStage()),
-      };
-      renderMonster(fight.monster);
-      renderCharacterInto(document.getElementById("battle-player-sprite"), selectedCharacter);
-      renderHintButton();
-
-      var playerNameEl = document.getElementById("battle-fight-player-name");
-      if (playerNameEl) {
-        playerNameEl.textContent = document.getElementById("student-display-name")?.textContent || "You";
-      }
-
-      showFightScreenEl();
-      renderVocabNote();
-      renderHp();
-      renderWordsUsed();
-      advanceToQuestion(0);
-      resetBattleClock();
-    } catch (err) {
-      fight = null;
-      stopIntroMusic();
-      showLobbyScreen();
-      if (typeof showToast === "function") {
-        showToast((err && err.message) || "Could not start battle.", "error");
-      }
-    }
-  }
-
-  /** Exit dialog: Keep Battling / Restart (back to the Ready screen) / Exit Battle. */
-  async function onExitBattleClick() {
-    var choice = true;
-    // Restart only makes sense once the round has started (not on the Ready screen).
-    var inBattle = !!(fight && fight.started && !fight.ended);
-    if (fight) fight.paused = true; // don't let the clock run out while deciding
-    if (window.LearnIQConfirm && typeof window.LearnIQConfirm.show === "function") {
-      choice = await window.LearnIQConfirm.show({
-        title: "Exit Battle?",
-        message: inBattle
-          ? "Your progress in this battle will be lost. Restart to try again from the beginning."
-          : "You'll go back to the lesson list.",
-        confirmText: "Exit Battle",
-        cancelText: inBattle ? "Keep Battling" : "Stay",
-        extraText: inBattle ? "Restart" : "",
-        variant: "danger",
-      });
-    }
-    if (choice === "extra") {
-      restartBattle();
-    } else if (choice) {
-      exitToLobby();
-    } else if (fight) {
-      fight.paused = false;
-      battleTimerLastTick = Date.now(); // don't count the time spent in the dialog
-    }
-  }
-
-  /** Same lesson and questions (reshuffled), full HP, fresh timer, back on the Ready screen. */
+  /** Same lesson, a fresh pick of questions, full HP, fresh timer, back on the Ready screen. */
   function restartBattle(options) {
     if (!fight) return;
     var opts = options || {};
     stopBattleTimer();
-    closeResultModal();
-    ALL_TRACKS.forEach(stopTrack);
+    shell.closePause(true);
+    shell.showPlayScreen();
+    sound.stopAll();
     if (opts.tryAgain) {
       // "Try Again" after a loss: play try again.mp3 first, then the intro music.
       playTrack(sfxTryAgain);
@@ -1878,58 +1045,171 @@
       var startIntro = function () {
         if (started || !fight || fight.started) return;
         started = true;
-        playIntroMusic();
+        sound.playIntro();
       };
       if (el) el.addEventListener("ended", startIntro, { once: true });
       setTimeout(startIntro, 4000); // fallback if the clip can't play
     } else {
-      playIntroMusic();
+      sound.playIntro();
     }
     resetFightForRebattle();
   }
 
-  function onResultPrimaryClick() {
-    // The button reads "Try Again" after a loss and "Battle Again" after a win.
-    restartBattle({ tryAgain: !!fight && fight.lastOutcome !== "win" });
-  }
+  /** Results → PLAY AGAIN / TRY AGAIN: same stage, picked again from the bank (it may have grown). */
+  var playAgainBusy = false;
 
-  function onResultSecondaryClick() {
-    exitToLobby();
-  }
-
-  function setupBattleArenaPage() {
-    setupBattleMenu();
-    setupCharacterPicker();
-    renderNextOpponent();
-    setupDifficultyPicker();
-    void loadBattleStats();
-    if (typeof hydrateStudentSidebarChip === "function") hydrateStudentSidebarChip();
-    if (typeof initRoleAwareDashboardSidebar === "function") initRoleAwareDashboardSidebar();
-    if (typeof hydrateSidebarProfileFromDatabase === "function") {
-      void hydrateSidebarProfileFromDatabase();
+  async function playAgain() {
+    var current = fight;
+    if (!current || playAgainBusy) return;
+    playAgainBusy = true;
+    try {
+      var bank = await shell.reloadBank(current.lessonId, current.difficulty);
+      if (bank.length >= 5) {
+        current.bank = bank;
+        current.bankSize = bank.length;
+      }
+    } catch (e) {
+      /* keep the bank we have */
     }
+    playAgainBusy = false;
+    // Reads "Try Again" after a loss and "Play Again" after a win.
+    if (fight === current) restartBattle({ tryAgain: current.lastOutcome !== "win" });
+  }
 
-    document.getElementById("battle-arena-refresh-btn")?.addEventListener("click", function () {
-      void loadLessons();
-    });
-    document.getElementById("battle-arena-lesson-list")?.addEventListener("click", onLessonListClick);
-    document.querySelectorAll('input[name="battle-mode"]').forEach(function (radio) {
-      radio.addEventListener("change", onModeChange);
-    });
-    document.getElementById("battle-arena-start-btn")?.addEventListener("click", onStartClick);
-    document.getElementById("battle-arena-modal-ok")?.addEventListener("click", function () {
-      void startBattle();
-    });
-    document.getElementById("battle-arena-modal-close")?.addEventListener("click", closeBattleModal);
-    document.getElementById("battle-arena-modal")?.addEventListener("click", function (e) {
-      if (e.target === e.currentTarget) closeBattleModal();
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape") return;
-      var modal = document.getElementById("battle-arena-modal");
-      if (modal && !modal.hidden) closeBattleModal();
+  /* ----------------------------------------------------------
+   * Shell hooks: Battle Log rows, menu card, pause
+   * ---------------------------------------------------------- */
+  function isWin(b) {
+    return String((b && b.outcome) || "").toLowerCase() === "win";
+  }
+
+  function battlePoints(b) {
+    return Number(b.score != null ? b.score : b.total_damage || 0);
+  }
+
+  function logRow(b) {
+    var won = isWin(b);
+    return {
+      badge: won
+        ? '<i class="fa-solid fa-star" aria-hidden="true"></i> WON'
+        : '<i class="fa-solid fa-xmark" aria-hidden="true"></i> LOST',
+      cls: won ? "is-win" : "is-loss",
+      meta: [S.formatLogDate(b.timestamp), S.difficultyLabel(b.difficulty), b.subject_name || ""],
+      score: battlePoints(b) + " PTS",
+    };
+  }
+
+  function logDetail(b) {
+    var won = isWin(b);
+    return {
+      title: won ? "VICTORY" : "DEFEAT",
+      cls: won ? "is-win" : "is-loss",
+      chips: [
+        S.formatLogDate(b.timestamp),
+        S.difficultyLabel(b.difficulty),
+        battlePoints(b) + " PTS",
+        b.exp_gained != null ? "+" + Number(b.exp_gained) + " EXP" : "",
+        Number(b.correct_answers || 0) + " CORRECT",
+        b.level_after != null ? "LV " + Number(b.level_after) : "",
+        b.new_best ? "NEW BEST!" : "",
+        b.leveled_up ? "LEVEL UP!" : "",
+      ],
+    };
+  }
+
+  /** Main menu player card: Word Clash level, EXP bar, wins and best score. */
+  function menuCard() {
+    var st = menuStats();
+    var into = st.totalExp % EXP_PER_LEVEL;
+    return {
+      level: "LV " + st.level + " · " + into + "/" + EXP_PER_LEVEL + " EXP",
+      expPct: Math.round((into / EXP_PER_LEVEL) * 100),
+      meta: st.wins + (st.wins === 1 ? " WIN" : " WINS") + " · BEST " + st.best,
+    };
+  }
+
+  /* Stage panel row under the fighter: the monster the next battle will be against. */
+  var NEXT_OPPONENT_HTML =
+    '<div class="wc-setup wc-setup-row">' +
+    '<div class="wc-opponent-sprite" id="wc-opponent-sprite" aria-hidden="true"></div>' +
+    '<div class="wc-setup-body"><p class="wc-setup-label">NEXT OPPONENT</p>' +
+    '<p class="wc-opponent-name" id="wc-opponent-name">—</p></div></div>';
+
+  function setup() {
+    shell = S.create({
+      id: "word-clash",
+      name: "Word Clash",
+      eventType: "battle",
+      title: ["WORD", "CLASH"],
+      tagline: "Spell the answer. Defeat the monsters.",
+      logTitle: "BATTLE LOG",
+      playLabel: "FIGHT!",
+      loadingText: "Preparing your battle…",
+      playScreenId: "battle-fight-screen",
+      setupHtml: NEXT_OPPONENT_HTML,
+      difficultyNote: function (key) {
+        return formatBattleTime(BATTLE_SECONDS[key] || BATTLE_SECONDS.normal) + " on the clock";
+      },
+      start: startBattle,
+      playAgain: function () {
+        void playAgain();
+      },
+      onStagesOpen: renderNextOpponent,
+      menuCard: menuCard,
+      refreshStats: loadBattleStats,
+      isCleared: isWin,
+      logRow: logRow,
+      logDetail: logDetail,
+      canPause: function () {
+        return !!fight && !fight.ended;
+      },
+      onPause: function () {
+        if (fight) fight.paused = true;
+      },
+      onResume: function () {
+        if (!fight) return;
+        fight.paused = false;
+        battleTimerLastTick = Date.now(); // time spent paused doesn't count
+        document.getElementById("battle-pause-btn")?.focus({ preventScroll: true });
+      },
+      canRestart: function () {
+        return !!fight && fight.started;
+      },
+      onRestart: function () {
+        restartBattle();
+      },
+      quitMessage: function () {
+        return fight && fight.started ? "This battle won't be saved." : "You'll go back to the main menu.";
+      },
+      onLeave: function () {
+        stopBattleTimer();
+        sound.stopAll();
+        setBattleWaiting(false);
+        fight = null;
+      },
+      // Don't let the clock run while choosing a fighter mid-battle.
+      onCharacterDialog: function (open) {
+        if (fight && fight.started && !fight.ended) {
+          fight.paused = open;
+          if (!open) battleTimerLastTick = Date.now();
+        }
+        document.getElementById("battle-player-sprite")?.setAttribute("aria-expanded", open ? "true" : "false");
+      },
+      onCharacterChange: function (seed) {
+        S.renderCharacterInto(document.getElementById("battle-player-sprite"), seed);
+      },
     });
 
+    document.getElementById("battle-pause-btn")?.addEventListener("click", shell.openPause);
+    // Click your fighter in the arena to change it.
+    var sprite = document.getElementById("battle-player-sprite");
+    sprite?.addEventListener("click", shell.openCharacterPicker);
+    sprite?.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        shell.openCharacterPicker();
+      }
+    });
     document.getElementById("battle-letter-grid")?.addEventListener("click", onTileClick);
     document.getElementById("battle-clear-btn")?.addEventListener("click", onClearClick);
     document.getElementById("battle-backspace-btn")?.addEventListener("click", onBackspaceClick);
@@ -1939,25 +1219,10 @@
     document.getElementById("battle-start-btn")?.addEventListener("click", onStartRoundClick);
     document.getElementById("battle-attack-btn")?.addEventListener("click", onAttackClick);
     document.getElementById("next-btn")?.addEventListener("click", onNextClick);
-    document.getElementById("battle-exit-btn")?.addEventListener("click", function () {
-      void onExitBattleClick();
-    });
-    document.getElementById("battle-result-primary-btn")?.addEventListener("click", onResultPrimaryClick);
-    document.getElementById("battle-result-secondary-btn")?.addEventListener("click", onResultSecondaryClick);
-
-    setStartEnabled(false);
-    renderSelectedPanel();
-    void loadLessons();
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var path = (window.location.pathname || "").split("/").pop() || "";
-    if (path !== "battle-arena.html" && !document.body.classList.contains("battle-arena-page")) {
-      return;
-    }
-    setupBattleArenaPage();
+    if (!document.getElementById("battle-fight-screen") || !window.ArcadeShell) return;
+    setup();
   });
-
-  window.setupBattleArenaPage = setupBattleArenaPage;
 })();
-// .

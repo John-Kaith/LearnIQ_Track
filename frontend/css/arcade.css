@@ -1,0 +1,1032 @@
+/*
+ * Arcade (arcade.html): the game library. LMS page, so it follows the site
+ * theme (gold in light mode, blue/violet in dark mode). Game covers are
+ * "box art" and keep the game's own pixel palette in both themes.
+ */
+
+/* ---- Arcade level (page header) ---- */
+.arcade-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+  padding: 0.5rem 0.9rem 0.5rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--lq-border-accent);
+  background: rgba(var(--lq-accent-violet-rgb), 0.1);
+  text-align: left;
+}
+
+.arcade-level-badge {
+  display: grid;
+  place-items: center;
+  min-width: 3.4rem;
+  height: 2.4rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  background: var(--lq-gradient-accent);
+  box-shadow: var(--lq-shadow-btn);
+}
+
+.arcade-level-body {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 9rem;
+}
+
+.arcade-level-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.arcade-level-bar {
+  display: block;
+  height: 0.45rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--lq-progress-track-bg);
+}
+
+.arcade-level-bar > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lq-gradient-accent-bar);
+  transition: width 0.6s ease;
+}
+
+.arcade-level-exp {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* ---- Game cover art (same in light and dark) ---- */
+.arcade-cover {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--lq-radius-md);
+  color: #f4f1ff;
+  font-family: "Press Start 2P", monospace;
+  text-decoration: none;
+}
+
+.arcade-cover--wordclash {
+  background:
+    radial-gradient(1px 1px at 15% 20%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 72% 14%, rgba(255, 255, 255, 0.8), transparent 60%),
+    radial-gradient(2px 2px at 40% 34%, rgba(103, 232, 249, 0.7), transparent 60%),
+    radial-gradient(1px 1px at 88% 40%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(circle at 50% -10%, rgba(139, 92, 246, 0.55), transparent 60%),
+    #150c30;
+}
+
+/* Pixel ground strip */
+.arcade-cover--wordclash::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18%;
+  background: repeating-linear-gradient(90deg, #120a2e 0 16px, #1b1440 16px 32px);
+  border-top: 3px solid #f4f1ff;
+}
+
+.arcade-cover-logo {
+  position: absolute;
+  top: 12%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.35em;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
+.arcade-cover-logo > span:first-child {
+  font-size: 1em;
+  color: #fff;
+  text-shadow: 2px 2px 0 #6366f1, 4px 4px 0 #000;
+}
+
+.arcade-cover-logo > span:last-child {
+  font-size: 1.3em;
+  color: #67e8f9;
+  text-shadow: 2px 2px 0 #8b5cf6, 4px 4px 0 #000;
+}
+
+/* Both stand on the ground strip (top of the bottom 18%) */
+.arcade-cover-fighter,
+.arcade-cover-monster {
+  position: absolute;
+  bottom: 18%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.arcade-cover-fighter {
+  left: 13%;
+  width: min(19%, 8.5rem);
+  aspect-ratio: 1;
+  font-size: 3rem;
+}
+
+.arcade-cover-fighter img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.arcade-cover-monster {
+  right: 12%;
+  font-size: 3.4rem;
+  transform: scaleX(-1);
+}
+
+.arcade-cover-vs {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  z-index: 1;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: #facc15;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.arcade-cover--soon {
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  color: var(--muted);
+  background: repeating-linear-gradient(45deg, rgba(var(--lq-accent-violet-rgb), 0.08) 0 10px, transparent 10px 20px);
+  border: 2px dashed var(--lq-border-accent);
+}
+
+/* Tic-Tac-Know: a classroom chalkboard in a wooden frame, like the game.
+   X is blue chalk and O is yellow chalk. */
+.arcade-cover--ttk {
+  color: #eef3ea;
+  background:
+    radial-gradient(ellipse 45% 35% at 20% 25%, rgba(255, 255, 255, 0.08), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 80% 75%, rgba(255, 255, 255, 0.06), transparent 70%),
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 10px),
+    #22412f;
+  box-shadow: inset 0 0 0 6px #8b5a2b, inset 0 0 0 8px #5c3816, inset 0 0 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Chalk tray along the bottom of the frame */
+.arcade-cover--ttk::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 8px;
+  height: 5px;
+  background: #5c3816;
+}
+
+.arcade-cover--ttk .arcade-cover-logo > span:first-child {
+  color: #eef3ea;
+  text-shadow: 0 0 2px rgba(238, 243, 234, 0.6), 2px 3px 0 rgba(238, 243, 234, 0.14);
+}
+
+.arcade-cover--ttk .arcade-cover-logo > span:last-child {
+  color: #ffe08a;
+  text-shadow: 0 0 2px rgba(255, 224, 138, 0.6), 3px 4px 0 rgba(255, 224, 138, 0.14);
+}
+
+.arcade-ttk-board {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  height: 46%;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  /* a # drawn in chalk */
+  background:
+    linear-gradient(90deg, transparent calc(33.33% - 1.5px), rgba(238, 243, 234, 0.85) calc(33.33% - 1.5px) calc(33.33% + 1.5px), transparent calc(33.33% + 1.5px)),
+    linear-gradient(90deg, transparent calc(66.67% - 1.5px), rgba(238, 243, 234, 0.85) calc(66.67% - 1.5px) calc(66.67% + 1.5px), transparent calc(66.67% + 1.5px)),
+    linear-gradient(180deg, transparent calc(33.33% - 1.5px), rgba(238, 243, 234, 0.85) calc(33.33% - 1.5px) calc(33.33% + 1.5px), transparent calc(33.33% + 1.5px)),
+    linear-gradient(180deg, transparent calc(66.67% - 1.5px), rgba(238, 243, 234, 0.85) calc(66.67% - 1.5px) calc(66.67% + 1.5px), transparent calc(66.67% + 1.5px));
+  transform: translateX(-50%) rotate(-1.5deg);
+}
+
+.arcade-ttk-board > span {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.arcade-ttk-board .is-x {
+  color: #a9d8ff;
+  text-shadow: 0 0 2px rgba(169, 216, 255, 0.6);
+}
+
+.arcade-ttk-board .is-o {
+  color: #ffe08a;
+  text-shadow: 0 0 2px rgba(255, 224, 138, 0.6);
+}
+
+.arcade-ttk-board .is-win {
+  background: rgba(255, 224, 138, 0.14);
+}
+
+/* Hero: the student's fighter, the board, then the bot */
+.arcade-cover--ttk .arcade-cover-fighter {
+  left: 7%;
+  bottom: 10%;
+}
+
+.arcade-cover-bot {
+  position: absolute;
+  right: 7%;
+  bottom: 10%;
+  z-index: 1;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 3.4rem;
+  line-height: 1;
+}
+
+.arcade-hero-cover .arcade-cover-bot {
+  font-size: 4rem;
+}
+
+.arcade-hero-cover:hover .arcade-cover-bot {
+  animation: arcade-bob 0.6s steps(2) infinite;
+}
+
+@keyframes arcade-bob {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ---- Larong Pinoy covers (the same art as each game) ---- */
+.arcade-sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The small "LARONG PINOY" line over the game's name */
+.arcade-cover--sungka .arcade-cover-logo > span:first-child,
+.arcade-cover--palosebo .arcade-cover-logo > span:first-child,
+.arcade-cover--patintero .arcade-cover-logo > span:first-child {
+  font-size: 0.55em;
+  letter-spacing: 0.16em;
+}
+
+/* Sungka: a wooden sungkaan on a woven banig */
+.arcade-cover--sungka {
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(43, 22, 8, 0.55) 100%),
+    repeating-linear-gradient(45deg, rgba(155, 44, 44, 0.5) 0 6px, transparent 6px 26px),
+    repeating-linear-gradient(-45deg, rgba(47, 107, 58, 0.45) 0 6px, transparent 6px 26px),
+    repeating-conic-gradient(#cfa86f 0% 25%, #b98f55 0% 50%) 0 0 / 8px 8px;
+}
+
+.arcade-cover--sungka .arcade-cover-logo > span:first-child {
+  color: #fff4dc;
+  text-shadow: 2px 2px 0 #9b2c2c, 3px 3px 0 #1e0f05;
+}
+
+.arcade-cover--sungka .arcade-cover-logo > span:last-child {
+  color: #f2c14e;
+  text-shadow: 2px 2px 0 #9b2c2c, 4px 4px 0 #1e0f05;
+}
+
+.arcade-sg-board {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  z-index: 1;
+  width: 72%;
+  height: 40%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8%;
+  padding: 3% 9%;
+  background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 9px), linear-gradient(180deg, #a3582f 0 20%, #8a4523 20%);
+  border: 3px solid #3a1d0c;
+  border-radius: 999px / 50%;
+  box-shadow: 4px 4px 0 #1e0f05;
+  transform: translateX(-50%);
+}
+
+.arcade-sg-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8%;
+  min-height: 0;
+}
+
+.arcade-sg-row i {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #2a1308 0 58%, #4a2410 64%);
+}
+
+.arcade-sg-row i .arcade-sprite {
+  width: 55%;
+}
+
+/* Palosebo: fiesta sunset, banderitas and greasy poles */
+.arcade-cover--palosebo {
+  background: linear-gradient(180deg, #3b1e54 0 16%, #5a2659 16% 30%, #8e3a5e 30% 44%, #c4525a 44% 58%, #e8774a 58% 72%, #f6a54c 72% 86%, #fbd27f 86%);
+}
+
+.arcade-pb-flags {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 15%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='13' shape-rendering='crispEdges'%3E%3Cpath d='M1 1h8l-4 8z' fill='%23ff5ca8'/%3E%3Cpath d='M13 1h8l-4 8z' fill='%23ffd23f'/%3E%3Cpath d='M25 1h8l-4 8z' fill='%237fd4ff'/%3E%3Cpath d='M37 1h8l-4 8z' fill='%237cf29c'/%3E%3C/svg%3E") 0 4px / 48px 13px repeat-x,
+    linear-gradient(#fff4e0, #fff4e0) 0 4px / 100% 1px no-repeat;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo {
+  top: 16%;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo > span:first-child {
+  color: #fff4e0;
+  text-shadow: 2px 2px 0 #ff5ca8, 3px 3px 0 #1c0a24;
+}
+
+.arcade-cover--palosebo .arcade-cover-logo > span:last-child {
+  color: #ffd23f;
+  text-shadow: 2px 2px 0 #ff5ca8, 4px 4px 0 #1c0a24;
+}
+
+.arcade-pb-poles {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 38%;
+  display: flex;
+  justify-content: center;
+  gap: 18%;
+}
+
+.arcade-pb-poles > i {
+  position: relative;
+  width: 3.4%;
+  min-width: 7px;
+  background:
+    repeating-linear-gradient(180deg, #8a8f2b 0 2px, transparent 2px 12px),
+    linear-gradient(90deg, #6f7322 0 20%, #d6d96a 20% 70%, #a7ab3e 70%);
+}
+
+.arcade-pb-poles > i > b {
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  width: 260%;
+  transform: translateX(-50%);
+}
+
+.arcade-pb-poles > i > span {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  width: 470%;
+  transform: translateX(-50%);
+}
+
+/* Patintero: a night court with chalk lines */
+.arcade-cover--patintero {
+  background:
+    radial-gradient(circle at 9% 68%, #fff7d6 0 8px, transparent 9px),
+    radial-gradient(1px 1px at 18% 24%, #ffffff, transparent 60%) 0 0 / 70px 50px,
+    linear-gradient(180deg, #0b1024 0 55%, #1a2350 55%);
+}
+
+.arcade-cover--patintero .arcade-cover-logo > span:first-child {
+  color: #eef2ff;
+  text-shadow: 2px 2px 0 #3b82f6, 3px 3px 0 #05081a;
+}
+
+.arcade-cover--patintero .arcade-cover-logo > span:last-child {
+  color: #ffd166;
+  text-shadow: 2px 2px 0 #3b82f6, 4px 4px 0 #05081a;
+}
+
+.arcade-pt-court {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 1;
+  width: 66%;
+  height: 46%;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 calc(33% - 2px), #f1f5f9 calc(33% - 2px) 33%),
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(241, 245, 249, 0.4) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 209, 102, 0.3), transparent 70%),
+    #6b7280;
+  border: 3px solid #f1f5f9;
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+
+.arcade-pt-kid {
+  position: absolute;
+  width: 12%;
+}
+
+.arcade-pt-kid.is-runner {
+  left: 24%;
+  bottom: 6%;
+}
+
+.arcade-pt-kid.is-taya {
+  left: 60%;
+  bottom: 30%;
+}
+
+/* Tumbang Preso: a sunny street, a can and a flying tsinelas */
+.arcade-cover--tumbang {
+  background:
+    radial-gradient(ellipse 34px 10px at 22% 64%, #ffffff 96%, transparent),
+    radial-gradient(ellipse 44px 11px at 80% 70%, #ffffff 96%, transparent),
+    linear-gradient(180deg, #3d97e6 0 30%, #5aaaf0 30% 55%, #7fc0f6 55% 72%);
+}
+
+.arcade-cover--tumbang .arcade-cover-logo > span:first-child {
+  color: #fffbea;
+  text-shadow: 2px 2px 0 #e5484d, 4px 4px 0 #0c1022;
+}
+
+.arcade-cover--tumbang .arcade-cover-logo > span:last-child {
+  color: #ffcf3f;
+  text-shadow: 2px 2px 0 #e5484d, 4px 4px 0 #0c1022;
+}
+
+.arcade-tp-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0 14px, transparent 14px 30px) 0 70% / 100% 2px no-repeat,
+    linear-gradient(180deg, #8d8170 0 12%, #5c5853 12%);
+}
+
+.arcade-tp-kid,
+.arcade-tp-can,
+.arcade-tp-slipper {
+  position: absolute;
+  z-index: 1;
+}
+
+.arcade-tp-kid {
+  left: 12%;
+  bottom: 10%;
+  width: 12%;
+}
+
+.arcade-tp-slipper {
+  left: 42%;
+  bottom: 40%;
+  width: 11%;
+  transform: rotate(-24deg);
+}
+
+.arcade-tp-can {
+  left: 66%;
+  bottom: 14%;
+  width: 7%;
+}
+
+/* Pinoy Henyo: a noontime show with red curtains */
+.arcade-cover--henyo {
+  background:
+    radial-gradient(ellipse 30% 55% at 25% -8%, rgba(255, 240, 200, 0.35), transparent 70%),
+    radial-gradient(ellipse 30% 55% at 75% -8%, rgba(255, 240, 200, 0.35), transparent 70%),
+    linear-gradient(180deg, transparent 0 80%, #ffcc33 80% 82%, #1e3a8a 82%),
+    repeating-linear-gradient(90deg, #7a0d1f 0 10px, #9c1529 10px 17px, #6b0b1b 17px 25px);
+}
+
+.arcade-cover--henyo .arcade-cover-logo > span:first-child {
+  color: #fff6e0;
+  text-shadow: 2px 2px 0 #8b1023, 4px 4px 0 #120206;
+}
+
+.arcade-cover--henyo .arcade-cover-logo > span:last-child {
+  color: #ffcc33;
+  text-shadow: 2px 2px 0 #8b1023, 4px 4px 0 #120206;
+}
+
+.arcade-ph-card {
+  position: absolute;
+  left: 50%;
+  bottom: 24%;
+  z-index: 1;
+  padding: 0.3em 0.7em;
+  font-size: 1.1em;
+  color: #22040b;
+  background: #fff6e0;
+  border: 3px solid #ffcc33;
+  box-shadow: 3px 3px 0 #120206;
+  transform: translateX(-50%);
+}
+
+.arcade-ph-bubble {
+  position: absolute;
+  bottom: 44%;
+  z-index: 1;
+  padding: 0.3em 0.45em;
+  font-size: 0.6em;
+  color: #22040b;
+  border: 2px solid #120206;
+  box-shadow: 2px 2px 0 #120206;
+}
+
+.arcade-ph-bubble.is-oo {
+  left: 12%;
+  background: #4ade80;
+  transform: rotate(-6deg);
+}
+
+.arcade-ph-bubble.is-pwede {
+  right: 10%;
+  background: #fcd34d;
+  transform: rotate(5deg);
+}
+
+/* ---- Continue playing (hero) ---- */
+.arcade-hero {
+  container-type: inline-size;
+  padding: 1.25rem;
+}
+
+.arcade-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1.4rem;
+}
+
+.arcade-hero-cover {
+  min-height: 15rem;
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+}
+
+.arcade-hero-cover .arcade-cover-monster {
+  font-size: 4.2rem;
+}
+
+.arcade-hero-cover:hover .arcade-cover-monster {
+  animation: arcade-wobble 0.6s steps(2) infinite;
+}
+
+@keyframes arcade-wobble {
+  50% {
+    transform: scaleX(-1) translateY(-4px);
+  }
+}
+
+.arcade-hero-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.arcade-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lq-accent-blue-strong);
+}
+
+html[data-theme="dark"] .arcade-eyebrow {
+  color: var(--lq-accent-text);
+}
+
+.arcade-hero-body h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.arcade-hero-desc,
+.arcade-hero-last {
+  margin: 0;
+  color: var(--muted);
+}
+
+.arcade-hero-last {
+  min-height: 1.5em;
+  font-size: 0.92rem;
+}
+
+.arcade-hero-last strong {
+  color: var(--text);
+}
+
+.arcade-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.2rem;
+}
+
+.arcade-stat {
+  min-width: 0;
+  padding: 0.6rem 0.5rem;
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid var(--lq-border-subtle);
+  background: var(--lq-surface-nested-bg);
+  text-align: center;
+}
+
+.arcade-stat dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.arcade-stat dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.arcade-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.arcade-play-btn {
+  min-width: 10rem;
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+@container (max-width: 640px) {
+  .arcade-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .arcade-hero-cover {
+    min-height: 12.5rem;
+  }
+
+  .arcade-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .arcade-play-btn {
+    flex: 1;
+  }
+}
+
+/* ---- Sections ---- */
+.arcade-section {
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.arcade-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.arcade-section-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.arcade-link {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--lq-accent-blue-strong);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html[data-theme="dark"] .arcade-link {
+  color: var(--lq-accent-text);
+}
+
+.arcade-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- All games ---- */
+.arcade-games {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+}
+
+.arcade-game {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border-radius: var(--lq-radius-lg);
+  border: 1px solid var(--lq-border-subtle);
+  background: var(--lq-surface-nested-bg);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+a.arcade-game:hover,
+a.arcade-game:focus-visible {
+  transform: translateY(-3px);
+  border-color: var(--lq-border-accent);
+  box-shadow: var(--lq-shadow-card);
+  outline: none;
+}
+
+a.arcade-game:focus-visible {
+  box-shadow: var(--lq-focus-ring), var(--lq-shadow-card);
+}
+
+.arcade-game .arcade-cover {
+  aspect-ratio: 16 / 9;
+  font-size: 0.9rem;
+}
+
+.arcade-game .arcade-cover-monster {
+  right: 50%;
+  transform: translateX(50%) scaleX(-1);
+  font-size: 2.2rem;
+}
+
+.arcade-game .arcade-cover--soon {
+  font-size: 2rem;
+}
+
+/* Card: logo on the left, board on the right */
+.arcade-game .arcade-cover--ttk {
+  font-size: 0.75rem;
+}
+
+.arcade-game .arcade-cover--ttk .arcade-cover-logo {
+  top: 50%;
+  left: 8%;
+  right: auto;
+  justify-items: start;
+  transform: translateY(-50%);
+}
+
+.arcade-game .arcade-ttk-board {
+  left: auto;
+  right: 8%;
+  top: 50%;
+  bottom: auto;
+  height: 64%;
+  transform: translateY(-50%) rotate(-1.5deg);
+}
+
+.arcade-game-body {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0 0.2rem;
+}
+
+.arcade-game-name {
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.arcade-game-desc {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.arcade-game-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.arcade-game-tags > span {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--lq-border-subtle);
+}
+
+.arcade-game-cta {
+  margin-top: auto;
+  padding: 0 0.2rem 0.15rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--lq-accent-blue-strong);
+}
+
+html[data-theme="dark"] .arcade-game-cta {
+  color: var(--lq-accent-text);
+}
+
+.arcade-game.is-locked {
+  opacity: 0.8;
+}
+
+/* ---- Recent plays / Top players ---- */
+.arcade-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .arcade-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.arcade-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.arcade-list-note {
+  padding: 0.6rem 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.arcade-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--lq-radius-sm);
+  border: 1px solid var(--lq-border-subtle);
+  background: var(--lq-surface-nested-bg);
+}
+
+.arcade-row-main {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.arcade-row-title {
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.arcade-row-meta {
+  overflow: hidden;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.arcade-row-value {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.arcade-outcome {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.arcade-outcome.is-win {
+  color: #a16207;
+  background: rgba(250, 204, 21, 0.22);
+}
+
+.arcade-outcome.is-loss {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+html[data-theme="dark"] .arcade-outcome.is-win {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.14);
+}
+
+html[data-theme="dark"] .arcade-outcome.is-loss {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.arcade-outcome.is-draw {
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+html[data-theme="dark"] .arcade-outcome.is-draw {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.16);
+}
+
+.arcade-rank {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  font-weight: 800;
+  color: var(--muted);
+  background: rgba(var(--lq-accent-violet-rgb), 0.1);
+}
+
+/* Gold, silver, bronze */
+.arcade-rank.is-1 {
+  color: #713f12;
+  background: #fde047;
+}
+
+.arcade-rank.is-2 {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.arcade-rank.is-3 {
+  color: #7c2d12;
+  background: #fdba74;
+}
+
+.arcade-row.is-you {
+  border-color: var(--lq-border-accent);
+  background: rgba(var(--lq-accent-violet-rgb), 0.12);
+}
+
+.arcade-you {
+  margin-left: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.arcade-gap {
+  padding: 0 0.75rem;
+  color: var(--muted);
+  line-height: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arcade-hero-cover:hover .arcade-cover-monster,
+  .arcade-hero-cover:hover .arcade-cover-bot {
+    animation: none;
+  }
+
+  a.arcade-game:hover,
+  a.arcade-game:focus-visible {
+    transform: none;
+  }
+}
+
+html.reduce-motion .arcade-hero-cover:hover .arcade-cover-monster,
+html.reduce-motion .arcade-hero-cover:hover .arcade-cover-bot {
+  animation: none;
+}

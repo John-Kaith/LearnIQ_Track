@@ -814,6 +814,13 @@ def _battle_question_difficulty(entry: Any) -> str:
     return "normal"
 
 
+def get_battle_questions_for_difficulty(lesson_id: str, difficulty: str) -> list[dict[str, Any]]:
+    """One difficulty's Word Clash question bank for a lesson (shared by every student)."""
+    row = get_content_row(lesson_id) or {}
+    saved = row.get("battle_questions") if isinstance(row.get("battle_questions"), list) else []
+    return [q for q in saved if isinstance(q, dict) and _battle_question_difficulty(q) == difficulty]
+
+
 def replace_battle_questions_for_difficulty(lesson_id: str, difficulty: str, questions: list[Any]) -> None:
     """Swap one difficulty's questions in lesson_content.battle_questions, keeping the others."""
     row = get_content_row(lesson_id) or {}
@@ -845,19 +852,28 @@ def unpublish_lesson(lesson_id: str) -> None:
     _sb().table("lessons").update({"is_published": False}).eq("id", lesson_id).execute()
 
 
-def list_published_lessons_with_content() -> list[dict[str, Any]]:
-    lesson_cols = (
-        "id, filename, file_type, extracted_text, is_published, "
-        "created_at, teacher_id_number, subject_id, lesson_content(*)"
-    )
-    res = (
-        _sb()
-        .table("lessons")
-        .select(lesson_cols)
-        .eq("is_published", True)
-        .order("created_at", desc=True)
-        .execute()
-    )
+def list_published_lessons_with_content(
+    subject_ids: list[str] | None = None,
+    *,
+    include_content: bool = True,
+) -> list[dict[str, Any]]:
+    """Published lessons, newest first.
+
+    subject_ids narrows the query in the database instead of pulling every
+    school lesson. include_content=False skips reviewer/quiz/activities (and
+    omits those keys) for list views that fetch content per lesson on open.
+    extracted_text is never selected: it isn't returned and made up most of
+    the transfer.
+    """
+    if subject_ids is not None and not subject_ids:
+        return []
+    lesson_cols = "id, filename, file_type, is_published, created_at, teacher_id_number, subject_id"
+    if include_content:
+        lesson_cols += ", lesson_content(*)"
+    q = _sb().table("lessons").select(lesson_cols).eq("is_published", True)
+    if subject_ids is not None:
+        q = q.in_("subject_id", [str(s) for s in subject_ids])
+    res = q.order("created_at", desc=True).execute()
     # Build a lookup of subjects so we can attach name/color/description to each lesson.
     subjects_by_id = {str(s.get("id")): s for s in list_subjects()}
 
@@ -892,19 +908,21 @@ def list_published_lessons_with_content() -> list[dict[str, Any]]:
         sid_key = str(sid) if sid is not None else None
         subject = subjects_by_id.get(sid_key) if sid_key else None
 
-        lessons.append({
+        lesson = {
             "file_id": clean["id"],
             "filename": clean.get("filename") or "",
             "file_type": clean.get("file_type") or "",
             "created_at": clean.get("created_at"),
-            "reviewer": reviewer_str,
-            "quiz": quiz,
-            "activities": activities,
             "subject_id": sid_key,
             "subject_name": (subject or {}).get("name") or "",
             "subject_color": (subject or {}).get("color") or "",
             "teacher_id_number": (clean.get("teacher_id_number") or "").strip(),
-        })
+        }
+        if include_content:
+            lesson["reviewer"] = reviewer_str
+            lesson["quiz"] = quiz
+            lesson["activities"] = activities
+        lessons.append(lesson)
 
     return lessons
 
@@ -1382,8 +1400,9 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
             a["last_ts"] = ts
 
     battle_stats = get_all_battle_stats()
-    for sid in battle_stats:
-        agg[sid]  # students who only played the AI Battle Arena still appear
+    game_exp = get_all_game_exp()
+    for sid in list(battle_stats) + list(game_exp):
+        agg[sid]  # students who only played Arcade games still appear
 
     if not agg:
         return {"updated_at": now_iso, "entries": []}
@@ -1430,6 +1449,8 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
                 "battle_level": int(bstats.get("level") or 0),
                 "battle_best_score": int(bstats.get("best_score") or 0),
                 "battle_total_exp": int(bstats.get("total_exp") or 0),
+                "arcade_total_exp": int(bstats.get("total_exp") or 0) + int(game_exp.get(sid) or 0),
+                "arcade_level": (int(bstats.get("total_exp") or 0) + int(game_exp.get(sid) or 0)) // BATTLE_EXP_PER_LEVEL,
             }
         )
 
@@ -3160,6 +3181,8 @@ def list_published_lessons_for_student(
     student_uuid: str,
     subject_id: str | None = None,
     grading_period_id: str | None = None,
+    *,
+    include_content: bool = True,
 ) -> list[dict[str, Any]]:
     """Published lessons limited to subjects the student is enrolled in."""
     if not student_uuid:
@@ -3171,7 +3194,13 @@ def list_published_lessons_for_student(
     access = _student_enrollment_access_map(student_uuid, period_id)
     if not access:
         return []
-    lessons = list_published_lessons_with_content()
+    # Only ask the DB about enrolled subjects: an unknown or malformed subject_id
+    # just yields no lessons (as before) instead of a uuid syntax error.
+    if subject_id is not None:
+        wanted = [str(subject_id)] if str(subject_id) in access else []
+    else:
+        wanted = list(access.keys())
+    lessons = list_published_lessons_with_content(wanted, include_content=include_content)
     out: list[dict[str, Any]] = []
     for lesson in lessons:
         sid = lesson.get("subject_id")
@@ -4418,8 +4447,8 @@ def insert_student_learning_event(
     """Persist reviewer / activity history event."""
     idn = (student_id_number or "").strip()
     et = (event_type or "").strip().lower()
-    if et not in ("reviewer", "activity", "battle"):
-        raise ValueError("event_type must be reviewer, activity, or battle")
+    if et not in ("reviewer", "activity", "battle", "game"):
+        raise ValueError("event_type must be reviewer, activity, battle, or game")
     student_uuid = profile_uuid_for_id_number(idn) if idn else None
     lesson_id = payload.get("lesson_id")
     meta = {
@@ -4638,6 +4667,12 @@ def summarize_battle_events(metas: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _battle_event_rows(student_uuid: str | None = None, student_id_number: str | None = None) -> list[dict[str, Any]]:
     """All battle events (optionally for one student), paged past Supabase's 1000-row cap."""
+    return _learning_event_rows("battle", student_uuid, student_id_number)
+
+
+def _learning_event_rows(
+    event_type: str, student_uuid: str | None = None, student_id_number: str | None = None
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     page = 1000
     start = 0
@@ -4646,7 +4681,7 @@ def _battle_event_rows(student_uuid: str | None = None, student_id_number: str |
             _sb()
             .table("student_learning_events")
             .select("student_id, student_id_number, metadata")
-            .eq("event_type", "battle")
+            .eq("event_type", event_type)
         )
         if student_uuid:
             q = q.eq("student_id", student_uuid)
@@ -4695,17 +4730,94 @@ def get_all_battle_stats() -> dict[str, dict[str, Any]]:
     return {sid: summarize_battle_events(metas) for sid, metas in by_student.items()}
 
 
+# ---------- Arcade: games after Word Clash ("game" events, metadata.game = which game) ----------
+# Every Arcade game uses the same EXP rule: 10 for a win, 6 for a draw, 4 for a loss,
+# +1 per correct answer (max +5). Arcade level = Word Clash EXP + all game EXP, 100 per level.
+# Keep in sync with GAME_EXP in frontend/js/arcade/arcade-shell.js.
+
+
+def game_exp_for_result(outcome: Any, correct_answers: Any) -> int:
+    result = str(outcome or "").strip().lower()
+    base = 10 if result == "win" else 6 if result == "draw" else 4
+    return base + min(5, max(0, _int_or_zero(correct_answers)))
+
+
+def summarize_game_events(metas: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Per game: matches, wins, draws, losses and EXP."""
+    games: dict[str, dict[str, Any]] = {}
+    for meta in metas:
+        name = str(meta.get("game") or "game").strip().lower() or "game"
+        g = games.setdefault(name, {"matches": 0, "wins": 0, "draws": 0, "losses": 0, "total_exp": 0})
+        result = str(meta.get("outcome") or "").strip().lower()
+        g["matches"] += 1
+        if result == "win":
+            g["wins"] += 1
+        elif result == "draw":
+            g["draws"] += 1
+        else:
+            g["losses"] += 1
+        g["total_exp"] += game_exp_for_result(result, meta.get("correct_answers"))
+    return games
+
+
+def _student_rows(event_type: str, student_id_number: str) -> list[dict[str, Any]]:
+    idn = (student_id_number or "").strip()
+    student_uuid = profile_uuid_for_id_number(idn) if idn else None
+    if not student_uuid and not idn:
+        return []
+    try:
+        return _learning_event_rows(event_type, student_uuid=student_uuid, student_id_number=idn)
+    except Exception as e:
+        print(f"_student_rows {event_type}: {e}")
+        return []
+
+
+def get_student_arcade_stats(student_id_number: str) -> dict[str, Any]:
+    """Arcade level (EXP from every game) plus each game's own record."""
+    word_clash = summarize_battle_events([_event_meta(r) for r in _student_rows("battle", student_id_number)])
+    games = summarize_game_events([_event_meta(r) for r in _student_rows("game", student_id_number)])
+    total_exp = int(word_clash["total_exp"]) + sum(int(g["total_exp"]) for g in games.values())
+    return {
+        "level": total_exp // BATTLE_EXP_PER_LEVEL,
+        "total_exp": total_exp,
+        "exp_into_level": total_exp % BATTLE_EXP_PER_LEVEL,
+        "exp_per_level": BATTLE_EXP_PER_LEVEL,
+        "games": {"word-clash": word_clash, **games},
+    }
+
+
+def get_all_game_exp() -> dict[str, int]:
+    """Total EXP from "game" events for every student, keyed by profile uuid."""
+    try:
+        rows = _learning_event_rows("game")
+    except Exception as e:
+        print(f"get_all_game_exp: {e}")
+        return {}
+    exp: dict[str, int] = defaultdict(int)
+    for r in rows:
+        sid = str(r.get("student_id") or "").strip()
+        if not sid or sid == ZERO_UUID:
+            sid = profile_uuid_for_id_number(str(r.get("student_id_number") or "").strip()) or ""
+        if not sid:
+            continue
+        meta = _event_meta(r)
+        exp[sid] += game_exp_for_result(meta.get("outcome"), meta.get("correct_answers"))
+    return dict(exp)
+
+
 def get_student_learning_history(student_id_number: str) -> dict[str, list[dict[str, Any]]]:
     quiz = list_student_quiz_history(student_id_number)
     reviewer = list_student_learning_events(student_id_number, "reviewer")
     activity = list_student_learning_events(student_id_number, "activity")
     battle = list_student_learning_events(student_id_number, "battle")
+    game = list_student_learning_events(student_id_number, "game")
     backfill = backfill_student_history_from_lessons(student_id_number)
     return {
         "quiz": _merge_history_by_lesson(quiz, backfill.get("quiz") or []),
         "reviewer": _merge_history_by_lesson(reviewer, backfill.get("reviewer") or []),
         "activity": _merge_history_by_lesson(activity, backfill.get("activity") or []),
         "battle": battle,
+        "game": game,
     }
 
 

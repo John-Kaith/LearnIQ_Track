@@ -1,0 +1,346 @@
+/**
+ * Sungka (sungka.html): a carved wooden sungkaan on a woven banig mat, with
+ * cowrie shells (sigay). Uses css/arcade-skin.css for the shared screens (load
+ * it first). Same look in light and dark mode. On phones the board stands upright.
+ */
+
+body.sungka-page {
+  --sg-wood: #8a4523;
+  --sg-wood-light: #a3582f;
+  --sg-wood-dark: #3a1d0c;
+  --sg-hole: #2a1308;
+  --sg-cream: #fff4dc;
+  --sg-gold: #f2c14e;
+  --sg-banig:
+    repeating-linear-gradient(45deg, rgba(155, 44, 44, 0.5) 0 10px, transparent 10px 44px),
+    repeating-linear-gradient(-45deg, rgba(47, 107, 58, 0.45) 0 10px, transparent 10px 44px),
+    repeating-conic-gradient(#cfa86f 0% 25%, #b98f55 0% 50%) 0 0 / 12px 12px;
+
+  --sk-ink: var(--sg-cream);
+  --sk-ink-soft: rgba(255, 244, 220, 0.88);
+  --sk-ink-faint: rgba(255, 244, 220, 0.5);
+  --sk-bg: radial-gradient(ellipse at center, rgba(43, 22, 8, 0.05) 30%, rgba(43, 22, 8, 0.6) 100%), var(--sg-banig);
+  --sk-deep: #2b1608;
+  --sk-mid: #4a2a14;
+  --sk-panel: rgba(43, 22, 8, 0.86);
+  --sk-btn: rgba(43, 22, 8, 0.86);
+  --sk-hover-bg: rgba(242, 193, 78, 0.2);
+  --sk-dim: rgba(30, 15, 5, 0.75);
+  --sk-line: #f2d8a7;
+  --sk-line-soft: rgba(242, 216, 167, 0.6);
+  --sk-ghost: #1e0f05;
+  --sk-shadow: 4px 4px 0 #1e0f05;
+  --sk-title-shadow: 3px 3px 0 #1e0f05;
+  --sk-select: #ff8a5c;
+  --sk-accent: var(--sg-gold);
+  --sk-accent-fill: var(--sg-gold);
+  --sk-accent-ink: #2b1608;
+  --sk-good: #9be58a;
+  --sk-bad: #ff8a80;
+  --sk-info: #8fd3ff;
+  --sk-logo-top: var(--sg-cream);
+  --sk-logo-main: var(--sg-gold);
+  --sk-logo-shadow: 4px 4px 0 #9b2c2c, 8px 8px 0 #1e0f05;
+  --sk-cursor: ">";
+}
+
+body.sungka-page .wc-logo-top {
+  font-size: clamp(1rem, 4vw, 1.9rem);
+  letter-spacing: 0.14em;
+}
+
+body.sungka-page .wc-logo-main {
+  font-size: clamp(2.4rem, 10vw, 5.6rem);
+}
+
+/* Plain text sits on a dark strip so it reads on the mat */
+body.sungka-page .wc-tagline,
+body.sungka-page .wc-hint,
+body.sungka-page .wc-screen-sub,
+body.sungka-page .wc-status:not([hidden]) {
+  padding: 0.35rem 0.65rem;
+  background: rgba(43, 22, 8, 0.82);
+}
+
+body.sungka-page .wc-screen-title {
+  padding: 0.3rem 0.6rem;
+  background: rgba(43, 22, 8, 0.82);
+}
+
+/* ============================================================
+ * Play screen
+ * ============================================================ */
+.sg-table {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: min(54rem, 100%);
+  margin: 0.6rem auto 0;
+  display: grid;
+  align-content: center;
+  gap: 0.9rem;
+}
+
+.sg-player {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: fit-content;
+  padding: 0.45rem 0.7rem;
+  background: var(--sk-panel);
+  border: 3px solid var(--sk-line-soft);
+  box-shadow: 3px 3px 0 var(--sk-ghost);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.sg-player.is-o {
+  justify-self: end;
+}
+
+.sg-player.is-turn {
+  border-color: var(--sk-accent);
+  transform: translateY(-2px);
+}
+
+.sg-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: var(--sk-deep);
+  border: 2px solid var(--sk-line-soft);
+}
+
+.sg-avatar img,
+.sg-avatar-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.sg-name {
+  font-size: 0.55rem;
+  font-weight: 400;
+}
+
+.sg-store-label {
+  font-size: 0.5rem;
+  color: var(--sk-ink-soft);
+}
+
+.sg-store-label b {
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--sk-accent);
+}
+
+/* The sungkaan: a carved wooden boat */
+.sg-board {
+  display: grid;
+  grid-template-columns: 1.25fr repeat(7, minmax(0, 1fr)) 1.25fr;
+  grid-template-rows: auto auto;
+  gap: 1.7rem 0.45rem;
+  padding: 1.6rem 1.6rem;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 3px, transparent 3px 15px),
+    linear-gradient(180deg, var(--sg-wood-light) 0 18%, var(--sg-wood) 18% 82%, #7a3b1d 82%);
+  border: 4px solid var(--sg-wood-dark);
+  border-radius: 56px / 50%;
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.14), inset 0 -6px 0 rgba(0, 0, 0, 0.25), 6px 8px 0 var(--sk-ghost);
+}
+
+.sg-pit,
+.sg-store {
+  position: relative;
+  grid-column: var(--dc);
+  grid-row: var(--dr);
+  padding: 0;
+  font: inherit;
+  color: var(--sg-cream);
+  background: radial-gradient(circle at 50% 42%, var(--sg-hole) 0 58%, #4a2410 62% 70%, #5c2e15 74%);
+  border: 3px solid var(--sg-wood-dark);
+  box-shadow: inset 0 4px 0 rgba(0, 0, 0, 0.45);
+}
+
+.sg-pit {
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: 50%;
+  cursor: default;
+}
+
+.sg-store {
+  min-height: 7rem;
+  border-radius: 999px;
+}
+
+.sg-shells {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sg-shell {
+  position: absolute;
+  width: 24%;
+  transform: translate(-50%, -50%);
+}
+
+.sg-store .sg-shell {
+  width: 30%;
+}
+
+.sg-shell-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Shell counts: above the top row, below the bottom row, inside the ulo */
+.sg-count {
+  position: absolute;
+  left: 50%;
+  font-size: 0.55rem;
+  line-height: 1;
+  color: var(--sg-cream);
+  text-shadow: 2px 2px 0 var(--sk-ghost);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.sg-pit.is-o .sg-count {
+  top: -1.2rem;
+}
+
+.sg-pit.is-x .sg-count {
+  bottom: -1.2rem;
+}
+
+.sg-store .sg-count {
+  bottom: 0.45rem;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.65rem;
+  color: var(--sg-gold);
+  background: rgba(43, 22, 8, 0.8);
+}
+
+/* Bahay you can pick after a right answer */
+.sg-pit.is-pickable {
+  cursor: pointer;
+  border-color: var(--sg-gold);
+  box-shadow: 0 0 0 3px var(--sg-gold), inset 0 4px 0 rgba(0, 0, 0, 0.45);
+  animation: sg-pulse 0.9s steps(2) infinite;
+}
+
+.sg-pit.is-pickable:hover,
+.sg-pit.is-pickable:focus-visible {
+  outline: none;
+  border-color: var(--sk-select);
+  box-shadow: 0 0 0 4px var(--sk-select), inset 0 4px 0 rgba(0, 0, 0, 0.45);
+  animation: none;
+}
+
+@keyframes sg-pulse {
+  50% {
+    box-shadow: 0 0 0 5px rgba(242, 193, 78, 0.55), inset 0 4px 0 rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Where the shells in hand are */
+.sg-pit.is-hand,
+.sg-store.is-hand {
+  border-color: var(--sg-cream);
+  box-shadow: 0 0 0 4px var(--sg-cream), inset 0 4px 0 rgba(0, 0, 0, 0.45);
+}
+
+.sg-play .sk-status {
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  background: rgba(43, 22, 8, 0.82);
+}
+
+.sg-play .sk-status:empty {
+  visibility: hidden;
+}
+
+.sg-play .sk-ready {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(30rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+}
+
+.sg-play.is-waiting .sg-table {
+  opacity: 0.55;
+}
+
+html.reduce-motion .sg-pit.is-pickable {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sg-pit.is-pickable {
+    animation: none;
+  }
+}
+
+/* ---- Phones: the board stands upright, the opponent's row on the left ---- */
+@media (max-width: 640px) {
+  .sg-table {
+    gap: 0.6rem;
+  }
+
+  .sg-board {
+    width: min(12.5rem, 100%);
+    justify-self: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto repeat(7, auto) auto;
+    gap: 0.4rem 2.2rem;
+    padding: 1rem 1.5rem;
+    border-radius: 50% / 46px;
+  }
+
+  .sg-pit,
+  .sg-store {
+    grid-column: var(--mc);
+    grid-row: var(--mr);
+  }
+
+  .sg-store {
+    min-height: 3.6rem;
+  }
+
+  .sg-pit.is-o .sg-count,
+  .sg-pit.is-x .sg-count {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  .sg-pit.is-o .sg-count {
+    left: auto;
+    right: calc(100% + 0.35rem);
+  }
+
+  .sg-pit.is-x .sg-count {
+    left: calc(100% + 0.35rem);
+  }
+
+  .sg-player {
+    padding: 0.35rem 0.5rem;
+  }
+
+  .sg-avatar {
+    width: 32px;
+    height: 32px;
+  }
+}

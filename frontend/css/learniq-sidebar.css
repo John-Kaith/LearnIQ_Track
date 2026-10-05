@@ -89,8 +89,8 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 90% 45% at 50% -5%, rgba(251, 191, 36, 0.18), transparent 55%),
-    radial-gradient(ellipse 70% 40% at 100% 100%, rgba(234, 179, 8, 0.1), transparent 50%);
+    radial-gradient(ellipse 90% 45% at 50% -5%, rgba(var(--lq-accent-violet-soft-rgb), 0.18), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 100% 100%, rgba(var(--lq-accent-violet-rgb), 0.1), transparent 50%);
   pointer-events: none;
   z-index: 0;
 }
@@ -147,9 +147,9 @@
   font-size: 0.95rem;
   background: var(--lq-gradient-accent);
   box-shadow:
-    0 0 0 1px rgba(251, 191, 36, 0.35),
-    0 10px 28px rgba(234, 179, 8, 0.28),
-    0 0 20px rgba(251, 191, 36, 0.12);
+    0 0 0 1px rgba(var(--lq-accent-violet-soft-rgb), 0.35),
+    0 10px 28px rgba(var(--lq-accent-violet-rgb), 0.28),
+    0 0 20px rgba(var(--lq-accent-violet-soft-rgb), 0.12);
 }
 
 .dashboard-shell > .sidebar .sidebar-header > .small-note {
@@ -172,7 +172,7 @@
 }
 
 .dashboard-shell > .sidebar .theme-toggle-btn:hover {
-  background: rgba(251, 191, 36, 0.22);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.22);
   border-color: var(--lq-border-accent-soft);
   box-shadow: var(--lq-glow-purple-sm);
   color: var(--lq-text-primary);
@@ -203,7 +203,7 @@
 
 .dashboard-shell > .sidebar .sidebar-join-btn:hover,
 .dashboard-shell > .sidebar .sidebar-join-btn:focus-visible {
-  background: rgba(251, 191, 36, 0.22);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.22);
   border-color: var(--lq-border-accent-soft);
   box-shadow: var(--lq-glow-purple-sm);
   color: var(--lq-text-primary);
@@ -211,7 +211,7 @@
 }
 
 .dashboard-shell > .sidebar .sidebar-join-btn:focus-visible {
-  outline: 3px solid rgba(251, 191, 36, 0.28);
+  outline: 3px solid rgba(var(--lq-accent-violet-soft-rgb), 0.28);
   outline-offset: 2px;
 }
 
@@ -275,9 +275,9 @@
 
 .dashboard-shell > .sidebar .side-links a:hover {
   color: var(--lq-text-secondary);
-  background: rgba(251, 191, 36, 0.14);
-  border-color: rgba(217, 119, 6, 0.18);
-  box-shadow: 0 0 18px rgba(234, 179, 8, 0.08);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.14);
+  border-color: rgba(var(--lq-accent-indigo-rgb), 0.18);
+  box-shadow: 0 0 18px rgba(var(--lq-accent-violet-rgb), 0.08);
 }
 
 .dashboard-shell > .sidebar .side-links a:hover i {
@@ -289,16 +289,16 @@
   font-weight: 600;
   background: linear-gradient(
     135deg,
-    rgba(251, 191, 36, 0.28) 0%,
+    rgba(var(--lq-accent-violet-soft-rgb), 0.28) 0%,
     rgba(254, 243, 199, 0.65) 48%,
     rgba(255, 251, 235, 0.9) 100%
   );
-  border: 1px solid rgba(217, 119, 6, 0.28);
-  border-left: 1px solid rgba(217, 119, 6, 0.28);
+  border: 1px solid rgba(var(--lq-accent-indigo-rgb), 0.28);
+  border-left: 1px solid rgba(var(--lq-accent-indigo-rgb), 0.28);
   padding-left: 0.85rem;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 0 18px rgba(234, 179, 8, 0.1);
+    0 0 18px rgba(var(--lq-accent-violet-rgb), 0.1);
 }
 
 .dashboard-shell > .sidebar .side-links a.active i {
@@ -550,7 +550,7 @@ html[data-theme="dark"] .dashboard-shell > .sidebar #sidebar-logout:hover {
     background: var(--lq-gradient-accent);
     color: #fff;
     font-size: 1.05rem;
-    box-shadow: 0 8px 20px rgba(234, 179, 8, 0.35);
+    box-shadow: 0 8px 20px rgba(var(--lq-accent-violet-rgb), 0.35);
     cursor: pointer;
   }
 

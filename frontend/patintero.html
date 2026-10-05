@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patintero | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/arcade-skin.css?v=2026100601" />
+  <link rel="stylesheet" href="css/patintero.css?v=2026100601" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/arcade/quiz-card.js?v=2026100601" defer></script>
+  <script src="js/pages/patintero.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Patintero (Larong Pinoy): cross every line to the far end and back home without getting
+     tagged by the taya on the lines. Tagged? Answer right to slip through (lusot), wrong and
+     you're out. Two round trips win. Menus, results and pause come from js/arcade/arcade-shell.js. -->
+<body class="patintero-page arcade-game arcade-skin">
+  <main class="wc-app" id="wc-app" aria-label="Patintero"></main>
+
+  <section class="sk-play pt-play" id="pt-play-screen" hidden>
+    <header class="sk-top">
+      <button type="button" class="sk-pause-btn" id="pt-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+        <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+      </button>
+      <p class="sk-top-title" id="pt-trips">BALIK 0 / 2</p>
+      <span class="sk-top-right pt-lives" id="pt-lives" role="img" aria-label="3 lives"></span>
+    </header>
+
+    <div class="pt-field">
+      <div class="pt-court" id="pt-court" role="application" aria-label="Patintero court. Use the arrow keys or the buttons to move.">
+        <div class="pt-grid" id="pt-grid" aria-hidden="true"></div>
+        <div class="pt-runner" id="pt-runner" aria-hidden="true"></div>
+        <div class="pt-guards" id="pt-guards" aria-hidden="true"></div>
+      </div>
+      <p class="pt-goal" id="pt-goal">GO TO THE FAR END ↑</p>
+    </div>
+
+    <div class="pt-pad" aria-label="Move">
+      <button type="button" class="sk-btn pt-pad-btn is-up" data-move="up" aria-label="Move up"><i class="fa-solid fa-caret-up" aria-hidden="true"></i></button>
+      <button type="button" class="sk-btn pt-pad-btn is-left" data-move="left" aria-label="Move left"><i class="fa-solid fa-caret-left" aria-hidden="true"></i></button>
+      <button type="button" class="sk-btn pt-pad-btn is-down" data-move="down" aria-label="Move down"><i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+      <button type="button" class="sk-btn pt-pad-btn is-right" data-move="right" aria-label="Move right"><i class="fa-solid fa-caret-right" aria-hidden="true"></i></button>
+    </div>
+
+    <p class="sk-status" id="pt-status" role="status" aria-live="polite"></p>
+
+    <div class="sk-ready" id="pt-ready" hidden>
+      <p class="sk-ready-title">Ready?</p>
+      <p class="sk-ready-text">
+        Cross every line to the <strong>far end</strong> and come <strong>back home</strong> without getting tagged.
+        The taya can only move along their line. Tagged? Answer right to slip through, wrong and you're out.
+        <strong>2 round trips</strong> win. You have 3 lives.
+      </p>
+      <button type="button" class="sk-btn sk-btn-primary" id="pt-start-btn">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> START
+      </button>
+    </div>
+
+    <p class="sk-toast" id="pt-toast" hidden></p>
+    <div id="pt-quiz"></div>
+  </section>
+</body>
+</html>

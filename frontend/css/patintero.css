@@ -1,0 +1,282 @@
+/**
+ * Patintero (patintero.html): a barangay street at night — a concrete court with
+ * chalk lines under a warm streetlight, the taya standing on their lines.
+ * Uses css/arcade-skin.css for the shared screens (load it first).
+ * Same look in light and dark mode.
+ */
+
+body.patintero-page {
+  --pt-night: #0b1024;
+  --pt-navy: #141c3a;
+  --pt-lamp: #ffd166;
+  --pt-chalk: #f1f5f9;
+  --pt-mint: #7cf0c5;
+  --pt-sky:
+    radial-gradient(circle at 84% 14%, #fff7d6 0 26px, rgba(255, 247, 214, 0.18) 27px 46px, transparent 47px),
+    radial-gradient(1px 1px at 12% 20%, #ffffff, transparent 60%) 0 0 / 160px 120px,
+    radial-gradient(1px 1px at 58% 46%, rgba(255, 255, 255, 0.8), transparent 60%) 0 0 / 210px 150px,
+    radial-gradient(ellipse 260px 220px at 14% 100%, rgba(255, 209, 102, 0.22), transparent 70%),
+    linear-gradient(180deg, #0b1024 0 40%, #121a3a 40% 70%, #1a2350 70%);
+
+  --sk-ink: #eef2ff;
+  --sk-ink-soft: rgba(238, 242, 255, 0.84);
+  --sk-ink-faint: rgba(238, 242, 255, 0.45);
+  --sk-bg: var(--pt-sky);
+  --sk-deep: var(--pt-night);
+  --sk-mid: var(--pt-navy);
+  --sk-panel: rgba(20, 28, 58, 0.86);
+  --sk-btn: rgba(20, 28, 58, 0.86);
+  --sk-hover-bg: rgba(255, 209, 102, 0.14);
+  --sk-dim: rgba(5, 8, 20, 0.78);
+  --sk-line: #e2e8f0;
+  --sk-line-soft: rgba(226, 232, 240, 0.55);
+  --sk-ghost: #05081a;
+  --sk-shadow: 4px 4px 0 #05081a;
+  --sk-title-shadow: 3px 3px 0 #05081a;
+  --sk-select: var(--pt-mint);
+  --sk-accent: var(--pt-lamp);
+  --sk-accent-fill: var(--pt-lamp);
+  --sk-accent-ink: var(--pt-night);
+  --sk-good: #86efac;
+  --sk-bad: #fda4af;
+  --sk-info: #93c5fd;
+  --sk-logo-top: #eef2ff;
+  --sk-logo-main: var(--pt-lamp);
+  --sk-logo-shadow: 4px 4px 0 #3b82f6, 8px 8px 0 #05081a;
+  --sk-cursor: ">";
+}
+
+body.patintero-page .wc-logo-top {
+  font-size: clamp(1rem, 4vw, 1.9rem);
+  letter-spacing: 0.14em;
+}
+
+body.patintero-page .wc-logo-main {
+  font-size: clamp(1.9rem, 8vw, 5rem);
+}
+
+/* ============================================================
+ * Play screen
+ * ============================================================ */
+.pt-lives {
+  display: inline-flex;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #fb7185;
+}
+
+.pt-lives .is-lost {
+  color: rgba(238, 242, 255, 0.25);
+}
+
+.pt-field {
+  position: relative;
+  z-index: 1;
+  margin: 0.6rem auto 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+}
+
+/* The court: concrete with chalk lines; 5 squares across, 9 rows */
+.pt-court {
+  position: relative;
+  height: min(60vh, 34rem);
+  aspect-ratio: 5 / 9;
+  max-width: 100%;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 209, 102, 0.22), transparent 65%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 13px),
+    #6b7280;
+  border: 4px solid var(--pt-chalk);
+  box-shadow: 6px 6px 0 var(--sk-ghost);
+  overflow: hidden;
+}
+
+.pt-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: repeat(9, minmax(0, 1fr));
+}
+
+.pt-row {
+  position: relative;
+}
+
+/* A chalk line across the middle of each taya's row, and lane marks */
+.pt-row.is-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 5px;
+  margin-top: -2px;
+  background: var(--pt-chalk);
+  box-shadow: 0 0 4px rgba(241, 245, 249, 0.5);
+}
+
+.pt-row.is-end,
+.pt-row.is-home {
+  background: repeating-linear-gradient(45deg, rgba(255, 209, 102, 0.16) 0 8px, transparent 8px 16px);
+}
+
+.pt-row-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: clamp(0.45rem, 1.6vw, 0.6rem);
+  letter-spacing: 0.2em;
+  color: rgba(255, 209, 102, 0.85);
+  transform: translate(-50%, -50%);
+}
+
+/* Lanes: thin marks between the 5 squares */
+.pt-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(20% - 1px), rgba(241, 245, 249, 0.18) calc(20% - 1px) 20%);
+  pointer-events: none;
+}
+
+.pt-runner,
+.pt-guard {
+  position: absolute;
+  z-index: 2;
+  width: 20%;
+  height: calc(100% / 9);
+  display: grid;
+  place-items: center;
+  transition: left 0.16s steps(3), top 0.16s steps(3);
+}
+
+.pt-runner {
+  z-index: 3;
+}
+
+.pt-art {
+  display: block;
+  height: 92%;
+  width: auto;
+  filter: drop-shadow(2px 2px 0 var(--sk-ghost));
+}
+
+.pt-runner .pt-art {
+  filter: drop-shadow(0 0 4px rgba(255, 209, 102, 0.9)) drop-shadow(2px 2px 0 var(--sk-ghost));
+}
+
+.pt-runner.is-tagged {
+  animation: pt-shake 0.3s steps(3) 2;
+}
+
+@keyframes pt-shake {
+  33% {
+    transform: translateX(-4px);
+  }
+  66% {
+    transform: translateX(4px);
+  }
+}
+
+.pt-daze {
+  position: absolute;
+  top: -10%;
+  right: 6%;
+  display: none;
+  font-size: 0.5rem;
+  color: var(--pt-lamp);
+  text-shadow: 2px 2px 0 var(--sk-ghost);
+}
+
+.pt-guard.is-dazed .pt-art {
+  opacity: 0.55;
+}
+
+.pt-guard.is-dazed .pt-daze {
+  display: block;
+  animation: wc-blink 0.5s steps(1, end) infinite;
+}
+
+.pt-goal {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.55rem;
+  color: var(--pt-lamp);
+  background: var(--sk-panel);
+}
+
+/* On-screen pad (also on desktop, for mouse players) */
+.pt-pad {
+  position: relative;
+  z-index: 1;
+  margin: 0.5rem auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, 3.2rem);
+  grid-template-rows: repeat(2, 2.8rem);
+  grid-template-areas: ". up ." "left down right";
+  gap: 0.35rem;
+}
+
+.pt-pad-btn {
+  padding: 0;
+  font-size: 1.1rem;
+}
+
+.pt-pad-btn.is-up {
+  grid-area: up;
+}
+
+.pt-pad-btn.is-left {
+  grid-area: left;
+}
+
+.pt-pad-btn.is-down {
+  grid-area: down;
+}
+
+.pt-pad-btn.is-right {
+  grid-area: right;
+}
+
+.pt-play .sk-status {
+  margin-top: 0.4rem;
+}
+
+.pt-play .sk-ready {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(30rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+}
+
+.pt-play.is-waiting .pt-field,
+.pt-play.is-waiting .pt-pad {
+  opacity: 0.5;
+}
+
+html.reduce-motion .pt-runner,
+html.reduce-motion .pt-guard {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-runner,
+  .pt-guard {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .pt-court {
+    height: min(52vh, 30rem);
+  }
+
+  .pt-pad {
+    grid-template-columns: repeat(3, 3.6rem);
+    grid-template-rows: repeat(2, 3rem);
+  }
+}

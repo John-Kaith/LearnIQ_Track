@@ -28,6 +28,21 @@
   --lq-accent-violet: #eab308;
   --lq-accent-violet-soft: #fbbf24;
   --lq-accent-indigo: #d97706;
+  --lq-accent-deep: #b45309;
+
+  /* Same accents as "r, g, b" for rgba(var(--…-rgb), alpha), plus the pale
+     accent text shades. Use these instead of literal gold so dark mode can
+     swap them (see html[data-theme="dark"] below). */
+  --lq-accent-blue-rgb: 202, 138, 4;
+  --lq-accent-blue-strong-rgb: 161, 98, 7;
+  --lq-accent-violet-rgb: 234, 179, 8;
+  --lq-accent-violet-soft-rgb: 251, 191, 36;
+  --lq-accent-indigo-rgb: 217, 119, 6;
+  --lq-accent-deep-rgb: 180, 83, 9;
+  --lq-accent-text: #fcd34d;
+  --lq-accent-text-soft: #fde68a;
+  --lq-accent-text-soft-rgb: 253, 230, 138;
+  --lq-accent-text-faint: #fef3c7;
 
   /* —— Borders —— */
   --lq-border-subtle: rgba(120, 53, 15, 0.12);
@@ -117,6 +132,18 @@ html[data-theme="dark"] {
   --lq-accent-violet: #8b5cf6;
   --lq-accent-violet-soft: #a78bfa;
   --lq-accent-indigo: #6366f1;
+  --lq-accent-deep: #818cf8;
+
+  --lq-accent-blue-rgb: 96, 165, 250;
+  --lq-accent-blue-strong-rgb: 59, 130, 246;
+  --lq-accent-violet-rgb: 139, 92, 246;
+  --lq-accent-violet-soft-rgb: 167, 139, 250;
+  --lq-accent-indigo-rgb: 99, 102, 241;
+  --lq-accent-deep-rgb: 129, 140, 248;
+  --lq-accent-text: #c4b5fd;
+  --lq-accent-text-soft: #ddd6fe;
+  --lq-accent-text-soft-rgb: 221, 214, 254;
+  --lq-accent-text-faint: #ede9fe;
 
   --lq-border-subtle: rgba(148, 163, 184, 0.18);
   --lq-border-accent: rgba(99, 102, 241, 0.28);
@@ -183,7 +210,7 @@ html[data-theme="dark"] {
   right: -15%;
   width: 55%;
   height: 80%;
-  background: radial-gradient(circle, rgba(202, 138, 4, 0.22) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(var(--lq-accent-blue-rgb), 0.22) 0%, transparent 68%);
   pointer-events: none;
 }
 
@@ -195,7 +222,7 @@ html[data-theme="dark"] {
   left: -10%;
   width: 45%;
   height: 70%;
-  background: radial-gradient(circle, rgba(202, 138, 4, 0.16) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(var(--lq-accent-blue-rgb), 0.16) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -360,14 +387,14 @@ html:not([data-theme="dark"]) .stat-card {
 .lq-btn--secondary,
 .btn-secondary {
   color: #fff;
-  background: rgba(202, 138, 4, 0.14);
+  background: rgba(var(--lq-accent-blue-rgb), 0.14);
   border: 1px solid var(--lq-border-accent-soft);
 }
 
 .lq-btn--ghost,
 .btn-ghost {
   color: var(--lq-text-body);
-  background: rgba(251, 191, 36, 0.08);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.08);
   border: 1px solid var(--lq-border-subtle);
 }
 
@@ -394,7 +421,7 @@ input:focus,
 select:focus,
 textarea:focus,
 .form-select:focus {
-  border-color: rgba(202, 138, 4, 0.55);
+  border-color: rgba(var(--lq-accent-blue-rgb), 0.55);
   box-shadow: var(--lq-focus-ring);
 }
 
@@ -414,9 +441,9 @@ textarea:focus,
 .lq-nav-item.is-active,
 .side-links a:hover,
 .side-links a.active {
-  background: rgba(202, 138, 4, 0.12);
-  border-color: rgba(202, 138, 4, 0.22);
-  box-shadow: 0 0 20px rgba(202, 138, 4, 0.08);
+  background: rgba(var(--lq-accent-blue-rgb), 0.12);
+  border-color: rgba(var(--lq-accent-blue-rgb), 0.22);
+  box-shadow: 0 0 20px rgba(var(--lq-accent-blue-rgb), 0.08);
   color: var(--lq-text-primary);
 }
 
@@ -441,8 +468,8 @@ textarea:focus,
 .learning-iq-ai-badge {
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #a16207;
-  background: rgba(251, 191, 36, 0.2);
+  color: var(--lq-accent-blue-strong);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.2);
   border: 1px solid var(--lq-border-accent-soft);
   box-shadow: none;
 }
@@ -458,9 +485,9 @@ html[data-theme="dark"] .learning-iq-ai-badge {
   font-size: 0.9rem;
   text-transform: none;
   letter-spacing: normal;
-  color: #a16207;
-  background: rgba(251, 191, 36, 0.14);
-  border: 1px solid rgba(217, 119, 6, 0.22);
+  color: var(--lq-accent-blue-strong);
+  background: rgba(var(--lq-accent-violet-soft-rgb), 0.14);
+  border: 1px solid rgba(var(--lq-accent-indigo-rgb), 0.22);
 }
 
 html[data-theme="dark"] .pill {
@@ -512,7 +539,7 @@ html[data-theme="dark"] .learning-iq-bar-track {
 .lq-progress-fill--strong,
 .learning-iq-bar-fill--strong {
   background: var(--lq-gradient-accent-bar);
-  box-shadow: 0 0 16px rgba(202, 138, 4, 0.5);
+  box-shadow: 0 0 16px rgba(var(--lq-accent-blue-rgb), 0.5);
 }
 
 .lq-progress-fill--focus,
@@ -529,10 +556,10 @@ html[data-theme="dark"] .learning-iq-bar-track {
 
 .lq-progress-fill--elite,
 .learning-iq-bar-fill--elite {
-  background: linear-gradient(90deg, #b45309, #ca8a04, #fbbf24, #b45309);
+  background: linear-gradient(90deg, var(--lq-accent-deep), var(--lq-accent-blue), var(--lq-accent-violet-soft), var(--lq-accent-deep));
   background-size: 200% 100%;
   animation: lq-progress-shimmer 2.8s ease-in-out infinite;
-  box-shadow: 0 0 18px rgba(202, 138, 4, 0.55), 0 0 28px rgba(251, 191, 36, 0.25);
+  box-shadow: 0 0 18px rgba(var(--lq-accent-blue-rgb), 0.55), 0 0 28px rgba(var(--lq-accent-violet-soft-rgb), 0.25);
 }
 
 @keyframes lq-progress-shimmer {

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tumbang Preso | LearnIQ Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="js/shared/theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css?v=2026100401" />
+  <link rel="stylesheet" href="css/arcade-shell.css?v=2026100501" />
+  <link rel="stylesheet" href="css/arcade-skin.css?v=2026100601" />
+  <link rel="stylesheet" href="css/tumbang-preso.css?v=2026100601" />
+  <script src="js/shared/confirm-dialog.js?v=2026092701" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026100601" defer></script>
+  <script src="js/arcade/arcade-shell.js?v=2026100601" defer></script>
+  <script src="js/arcade/chiptune.js?v=2026100501" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
+  <script src="js/arcade/quiz-card.js?v=2026100601" defer></script>
+  <script src="js/pages/tumbang-preso.entry.js?v=2026100601" defer></script>
+</head>
+<!-- Tumbang Preso (Larong Pinoy): every right answer earns a throw of your tsinelas at the can.
+     Stop the moving arrow in the green to knock it down. You and the bot take turns; most
+     knock-downs after 8 rounds wins. Menus, results and pause come from js/arcade/arcade-shell.js. -->
+<body class="tumbang-page arcade-game arcade-skin">
+  <main class="wc-app" id="wc-app" aria-label="Tumbang Preso"></main>
+
+  <section class="sk-play tp-play" id="tp-play-screen" hidden>
+    <header class="sk-top">
+      <button type="button" class="sk-pause-btn" id="tp-pause-btn" aria-label="Pause (Esc)" title="Pause (Esc)">
+        <i class="fa-solid fa-pause" aria-hidden="true"></i> PAUSE
+      </button>
+      <p class="sk-top-title" id="tp-round">ROUND 1 OF 8</p>
+      <span class="sk-top-right"><span id="tp-score-x">0</span> · <span id="tp-score-o">0</span></span>
+    </header>
+
+    <div class="tp-scoreboard">
+      <div class="tp-player is-x" id="tp-player-x">
+        <span class="tp-avatar" id="tp-avatar-x" aria-hidden="true"></span>
+        <strong>YOU</strong>
+        <span class="tp-cans" id="tp-cans-x" role="img" aria-label="0 knock-downs"></span>
+      </div>
+      <div class="tp-player is-o" id="tp-player-o">
+        <span class="tp-cans" id="tp-cans-o" role="img" aria-label="0 knock-downs"></span>
+        <strong>BOT</strong>
+        <span class="tp-avatar" id="tp-avatar-o" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <div class="tp-scene" id="tp-scene" aria-hidden="true">
+      <div class="tp-store"><span class="tp-store-sign">SARI-SARI</span></div>
+      <div class="tp-post"></div>
+      <div class="tp-road"></div>
+      <div class="tp-line"></div>
+      <div class="tp-circle"></div>
+      <div class="tp-thrower" id="tp-thrower"></div>
+      <div class="tp-can" id="tp-can"></div>
+      <div class="tp-taya" id="tp-taya"></div>
+      <div class="tp-flight" id="tp-flight"><div class="tp-arc"><div class="tp-slipper" id="tp-slipper"></div></div></div>
+      <div class="tp-landed" id="tp-landed"></div>
+      <p class="tp-shout" id="tp-shout"></p>
+    </div>
+
+    <div class="tp-aim" id="tp-aim" hidden>
+      <div class="tp-meter" id="tp-meter">
+        <span class="tp-zone is-near" id="tp-near"></span>
+        <span class="tp-zone is-hit" id="tp-hit"></span>
+        <span class="tp-needle" id="tp-needle"></span>
+      </div>
+      <button type="button" class="sk-btn sk-btn-primary tp-throw-btn" id="tp-throw-btn">
+        <i class="fa-solid fa-hand-back-fist" aria-hidden="true"></i> THROW!
+      </button>
+      <p class="tp-aim-hint">Stop the arrow in the green: tap THROW, Space or Enter.</p>
+    </div>
+
+    <p class="sk-status" id="tp-status" role="status" aria-live="polite"></p>
+
+    <div class="sk-ready" id="tp-ready" hidden>
+      <p class="sk-ready-title">Ready?</p>
+      <p class="sk-ready-text">
+        Answer right to earn a <strong>throw</strong>. Stop the moving arrow in the <strong>green</strong> to knock the can down.
+        You and the bot take turns for 8 rounds. Most knock-downs wins!
+      </p>
+      <button type="button" class="sk-btn sk-btn-primary" id="tp-start-btn">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> START
+      </button>
+    </div>
+
+    <p class="sk-toast" id="tp-toast" hidden></p>
+    <div id="tp-quiz"></div>
+  </section>
+</body>
+</html>
