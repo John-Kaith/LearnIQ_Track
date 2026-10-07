@@ -76,14 +76,24 @@
   text-decoration: none;
 }
 
+/* Word Clash: a night battle. Your fighter's letter tiles fly at the dragon. */
 .arcade-cover--wordclash {
   background:
-    radial-gradient(1px 1px at 15% 20%, #fff, transparent 60%),
-    radial-gradient(1px 1px at 72% 14%, rgba(255, 255, 255, 0.8), transparent 60%),
-    radial-gradient(2px 2px at 40% 34%, rgba(103, 232, 249, 0.7), transparent 60%),
-    radial-gradient(1px 1px at 88% 40%, rgba(255, 255, 255, 0.7), transparent 60%),
-    radial-gradient(circle at 50% -10%, rgba(139, 92, 246, 0.55), transparent 60%),
-    #150c30;
+    radial-gradient(1px 1px at 22% 14%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 9% 50%, rgba(255, 255, 255, 0.75), transparent 60%),
+    radial-gradient(2px 2px at 64% 9%, rgba(103, 232, 249, 0.8), transparent 60%),
+    radial-gradient(1px 1px at 88% 24%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 78% 46%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(1px 1px at 38% 50%, rgba(255, 255, 255, 0.6), transparent 60%),
+    linear-gradient(180deg, #120a2e 0 30%, #1d1147 30% 52%, #2b1863 52% 70%, #3b2084 70%);
+  container-type: size;
+}
+
+/* Logo, tiles and HP bars grow with the cover (not the page), so small
+   cards and narrow phones don't get crowded */
+.arcade-cover--wordclash .arcade-cover-logo,
+.arcade-wc-stage {
+  font-size: clamp(11px, min(8.5cqh, 5.6cqw), 1.5rem);
 }
 
 /* Pixel ground strip */
@@ -123,55 +133,180 @@
   text-shadow: 2px 2px 0 #8b5cf6, 4px 4px 0 #000;
 }
 
-/* Both stand on the ground strip (top of the bottom 18%) */
-.arcade-cover-fighter,
-.arcade-cover-monster {
+/* The student's fighter on a hero cover (the picture from the Arcade games) */
+.arcade-cover-fighter {
   position: absolute;
   bottom: 18%;
+  left: 13%;
   z-index: 1;
   display: grid;
   place-items: center;
-  line-height: 1;
-  font-family: "Inter", system-ui, sans-serif;
-}
-
-.arcade-cover-fighter {
-  left: 13%;
   width: min(19%, 8.5rem);
   aspect-ratio: 1;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 3rem;
+  line-height: 1;
 }
 
-.arcade-cover-fighter img {
+.arcade-cover-fighter img,
+.arcade-wc-fighter img {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
 }
 
-.arcade-cover-monster {
-  right: 12%;
-  font-size: 3.4rem;
-  transform: scaleX(-1);
-}
-
-.arcade-cover-vs {
+.arcade-wc-moon {
   position: absolute;
-  left: 50%;
-  bottom: 30%;
-  z-index: 1;
-  transform: translateX(-50%);
-  font-size: 0.85rem;
-  color: #facc15;
-  text-shadow: 2px 2px 0 #000;
+  top: 10%;
+  left: 6%;
+  height: 18%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 64% 36%, #eadba0 0 12%, transparent 13%),
+    radial-gradient(circle at 36% 66%, #eadba0 0 9%, transparent 10%),
+    #fff6d5;
+  box-shadow: 0 0 0 0.3em rgba(255, 246, 213, 0.1), 0 0 1.4em rgba(255, 246, 213, 0.35);
 }
 
-.arcade-cover--soon {
+/* Stepped pixel hills behind the fight */
+.arcade-wc-hills {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  height: 30%;
+  background: #1a0d3d;
+  clip-path: polygon(0 100%, 0 58%, 5% 58%, 5% 42%, 11% 42%, 11% 26%, 18% 26%, 18% 44%, 24% 44%, 24% 62%, 36% 62%, 36% 48%, 44% 48%, 44% 34%, 52% 34%, 52% 50%, 60% 50%, 60% 66%, 70% 66%, 70% 36%, 78% 36%, 78% 18%, 86% 18%, 86% 38%, 93% 38%, 93% 56%, 100% 56%, 100% 100%);
+}
+
+/* Fighter, letter tiles and dragon in one row on the ground strip. Sized by
+   the cover's height, so the tiles always fit between the two fighters. */
+.arcade-wc-stage {
+  position: absolute;
+  left: 6%;
+  right: 5%;
+  bottom: 18%;
+  z-index: 1;
+  height: min(42%, 25cqw);
+  display: flex;
+  align-items: flex-end;
+}
+
+.arcade-wc-side {
+  position: relative;
+  flex: none;
+  height: 100%;
+}
+
+.arcade-wc-side.is-fighter {
+  height: 68%;
+  aspect-ratio: 12 / 16;
+}
+
+.arcade-wc-side.is-dragon {
+  aspect-ratio: 24 / 20;
+}
+
+.arcade-wc-fighter {
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  height: 100%;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 3rem;
+  line-height: 1;
+}
+
+/* HP bars over their heads: you are winning, the dragon is almost down */
+.arcade-wc-hp {
+  position: absolute;
+  bottom: calc(100% + 0.45em);
+  left: 50%;
+  width: 150%;
+  height: 0.55em;
+  background: #120a2e;
+  border: 2px solid #f4f1ff;
+  box-shadow: 2px 2px 0 #000;
+  transform: translateX(-50%);
+}
+
+.arcade-wc-hp > i {
+  display: block;
+  width: 85%;
+  height: 100%;
+  background: linear-gradient(180deg, #a3ff8f 0 35%, #39ff14 35%);
+}
+
+.is-dragon > .arcade-wc-hp {
+  left: auto;
+  right: 0;
+  width: 70%;
+  transform: none;
+}
+
+.is-dragon > .arcade-wc-hp > i {
+  width: 22%;
+  background: linear-gradient(180deg, #ff8fa6 0 35%, #ff2d55 35%);
+}
+
+/* The spelled word flies in an arc and hits the dragon */
+.arcade-wc-tiles {
+  position: relative;
+  flex: 1;
+  align-self: stretch;
+}
+
+.arcade-wc-tiles > b {
+  position: absolute;
+  z-index: 2;
   display: grid;
   place-items: center;
-  font-size: 2rem;
-  color: var(--muted);
-  background: repeating-linear-gradient(45deg, rgba(var(--lq-accent-violet-rgb), 0.08) 0 10px, transparent 10px 20px);
-  border: 2px dashed var(--lq-border-accent);
+  width: 1.9em;
+  aspect-ratio: 1;
+  font-size: 0.6em;
+  font-weight: 400;
+  line-height: 1;
+  color: #150c30;
+  background: #a78bfa;
+  border: 2px solid #f4f1ff;
+  box-shadow: 2px 2px 0 #000;
+}
+
+.arcade-wc-tiles > b:nth-child(1) {
+  left: 6%;
+  bottom: 30%;
+  transform: rotate(-14deg);
+}
+
+.arcade-wc-tiles > b:nth-child(2) {
+  left: 27%;
+  bottom: 52%;
+  transform: rotate(-5deg);
+}
+
+.arcade-wc-tiles > b:nth-child(3) {
+  left: 48%;
+  bottom: 60%;
+  transform: rotate(6deg);
+}
+
+.arcade-wc-tiles > b:nth-child(4) {
+  left: 69%;
+  bottom: 46%;
+  background: #67e8f9;
+  transform: rotate(15deg);
+}
+
+.arcade-wc-boom {
+  position: absolute;
+  right: -14%;
+  bottom: 26%;
+  z-index: 1;
+  width: 2.6em;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, #fffbe6 0 22%, #facc15 23% 50%, #ff7a1a 51%);
+  clip-path: polygon(50% 0, 58.4% 29.7%, 85.4% 14.6%, 70.3% 41.6%, 100% 50%, 70.3% 58.4%, 85.4% 85.4%, 58.4% 70.3%, 50% 100%, 41.6% 70.3%, 14.6% 85.4%, 29.7% 58.4%, 0 50%, 29.7% 41.6%, 14.6% 14.6%, 41.6% 29.7%);
 }
 
 /* Tic-Tac-Know: a classroom chalkboard in a wooden frame, like the game.
@@ -592,17 +727,23 @@
   font-size: clamp(1rem, 2.4vw, 1.5rem);
 }
 
-.arcade-hero-cover .arcade-cover-monster {
-  font-size: 4.2rem;
+/* Word Clash hero: your fighter's picture is square */
+.arcade-hero-cover .arcade-wc-side.is-fighter {
+  height: 80%;
+  aspect-ratio: 1;
 }
 
-.arcade-hero-cover:hover .arcade-cover-monster {
-  animation: arcade-wobble 0.6s steps(2) infinite;
+.arcade-hero-cover:hover .is-dragon > .arcade-sprite {
+  animation: arcade-bob 0.6s steps(2) infinite;
 }
 
-@keyframes arcade-wobble {
+.arcade-hero-cover:hover .arcade-wc-boom {
+  animation: arcade-boom 0.6s steps(2) infinite;
+}
+
+@keyframes arcade-boom {
   50% {
-    transform: scaleX(-1) translateY(-4px);
+    transform: scale(0.8) rotate(12deg);
   }
 }
 
@@ -786,16 +927,6 @@ a.arcade-game:focus-visible {
   font-size: 0.9rem;
 }
 
-.arcade-game .arcade-cover-monster {
-  right: 50%;
-  transform: translateX(50%) scaleX(-1);
-  font-size: 2.2rem;
-}
-
-.arcade-game .arcade-cover--soon {
-  font-size: 2rem;
-}
-
 /* Card: logo on the left, board on the right */
 .arcade-game .arcade-cover--ttk {
   font-size: 0.75rem;
@@ -860,10 +991,6 @@ a.arcade-game:focus-visible {
 
 html[data-theme="dark"] .arcade-game-cta {
   color: var(--lq-accent-text);
-}
-
-.arcade-game.is-locked {
-  opacity: 0.8;
 }
 
 /* ---- Recent plays / Top players ---- */
@@ -1015,7 +1142,8 @@ html[data-theme="dark"] .arcade-outcome.is-draw {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arcade-hero-cover:hover .arcade-cover-monster,
+  .arcade-hero-cover:hover .is-dragon > .arcade-sprite,
+  .arcade-hero-cover:hover .arcade-wc-boom,
   .arcade-hero-cover:hover .arcade-cover-bot {
     animation: none;
   }
@@ -1026,7 +1154,8 @@ html[data-theme="dark"] .arcade-outcome.is-draw {
   }
 }
 
-html.reduce-motion .arcade-hero-cover:hover .arcade-cover-monster,
+html.reduce-motion .arcade-hero-cover:hover .is-dragon > .arcade-sprite,
+html.reduce-motion .arcade-hero-cover:hover .arcade-wc-boom,
 html.reduce-motion .arcade-hero-cover:hover .arcade-cover-bot {
   animation: none;
 }

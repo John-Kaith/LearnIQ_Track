@@ -10,14 +10,14 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="js/shared/theme-boot.js"></script>
   <link rel="stylesheet" href="style.css?v=2026100401" />
-  <link rel="stylesheet" href="css/arcade.css?v=2026100601" />
+  <link rel="stylesheet" href="css/arcade.css?v=2026100701" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
   <script src="script.js?v=2026100601" defer></script>
-  <script src="js/arcade/sprites.js?v=2026100601" defer></script>
-  <script src="js/pages/arcade.entry.js?v=2026100601" defer></script>
+  <script src="js/arcade/sprites.js?v=2026100701" defer></script>
+  <script src="js/pages/arcade.entry.js?v=2026100701" defer></script>
 </head>
 <!-- Arcade: the game library. Pick a game here; each game opens full screen
      (battle-arena.html, tic-tac-know.html, sungka.html, palosebo.html, patintero.html,
@@ -84,10 +84,9 @@
       <section class="glass-card arcade-hero" aria-labelledby="arcade-hero-title">
         <div class="arcade-hero-grid">
           <a class="arcade-cover arcade-cover--wordclash arcade-hero-cover" id="arcade-hero-cover" href="battle-arena.html" tabindex="-1" aria-hidden="true">
+            <span class="arcade-wc-moon"></span>
+            <span class="arcade-wc-hills"></span>
             <span class="arcade-cover-logo"><span>WORD</span><span>CLASH</span></span>
-            <span class="arcade-cover-fighter" id="arcade-hero-fighter">🧑‍🎓</span>
-            <span class="arcade-cover-vs">VS</span>
-            <span class="arcade-cover-monster">🐲</span>
           </a>
           <div class="arcade-hero-body">
             <p class="arcade-eyebrow" id="arcade-hero-eyebrow">Continue playing</p>
@@ -114,17 +113,7 @@
           <h2 id="arcade-games-title">All games</h2>
         </div>
         <!-- The game cards come from GAMES in js/pages/arcade.entry.js -->
-        <ul class="arcade-games" id="arcade-games">
-          <li class="is-soon">
-            <div class="arcade-game is-locked">
-              <span class="arcade-cover arcade-cover--soon" aria-hidden="true"><i class="fa-solid fa-lock"></i></span>
-              <span class="arcade-game-body">
-                <span class="arcade-game-name">More games coming soon</span>
-                <span class="arcade-game-desc">New ways to practice your lessons are on the way.</span>
-              </span>
-            </div>
-          </li>
-        </ul>
+        <ul class="arcade-games" id="arcade-games"></ul>
       </section>
 
       <div class="arcade-columns">
