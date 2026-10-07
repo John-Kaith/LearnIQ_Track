@@ -6,20 +6,24 @@ import io
 import json
 import logging
 import os
+import posixpath
 import re
 import shutil
+import threading
 import time
 import uuid
 import zipfile
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form
+from fastapi import BackgroundTasks, Body, FastAPI, File, UploadFile, HTTPException, Header, Query, Form, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
 from pypdf import PdfReader
 from supabase import create_client, Client
 
@@ -95,13 +99,147 @@ class _HideTokensInAccessLog(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(_HideTokensInAccessLog())
 
+# Browsers may only call the API from the LearnIQ site (or any localhost port, for
+# local testing). The mobile app isn't a browser, so CORS doesn't apply to it.
+# Extra sites (e.g. a new domain): CORS_ALLOWED_ORIGINS=https://a.example,https://b.example
+CORS_ALLOWED_ORIGINS = [
+    "https://learniqtrack.site",
+    "https://www.learniqtrack.site",
+    "https://api.learniqtrack.site",
+    *[o.strip() for o in (os.getenv("CORS_ALLOWED_ORIGINS") or "").split(",") if o.strip()],
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_API_DOCS_PATHS = frozenset({"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"})
+_LOCAL_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+_SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    # No other site may show LearnIQ pages inside a frame (clickjacking).
+    ("Content-Security-Policy", "frame-ancestors 'self'"),
+    ("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(self)"),
+)
+
+
+def _came_through_cloudflare(headers) -> bool:
+    """The public site reaches us through the Cloudflare Tunnel, which adds these headers."""
+    return bool(headers.get("cf-connecting-ip") or headers.get("cf-ray"))
+
+
+class SecurityMiddleware:
+    """Security headers on every response; the API docs only on the computer
+    running the backend; immersion photos only through links the API signed.
+    Plain ASGI, so file responses and background tasks work as before."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        # Normalised like StaticFiles does, so "/uploads/x/../immersion/…" can't skip the check.
+        path = posixpath.normpath("/" + scope["path"].replace("\\", "/").lstrip("/"))
+        if path in _API_DOCS_PATHS and (
+            _came_through_cloudflare(request.headers) or request.url.hostname not in _LOCAL_HOSTNAMES
+        ):
+            await JSONResponse({"detail": "Not Found"}, status_code=404)(scope, receive, send)
+            return
+        if path.lower().startswith("/uploads/immersion/"):
+            q = request.query_params
+            if not immersion_upload.photo_link_is_valid(path[len("/uploads/") :], q.get("exp"), q.get("sig")):
+                await JSONResponse(
+                    {"error": "This photo link has expired. Refresh the page to see the photo."}, status_code=403
+                )(scope, receive, send)
+                return
+
+        async def send_with_security_headers(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for name, value in _SECURITY_HEADERS:
+                    if name not in headers:
+                        headers.append(name, value)
+            await send(message)
+
+        await self.app(scope, receive, send_with_security_headers)
+
+
+app.add_middleware(SecurityMiddleware)
+
+
+class _AttemptLimiter:
+    """Counts attempts per key over a sliding window. In memory: the backend is one process."""
+
+    def __init__(self, limit: int, window_sec: int):
+        self.limit = limit
+        self.window = window_sec
+        self._hits: dict[str, deque] = {}
+        self._lock = threading.Lock()
+
+    def _recent(self, key: str, now: float) -> deque:
+        hits = self._hits.setdefault(key, deque())
+        while hits and hits[0] <= now - self.window:
+            hits.popleft()
+        return hits
+
+    def wait_seconds(self, key: str) -> int:
+        """0 if the key may try now, else the seconds until its oldest attempt expires."""
+        now = time.time()
+        with self._lock:
+            hits = self._recent(key, now)
+            if len(hits) < self.limit:
+                if not hits:
+                    del self._hits[key]
+                return 0
+            return max(1, int(hits[0] + self.window - now + 0.999))
+
+    def add(self, key: str) -> None:
+        now = time.time()
+        with self._lock:
+            if len(self._hits) > 20000:  # forget idle keys so memory stays small
+                for k in [k for k, h in self._hits.items() if not h or h[-1] <= now - self.window]:
+                    del self._hits[k]
+            self._recent(key, now).append(now)
+
+    def clear(self, key: str) -> None:
+        with self._lock:
+            self._hits.pop(key, None)
+
+
+LOGIN_LIMIT_WINDOW_SEC = 15 * 60
+# Wrong passwords: 5 for one account from one network, 10 for one account from
+# anywhere, 100 from one network (a whole school can share one IP address).
+_login_fails_account_ip = _AttemptLimiter(5, LOGIN_LIMIT_WINDOW_SEC)
+_login_fails_account = _AttemptLimiter(10, LOGIN_LIMIT_WINDOW_SEC)
+_login_fails_ip = _AttemptLimiter(100, LOGIN_LIMIT_WINDOW_SEC)
+# Password reset emails: 3 per address, 10 per network.
+_reset_emails_by_address = _AttemptLimiter(3, LOGIN_LIMIT_WINDOW_SEC)
+_reset_emails_by_ip = _AttemptLimiter(10, LOGIN_LIMIT_WINDOW_SEC)
+
+
+def _client_ip(request: Request) -> str:
+    """The visitor's IP. Behind the Cloudflare Tunnel every request comes from
+    localhost, and Cloudflare puts the real address in CF-Connecting-IP."""
+    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")
+    return ip.strip() or "unknown"
+
+
+def _too_many_attempts(wait_sec: int, what: str) -> JSONResponse:
+    minutes = max(1, (wait_sec + 59) // 60)
+    return JSONResponse(
+        {"error": f"Too many {what}. Please wait {minutes} minute{'s' if minutes != 1 else ''} and try again."},
+        status_code=429,
+        headers={"Retry-After": str(wait_sec)},
+    )
 
 
 def require_supabase():
@@ -375,68 +513,6 @@ def health():
     }
 
 
-@app.get("/test-db")
-def test_db():
-    """
-    Quick Supabase smoke test: insert -> select -> update (then cleanup).
-    Useful for confirming DB connectivity and table write/read behavior.
-    """
-    err = require_supabase()
-    if err is not None:
-        return err
-    test_id = f"SBTEST-{uuid.uuid4().hex[:8]}"
-    test_email = f"{test_id.lower()}@example.com"
-    result = {
-        "configured": is_configured(),
-        "test_id_number": test_id,
-        "insert_ok": False,
-        "select_ok": False,
-        "update_ok": False,
-        "cleanup_ok": False,
-    }
-    try:
-        inserted = db_supabase.insert_profile(
-            id_number=test_id,
-            email=test_email,
-            password="TempPass123",
-            role="student",
-            last_name="Test",
-            first_name="Supabase",
-        )
-        result["insert_ok"] = bool(
-            inserted and db_supabase.profile_lrn_from_row(inserted) == test_id
-        )
-
-        rows = [
-            r
-            for r in db_supabase.list_profiles()
-            if db_supabase.profile_lrn_from_row(r) == test_id
-        ]
-        result["select_ok"] = bool(rows)
-
-        rows_after = [
-            r
-            for r in db_supabase.list_profiles()
-            if db_supabase.profile_lrn_from_row(r) == test_id
-        ]
-        result["update_ok"] = bool(rows_after)
-
-        # Keep test data out of production tables.
-        db_supabase._sb().table("profiles").delete().eq(db_supabase.PROFILE_LRN_COLUMN, test_id).execute()
-        rows_cleanup = [
-            r
-            for r in db_supabase.list_profiles()
-            if db_supabase.profile_lrn_from_row(r) == test_id
-        ]
-        result["cleanup_ok"] = not rows_cleanup
-
-        result["message"] = "Supabase test completed."
-        return result
-    except Exception as e:
-        result["error"] = str(e)
-        return JSONResponse(result, status_code=500)
-
-
 @app.get("/")
 def home():
     return RedirectResponse(url="/login.html", status_code=302)
@@ -446,14 +522,11 @@ def home():
 
 
 @app.post("/login")
-async def login_user(body: dict):
-    print("LOGIN ENDPOINT HIT")
-    
+async def login_user(body: dict, request: Request):
     err = require_supabase()
     if err is not None:
-        print(f"DEBUG: Supabase connection error: {err}")
         return err
-    
+
     try:
         password = body.get("password") or ""
         identifier = (
@@ -471,6 +544,12 @@ async def login_user(body: dict):
                 status_code=400,
             )
 
+        ip = _client_ip(request)
+        wait = _login_fails_ip.wait_seconds(ip)
+        if wait:
+            print("LOGIN BLOCKED: too many failed attempts from one network")
+            return _too_many_attempts(wait, "failed sign-in attempts")
+
         use_email = login_method == "email" or (
             login_method != "lrn" and "@" in identifier
         )
@@ -478,73 +557,65 @@ async def login_user(body: dict):
         if use_email:
             email = identifier.lower()
             user_profile = db_supabase.get_profile_by_email(email)
-            if not user_profile:
-                return JSONResponse({"error": "Invalid credentials."}, status_code=401)
         else:
             user_profile = db_supabase.get_profile_by_id_number(identifier)
-            if not user_profile:
-                return JSONResponse({"error": "Invalid credentials."}, status_code=401)
-            email = (user_profile.get("email") or "").strip().lower()
-            if not email:
-                return JSONResponse(
-                    {
-                        "error": "No email is linked to this LRN. Contact your administrator."
-                    },
+            email = ((user_profile or {}).get("email") or "").strip().lower()
+
+        # Wrong passwords count per account (typed as email or LRN) and per network.
+        account = email or identifier.lower()
+        account_ip = f"{account}|{ip}"
+        wait = max(_login_fails_account.wait_seconds(account), _login_fails_account_ip.wait_seconds(account_ip))
+        if wait:
+            print("LOGIN BLOCKED: too many failed attempts on one account")
+            return _too_many_attempts(wait, "failed sign-in attempts")
+
+        def failed(response: JSONResponse) -> JSONResponse:
+            _login_fails_ip.add(ip)
+            _login_fails_account.add(account)
+            _login_fails_account_ip.add(account_ip)
+            return response
+
+        if not user_profile:
+            return failed(JSONResponse({"error": "Invalid credentials."}, status_code=401))
+        if not email:
+            return failed(
+                JSONResponse(
+                    {"error": "No email is linked to this LRN. Contact your administrator."},
                     status_code=404,
                 )
-
-        print(f"LOGIN IDENTIFIER: {identifier!r}, AUTH EMAIL: {email}")
+            )
 
         # Authenticate with Supabase (email + password)
-        print(f"DEBUG: Attempting Supabase auth for email: {email}")
         try:
             auth_response = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
             })
-            print(f"LOGIN PASSWORD VALIDATION RESULT: {bool(auth_response.user)}")
         except Exception as auth_error:
-            print(f"DEBUG: Supabase auth exception: {auth_error}")
-            print(f"DEBUG: Auth exception type: {type(auth_error)}")
-            return JSONResponse({"error": "Invalid credentials."}, status_code=401)
-        
+            status = getattr(auth_error, "status", None)
+            if status == 0 or status == 429 or (isinstance(status, int) and status >= 500):
+                # Supabase is busy or unreachable: not a wrong password, so not counted.
+                print("LOGIN: Supabase auth unavailable:", type(auth_error).__name__, status)
+                return JSONResponse(
+                    {"error": "Sign-in is busy right now. Please try again in a minute."}, status_code=503
+                )
+            return failed(JSONResponse({"error": "Invalid credentials."}, status_code=401))
+
         if not auth_response.user:
-            print(f"DEBUG: No user returned from auth")
-            return JSONResponse({"error": "Invalid credentials."}, status_code=401)
-        
+            return failed(JSONResponse({"error": "Invalid credentials."}, status_code=401))
+        _login_fails_account_ip.clear(account_ip)
+
         # Return safe user data with auth session
-        print(f"DEBUG: Preparing successful response")
-        print(f"DEBUG: user_profile keys: {list(user_profile.keys()) if user_profile else 'None'}")
-        print(f"DEBUG: user_profile.get('role'): {user_profile.get('role') if user_profile else 'None'}")
-        print(f"DEBUG: Type of role: {type(user_profile.get('role')) if user_profile else 'None'}")
-        
-        try:
-            role_value = user_profile.get("role")
-            print(f"DEBUG: Role value before processing: '{role_value}'")
-            print(f"DEBUG: Role value trimmed: '{role_value.strip() if role_value else None}'")
-            print(f"DEBUG: Role value lowercased: '{role_value.strip().lower() if role_value else None}'")
-            
-            safe_user = db_supabase.serialize_public_profile(user_profile)
-            safe_user["role"] = role_value.strip().lower() if role_value else "student"
-            safe_user["access_token"] = auth_response.session.access_token
-            safe_user["refresh_token"] = auth_response.session.refresh_token
-            print(f"DEBUG: Final role in safe_user: '{safe_user['role']}'")
-            print(f"DEBUG: Final role type: {type(safe_user['role'])}")
-        except Exception as response_error:
-            print(f"DEBUG: Response preparation exception: {response_error}")
-            print(f"DEBUG: Response exception type: {type(response_error)}")
-            return JSONResponse({"error": "Error preparing user response."}, status_code=500)
-        
-        print(f"DEBUG: Login successful for user: {email}")
+        role_value = user_profile.get("role")
+        safe_user = db_supabase.serialize_public_profile(user_profile)
+        safe_user["role"] = role_value.strip().lower() if role_value else "student"
+        safe_user["access_token"] = auth_response.session.access_token
+        safe_user["refresh_token"] = auth_response.session.refresh_token
         return {"user": safe_user, "message": "Login successful"}
-        
+
     except Exception as e:
-        print(f"DEBUG: Login endpoint exception: {e}")
-        print(f"DEBUG: Exception type: {type(e)}")
-        print(f"DEBUG: Exception args: {e.args}")
-        import traceback
-        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+        print("LOGIN ERROR:", type(e).__name__)
+        return JSONResponse({"error": "Sign-in failed. Please try again."}, status_code=500)
 
 
 @app.post("/auth/refresh")
@@ -571,9 +642,8 @@ async def refresh_access_token(body: dict):
             "expires_in": getattr(session, "expires_in", None),
         }
     except Exception as e:
-        msg = str(e) or "Refresh failed."
-        print("AUTH REFRESH ERROR:", msg)
-        return JSONResponse({"error": msg}, status_code=401)
+        print("AUTH REFRESH ERROR:", type(e).__name__)
+        return JSONResponse({"error": "Your session expired. Please sign in again."}, status_code=401)
 
 
 def _reset_password_redirect_url() -> str:
@@ -584,89 +654,77 @@ def _reset_password_redirect_url() -> str:
 
 
 @app.post("/forgot-password")
-async def forgot_password(body: dict):
+async def forgot_password(body: dict, request: Request):
     err = require_supabase()
     if err is not None:
         return err
+    email = (body.get("email") or "").strip()
+    if not email:
+        return JSONResponse({"error": "Email is required."}, status_code=400)
+
+    # Each request sends an email, so cap them per address and per network.
+    ip = _client_ip(request)
+    address = email.lower()
+    wait = max(_reset_emails_by_ip.wait_seconds(ip), _reset_emails_by_address.wait_seconds(address))
+    if wait:
+        return _too_many_attempts(wait, "password reset requests")
+    _reset_emails_by_ip.add(ip)
+    _reset_emails_by_address.add(address)
+
     try:
-        email = (body.get("email") or "").strip()
-
-        if not email:
-            return JSONResponse({"error": "Email is required."}, status_code=400)
-
         # Use Supabase Auth to send password reset email
-        redirect_to = _reset_password_redirect_url()
-        print(f"[DEBUG] /forgot-password redirectTo = {redirect_to!r}")
         supabase.auth.reset_password_for_email(email, {
-            "redirectTo": redirect_to
+            "redirectTo": _reset_password_redirect_url()
         })
-
-        return {"message": "Password reset instructions have been sent to your email."}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        print("FORGOT PASSWORD ERROR:", type(e).__name__)
+        return JSONResponse(
+            {"error": "Could not send the reset email right now. Please try again later."}, status_code=500
+        )
+    return {"message": "Password reset instructions have been sent to your email."}
 
 
 @app.post("/reset-password")
 async def reset_password(body: dict):
-    """Completes a Supabase password recovery: exchanges the recovery
-    token/code from the emailed link for a session, then sets the new
-    password. Frontend (reset-password.html) reads the token/code from
-    the URL and calls this."""
+    """Completes a Supabase password recovery: checks the recovery
+    token/code from the emailed link, then sets the new password for that
+    user. Frontend (reset-password.html) reads the token/code from the URL
+    and calls this. The password is set by user id, never through whatever
+    session the shared `supabase` client happens to hold (every request
+    uses that one client)."""
     err = require_supabase()
     if err is not None:
         return err
+    expired_link = JSONResponse(
+        {"error": "Could not reset password. The link may have expired — request a new one."},
+        status_code=400,
+    )
     try:
         new_password = (body.get("new_password") or "").strip()
         if len(new_password) < 8:
             return JSONResponse({"error": "Password must be at least 8 characters."}, status_code=400)
 
         access_token = body.get("access_token")
-        refresh_token = body.get("refresh_token")
         code = body.get("code")
 
-        if access_token and refresh_token:
-            supabase.auth.set_session(access_token, refresh_token)
+        if access_token:
+            res = supabase.auth.get_user(jwt=access_token)
         elif code:
-            supabase.auth.exchange_code_for_session({"auth_code": code})
+            # PKCE link: /forgot-password left the code verifier in this client.
+            res = supabase.auth.exchange_code_for_session({"auth_code": code})
         else:
             return JSONResponse(
                 {"error": "This reset link is invalid or missing. Request a new one."},
                 status_code=400,
             )
-
-        supabase.auth.update_user({"password": new_password})
+        user_id = getattr(getattr(res, "user", None), "id", None)
+        if not user_id:
+            return expired_link
+        db_supabase.set_auth_user_password(str(user_id), new_password)
         return {"message": "Password updated. You can now log in with your new password."}
     except Exception as e:
-        return JSONResponse({"error": "Could not reset password. The link may have expired — request a new one."}, status_code=400)
-
-
-@app.post("/validate-session")
-async def validate_session(body: dict):
-    err = require_supabase()
-    if err is not None:
-        return err
-    try:
-        access_token = body.get("access_token")
-        if not access_token:
-            return JSONResponse({"error": "Access token required."}, status_code=400)
-        
-        # Set the session and get current user
-        supabase.auth.set_session(access_token)
-        user = supabase.auth.get_user()
-        
-        if not user.user:
-            return JSONResponse({"error": "Invalid session."}, status_code=401)
-        
-        # Get user profile from our profiles table
-        user_profile = db_supabase.get_profile_by_email(user.user.email)
-        if not user_profile:
-            return JSONResponse({"error": "User profile not found."}, status_code=404)
-        
-        # Return safe user data
-        safe_user = db_supabase.serialize_public_profile(user_profile)
-        return {"user": safe_user, "message": "Session valid"}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        print("RESET PASSWORD ERROR:", type(e).__name__)
+        return expired_link
 
 
 _STUDENT_STRANDS = frozenset({"ABM", "HUMSS", "STEM", "TVL-HE"})
@@ -1128,11 +1186,14 @@ async def patch_my_profile(
 
 
 @app.get("/lessons")
-def list_all_lessons_admin():
-    """All uploaded lesson files (admin Uploaded Files section + dashboard stat)."""
+def list_all_lessons_admin(authorization: str | None = Header(default=None)):
+    """All uploaded lesson files (admin Uploaded Files section + dashboard stat). Admins only."""
     err = require_supabase()
     if err is not None:
         return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
     try:
         rows = db_supabase.list_all_lessons()
         lessons_out = []
@@ -1386,11 +1447,18 @@ def _subject_response(row: dict) -> dict:
 @app.get("/subjects")
 def list_subjects_endpoint(
     owner_teacher_id_number: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    """List subjects with lesson counts. Filter by owner when owner_teacher_id_number is set."""
+    """List subjects with lesson counts. Filter by owner when owner_teacher_id_number is set.
+    Signed-in users only. A join code lets anyone join the class, so it's only
+    sent to admins and to the teacher the subject belongs to."""
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
+    caller_role = str((db_supabase.get_profile_by_id_number(caller_idn) or {}).get("role") or "").strip().lower()
     try:
         owner = (owner_teacher_id_number or "").strip()
         if owner:
@@ -1398,6 +1466,14 @@ def list_subjects_endpoint(
         else:
             subjects = db_supabase.list_subjects()
         _attach_subject_aggregate_counts(subjects)
+        if caller_role != "admin":
+            own_ids: set[str] = set()
+            if caller_role == "teacher":
+                own = subjects if owner == caller_idn else db_supabase.list_subjects_for_teacher_owner(caller_idn)
+                own_ids = {str(s.get("id")) for s in own}
+            for s in subjects:
+                if str(s.get("id")) not in own_ids:
+                    s["join_code"] = None
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=502)
@@ -2301,10 +2377,13 @@ async def set_lesson_subject(body: dict, authorization: str | None = Header(defa
 
 
 @app.get("/student/lesson")
-def get_student_lesson():
+def get_student_lesson(authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    bad = _require_signed_in(authorization)
+    if bad is not None:
+        return bad
     try:
         bundle = db_supabase.get_published_lesson_with_content()
         if not bundle:
@@ -3136,15 +3215,33 @@ async def save_ai_content(body: dict, authorization: str | None = Header(default
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+def _can_open_lesson_content(caller_idn: str, lesson: dict) -> bool:
+    """Teachers and admins: any lesson. Students: the lessons /student/lessons
+    shows them, plus lessons already in their History. (The content includes
+    the quiz answers.)"""
+    prof = db_supabase.get_profile_by_id_number(caller_idn) or {}
+    if str(prof.get("role") or "").strip().lower() in ("teacher", "admin"):
+        return True
+    student_uuid = str(prof.get("id") or "")
+    return db_supabase.student_can_open_lesson(student_uuid, lesson) or db_supabase.student_has_lesson_history(
+        student_uuid, str(lesson.get("id") or "")
+    )
+
+
 @app.get("/get-content/{file_id}")
-def get_content(file_id: str):
+def get_content(file_id: str, authorization: str | None = Header(default=None)):
     err = require_supabase()
     if err is not None:
         return err
+    caller_idn = student_id_number_from_authorization(authorization)
+    if not caller_idn:
+        return JSONResponse({"error": "Sign in required."}, status_code=401)
     try:
         lesson = db_supabase.get_lesson_row(file_id)
         if not lesson:
             return JSONResponse({"error": "Content not found"}, status_code=404)
+        if not _can_open_lesson_content(caller_idn, lesson):
+            return JSONResponse({"error": "You don't have access to this lesson."}, status_code=403)
         gen = db_supabase.get_content_row(file_id) or {}
         return {
             "file_id": file_id,

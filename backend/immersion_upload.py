@@ -1,8 +1,17 @@
-"""Local disk storage for immersion Time In photos (uploads/immersion/)."""
+"""Local disk storage for immersion Time In photos (uploads/immersion/).
+
+The photos show students, so /uploads/immersion/… only opens through a link
+the API signed: /uploads/<path>?exp=<unix time>&sig=<hmac>. A copied link stops
+working within two hours. main.py's SecurityMiddleware checks the signature.
+"""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import re
+import secrets
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +22,42 @@ IMMERSION_SUBDIR = "immersion"
 
 ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
+
+_FALLBACK_LINK_SECRET = secrets.token_hex(32)  # only if no server secret is configured
+
+
+def _photo_link_key() -> bytes:
+    """Read at call time: main.py loads .env after importing this module."""
+    secret = (
+        os.getenv("UPLOAD_SIGNING_SECRET")
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_KEY")
+        or _FALLBACK_LINK_SECRET
+    ).strip()
+    return hmac.new(secret.encode("utf-8"), b"learniq-photo-links", hashlib.sha256).digest()
+
+
+def _photo_link_sig(rel: str, exp: int) -> str:
+    return hmac.new(_photo_link_key(), f"{rel}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def signed_photo_url(relative_path: str) -> str:
+    """Valid for one to two hours. Expiry is on the hour, so a page's links stay
+    the same for a while and the browser can cache the photos."""
+    rel = str(relative_path).strip().lstrip("/")
+    exp = (int(time.time()) // 3600 + 2) * 3600
+    return f"/uploads/{rel}?exp={exp}&sig={_photo_link_sig(rel, exp)}"
+
+
+def photo_link_is_valid(relative_path: str, exp: str | None, sig: str | None) -> bool:
+    try:
+        exp_at = int(exp or "")
+    except ValueError:
+        return False
+    if exp_at < time.time():
+        return False
+    rel = str(relative_path).strip().lstrip("/")
+    return hmac.compare_digest(_photo_link_sig(rel, exp_at), str(sig or ""))
 
 
 def _safe_id_number(student_id_number: str) -> str:
@@ -62,6 +107,6 @@ def photo_public_url(relative_path: str | None) -> str | None:
         return None
     p = str(relative_path).strip().lstrip("/")
     if p.startswith("uploads/"):
-        return f"/{p}"
-    return f"/uploads/{p}"
+        p = p[len("uploads/") :]
+    return signed_photo_url(p)
 # .
