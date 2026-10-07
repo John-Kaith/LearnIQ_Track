@@ -2944,7 +2944,7 @@ async function renderMetrics() {
 
     const [usersRes, lessonsRes] = await Promise.all([
       fetch(apiUrl("/users"), { headers: adminAuthHeaders() }),
-      fetch(apiUrl("/lessons")),
+      fetch(apiUrl("/lessons"), { headers: adminAuthHeaders() }),
     ]);
     let uploadedFilesCount = 0;
     if (lessonsRes.ok) {
@@ -4466,7 +4466,7 @@ async function loadAIResults() {
   `;
 
   try {
-    const response = await fetch(apiUrl("/lessons"));
+    const response = await fetch(apiUrl("/lessons"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       grid.innerHTML = emptyHtml;
       return;
@@ -4509,7 +4509,7 @@ async function loadUploadedFiles() {
   if (!tableBody) return;
 
   try {
-    const response = await fetch(apiUrl("/lessons"));
+    const response = await fetch(apiUrl("/lessons"), { headers: adminAuthHeaders() });
     if (!response.ok) {
       tableBody.innerHTML = '<tr><td colspan="6">Failed to load files.</td></tr>';
       return;
@@ -5318,7 +5318,7 @@ function renderTeacherLessonsTable(lessons, selectedId) {
 
 async function syncLessonFromServer(fileId) {
   try {
-    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(fileId)}`));
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(fileId)}`), { headers: adminAuthHeaders() });
     if (!res.ok) {
       currentQuiz = [];
       return;
@@ -5670,7 +5670,7 @@ async function hydrateTeacherDashboardSubjectHeader() {
   }
 
   try {
-    const res = await fetch(apiUrl("/subjects"));
+    const res = await fetch(apiUrl("/subjects"), { headers: adminAuthHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     const subjects = Array.isArray(data.subjects) ? data.subjects : [];
@@ -5696,7 +5696,7 @@ async function loadTeacherSubjectOptions(selectId = "upload-subject-select") {
     ? apiUrl(`/subjects?owner_teacher_id_number=${teacherId}`)
     : apiUrl("/subjects");
   try {
-    const res = await fetch(subjectsUrl);
+    const res = await fetch(subjectsUrl, { headers: adminAuthHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     const subjects = Array.isArray(data.subjects) ? data.subjects : [];
@@ -6621,7 +6621,7 @@ async function renderTeacherSubjectsPage() {
   try {
     const ownerParam = encodeURIComponent(currentUser.id_number);
     const [subjectsRes, lessonsRes] = await Promise.all([
-      fetch(apiUrl(`/subjects?owner_teacher_id_number=${ownerParam}`)),
+      fetch(apiUrl(`/subjects?owner_teacher_id_number=${ownerParam}`), { headers: adminAuthHeaders() }),
       fetch(apiUrl(`/teacher/lessons?teacher_id_number=${ownerParam}`), { headers: adminAuthHeaders() }),
     ]);
 
@@ -6927,7 +6927,7 @@ async function hydrateTeacherSubjectLessonsPage() {
   const codeStat = document.getElementById("teacher-stat-join-code");
 
   try {
-    const res = await fetch(apiUrl("/subjects"));
+    const res = await fetch(apiUrl("/subjects"), { headers: adminAuthHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     const subjects = Array.isArray(data.subjects) ? data.subjects : [];
@@ -7832,7 +7832,7 @@ async function openAdminLessonPreviewModal(lessonId, fallbackData) {
   const cached = _adminLessonPreviewCache.get(id) || fallbackData || {};
 
   try {
-    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(id)}`));
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(id)}`), { headers: adminAuthHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = typeof data?.error === "string" ? data.error : res.statusText || "Failed to load lesson";
@@ -7943,14 +7943,14 @@ async function fetchAdminTeachers() {
 }
 
 async function fetchAdminAllLessons() {
-  const res = await fetch(apiUrl("/lessons"));
+  const res = await fetch(apiUrl("/lessons"), { headers: adminAuthHeaders() });
   if (!res.ok) throw new Error(`/lessons status ${res.status}`);
   const data = await res.json();
   return Array.isArray(data.lessons) ? data.lessons : [];
 }
 
 async function fetchAdminSubjects() {
-  const res = await fetch(apiUrl("/subjects"));
+  const res = await fetch(apiUrl("/subjects"), { headers: adminAuthHeaders() });
   if (!res.ok) throw new Error(`/subjects status ${res.status}`);
   const data = await res.json();
   return Array.isArray(data.subjects) ? data.subjects : [];
@@ -9577,7 +9577,7 @@ function showEmpty(message) {
 
   async function loadStudentLesson() {
     try {
-      const res = await fetch(apiUrl("/student/lesson"));
+      const res = await fetch(apiUrl("/student/lesson"), { headers: adminAuthHeaders() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         showEmpty(err.error || "No published lesson yet. Ask your teacher to publish one.");
@@ -9675,7 +9675,7 @@ function showEmpty(message) {
 
   async function refreshSelectedLessonContent() {
     if (!selectedLesson?.file_id) return;
-    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(selectedLesson.file_id)}`));
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(selectedLesson.file_id)}`), { headers: adminAuthHeaders() });
     if (!res.ok) return;
     const payload = await res.json();
     selectedLesson = {
@@ -10051,7 +10051,7 @@ async function renderAiResultPage() {
     return;
   }
 
-  const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(fileId)}`));
+  const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(fileId)}`), { headers: adminAuthHeaders() });
   if (!res.ok) {
     reviewerList.innerHTML = '<p class="small-note">Could not load this lesson.</p>';
     quizList.innerHTML = "<li>—</li>";
@@ -10608,7 +10608,7 @@ async function renderReviewerDetailIntoModal(item) {
     return;
   }
   try {
-    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`));
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`), { headers: adminAuthHeaders() });
     if (!res.ok) {
       setHistoryDetailBody('<p class="small-note">Failed to load reviewer content.</p>');
       return;
@@ -10646,7 +10646,7 @@ async function renderActivityDetailIntoModal(item) {
     return;
   }
   try {
-    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`));
+    const res = await fetch(apiUrl(`/get-content/${encodeURIComponent(lessonId)}`), { headers: adminAuthHeaders() });
     if (!res.ok) {
       setHistoryDetailBody('<p class="small-note">Failed to load activity content.</p>');
       return;

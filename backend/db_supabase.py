@@ -55,6 +55,11 @@ def _sb():
     return supabase
 
 
+def set_auth_user_password(auth_user_id: str, password: str) -> None:
+    """Set a Supabase Auth user's password by id (admin API, needs the server key)."""
+    _sb().auth.admin.update_user_by_id(auth_user_id, {"password": password})
+
+
 def get_profile_by_credentials(id_number: str, email: str) -> dict[str, Any] | None:
     """Get a user profile by ID number and email."""
     try:
@@ -2356,7 +2361,8 @@ def insert_time_in(student_id_number: str, time_in_iso: str) -> dict[str, Any]:
 
 
 def _upload_url_for_path(path: str | None) -> str | None:
-    """Public URL for a file under uploads/ — only if the file exists on disk."""
+    """URL for a file under uploads/ — only if the file exists on disk. Immersion
+    photos get a signed link that expires (see immersion_upload.py)."""
     if not path:
         return None
     p = str(path).strip().lstrip("/")
@@ -2372,6 +2378,8 @@ def _upload_url_for_path(path: str | None) -> str | None:
         disk = immersion_upload.UPLOAD_ROOT / rel.replace("/", os.sep)
         if not disk.is_file():
             return None
+        if rel.startswith(f"{immersion_upload.IMMERSION_SUBDIR}/"):
+            return immersion_upload.signed_photo_url(rel)
     except Exception:
         return None
     return f"/uploads/{rel}"
@@ -3215,6 +3223,45 @@ def list_published_lessons_for_student(
             continue
         out.append(lesson)
     return out
+
+
+def student_can_open_lesson(student_uuid: str, lesson: dict[str, Any]) -> bool:
+    """The rule of list_published_lessons_for_student, for one lesson row:
+    published, in a subject the student is enrolled in this grading period,
+    and by that subject's teacher when the enrollment names one."""
+    sid = str(lesson.get("subject_id") or "")
+    if not student_uuid or not sid or not lesson.get("is_published"):
+        return False
+    cur = get_current_grading_period() or {}
+    access = _student_enrollment_access_map(student_uuid, cur.get("id"))
+    if sid not in access:
+        return False
+    required_teacher = access[sid]
+    lesson_teacher = (lesson.get("teacher_id_number") or "").strip()
+    return not (required_teacher and lesson_teacher and lesson_teacher != required_teacher)
+
+
+def student_has_lesson_history(student_uuid: str, lesson_id: str) -> bool:
+    """True if the student already took this lesson's quiz or activity, or it's
+    in their History (so History still opens after a grading period ends)."""
+    if not student_uuid or not lesson_id:
+        return False
+    for table in ("quiz_attempts", "activity_attempts", "student_learning_events"):
+        try:
+            res = (
+                _sb()
+                .table(table)
+                .select("lesson_id")
+                .eq("student_id", student_uuid)
+                .eq("lesson_id", lesson_id)
+                .limit(1)
+                .execute()
+            )
+            if res.data:
+                return True
+        except Exception as e:
+            print(f"student_has_lesson_history ({table}): {e}")
+    return False
 
 
 # ---------- Quiz / activity / attendance aggregations ----------
