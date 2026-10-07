@@ -109,6 +109,35 @@
       ],
       palette: { r: "#dc2626", y: "#fbbf24", d: "#92400e" },
     },
+    // Word Clash's dragon: bat wings, horns, angry eyes, open mouth with fangs
+    dragon: {
+      rows: [
+        ".....oy..........yo.....",
+        ".....oyy...yo...yyo.....",
+        "......oyy..yy..yyo......",
+        "qp....oooooooooooo....pq",
+        "pqp.oggggggggggggggo.pqp",
+        "ppqoggooggggggggooggoqpp",
+        "pqpogggwooggggoowgggopqp",
+        ".pqogggwwkggggkwwgggoqp.",
+        ".ppoddggwkggggkwggddopp.",
+        "..poddggglollolgggddop..",
+        "...oddgggllllllgggddo...",
+        "....orwrrrrrrrrrrwro....",
+        "....orwrmmmmmmmmrwro....",
+        ".....rrrrwrwwrwrrrr.....",
+        ".....oooooooooooooo.....",
+        "....gogggyyyyyygggog....",
+        "...ggogggbbbbbbgggogg...",
+        "...o..gggyyyyyyggg..o...",
+        "......dddd....dddd......",
+        ".....oooooo..oooooo.....",
+      ],
+      palette: {
+        o: "#0f2e1f", g: "#2fbf71", d: "#1b7f4a", l: "#5fd892", y: "#ffd166", b: "#e9b949",
+        w: "#ffffff", k: "#111111", r: "#7a1426", m: "#c0263c", p: "#7c3aed", q: "#4c1d95",
+      },
+    },
     // Robot opponent
     bot: {
       rows: [

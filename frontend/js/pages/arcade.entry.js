@@ -51,11 +51,22 @@
       card: "Spell the answer to defeat the monster.",
       tags: ["Spelling", "Solo", "All subjects"],
       firstPlay: "You haven't played yet. Press Play to start your first battle!",
+      // A battle: your letter tiles hit the dragon. The hero shows the fighter you picked.
       cover: function (hero) {
+        var hp = '<span class="arcade-wc-hp"><i></i></span>';
         return (
+          '<span class="arcade-wc-moon"></span><span class="arcade-wc-hills"></span>' +
           logo("WORD", "CLASH") +
-          (hero ? '<span class="arcade-cover-fighter" id="arcade-hero-fighter">🧑‍🎓</span><span class="arcade-cover-vs">VS</span>' : "") +
-          '<span class="arcade-cover-monster">🐲</span>'
+          '<span class="arcade-wc-stage">' +
+          '<span class="arcade-wc-side is-fighter">' +
+          hp +
+          (hero
+            ? '<span class="arcade-wc-fighter" id="arcade-hero-fighter">🧑‍🎓</span>'
+            : sprite("kid", { t: "#67e8f9", p: "#312e81" })) +
+          "</span>" +
+          '<span class="arcade-wc-tiles"><b>W</b><b>O</b><b>R</b><b>D</b><i class="arcade-wc-boom"></i></span>' +
+          '<span class="arcade-wc-side is-dragon">' + hp + sprite("dragon") + "</span>" +
+          "</span>"
         );
       },
     },
@@ -167,7 +178,6 @@
   function renderGameCards() {
     var list = document.getElementById("arcade-games");
     if (!list) return;
-    var soon = list.querySelector(".is-soon");
     var html = Object.keys(GAMES)
       .map(function (id) {
         var g = GAMES[id];
@@ -189,7 +199,7 @@
         );
       })
       .join("");
-    list.innerHTML = html + (soon ? soon.outerHTML : "");
+    list.innerHTML = html;
   }
 
   function esc(v) {
