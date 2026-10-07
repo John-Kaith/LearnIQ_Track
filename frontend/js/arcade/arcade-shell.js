@@ -203,7 +203,7 @@
    * src may be null while a game still makes its music (see setTrackSrc).
    */
   function createTrack(src, loop, kind) {
-    var track = { src: src, loop: !!loop, kind: kind || "sfx", el: null, wanted: false };
+    var track = { src: src, loop: !!loop, kind: kind || "sfx", el: null, wanted: false, held: false };
     tracks.push(track);
     return track;
   }
@@ -218,12 +218,14 @@
     track.src = src || null;
     if (track.wanted && track.src) {
       track.wanted = false;
-      playTrack(track);
+      if (musicHeld && track.kind === "music") track.held = true; // starts on RESUME
+      else playTrack(track);
     }
   }
 
   function playTrack(track) {
     if (!track) return;
+    track.held = false;
     if (!track.src) {
       track.wanted = true; // plays once its file is ready
       return;
@@ -249,6 +251,7 @@
   function stopTrack(track) {
     if (!track) return;
     track.wanted = false;
+    track.held = false;
     if (!track.el) return;
     track.el.pause();
     track.el.currentTime = 0;
@@ -256,6 +259,42 @@
 
   function stopAllTracks() {
     tracks.forEach(stopTrack);
+  }
+
+  /*
+   * Pause menu: the music stops where it is and goes on from there on RESUME.
+   * While held, music that finishes loading waits too (see setTrackSrc).
+   */
+  var musicHeld = false;
+
+  function holdMusic() {
+    musicHeld = true;
+    tracks.forEach(function (t) {
+      if (t.kind === "music" && t.el && !t.el.paused) {
+        t.el.pause();
+        t.held = true;
+      }
+    });
+  }
+
+  /** resume false: leaving or restarting, where the game decides what plays next. */
+  function releaseMusic(resume) {
+    musicHeld = false;
+    tracks.forEach(function (t) {
+      if (!t.held) return;
+      t.held = false;
+      if (!resume) return;
+      if (!t.el) {
+        playTrack(t);
+        return;
+      }
+      var playing = t.el.play();
+      if (playing && typeof playing.catch === "function") {
+        playing.catch(function (e) {
+          console.warn("Could not resume " + t.src + ":", e);
+        });
+      }
+    });
   }
 
   /*
@@ -754,15 +793,45 @@
     );
   }
 
+  /* Loading screen tips; a game puts its own first with game.loadingTips. */
+  var SHARED_LOADING_TIPS = [
+    "Press Esc or the pause button anytime to pause the game.",
+    "Questions you haven't seen yet come first, then the ones you missed last time.",
+    "Your class shares each lesson's questions, and the list grows as you all play.",
+    "Finish a game to earn EXP for your Arcade level.",
+    "Press CHANGE on the lesson screen to pick a different fighter.",
+  ];
+  var LOADING_CELLS = 20;
+
   function overlayMarkup(g) {
     return (
-      '<section class="battle-loading-screen" id="battle-loading-screen" hidden>' +
+      // LOADING: the game's logo, the lesson, the fighter running, 3 steps, a progress bar, a tip
+      '<section class="battle-loading-screen" id="battle-loading-screen" hidden aria-label="Loading">' +
       '<div class="battle-loading-inner">' +
-      '<div class="battle-loading-sprite" id="battle-loading-sprite" aria-hidden="true">🧑‍🎓</div>' +
-      '<p class="battle-loading-title">LOADING<span class="battle-loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></p>' +
-      '<div class="battle-loading-bar" role="status" aria-label="Loading">' +
-      "<span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>" +
-      '<p class="battle-loading-hint" id="battle-loading-hint"></p></div></section>' +
+      '<p class="wc-logo battle-loading-logo" aria-hidden="true">' +
+      '<span class="wc-logo-top">' + esc(g.title[0]) + "</span>" +
+      '<span class="wc-logo-main">' + esc(g.title[1]) + "</span></p>" +
+      '<p class="battle-loading-stage" id="battle-loading-stage" hidden>' +
+      '<span class="battle-loading-lesson" id="battle-loading-lesson"></span>' +
+      '<span class="battle-loading-diff" id="battle-loading-diff"></span></p>' +
+      '<div class="battle-loading-scene" aria-hidden="true">' +
+      '<div class="battle-loading-sprite" id="battle-loading-sprite">🧑‍🎓</div>' +
+      '<div class="battle-loading-ground"></div></div>' +
+      '<div class="wc-card battle-loading-panel">' +
+      '<ol class="battle-loading-steps">' +
+      '<li data-step="lesson"><i aria-hidden="true"></i><span>Opening the lesson</span></li>' +
+      '<li data-step="questions"><i aria-hidden="true"></i><span id="battle-loading-questions">Getting your questions</span>' +
+      '<span class="battle-loading-timer" id="battle-loading-timer" hidden>0:00</span></li>' +
+      '<li data-step="ready"><i aria-hidden="true"></i><span>Starting the game</span></li></ol>' +
+      '<div class="battle-loading-meter">' +
+      '<div class="battle-loading-cells" id="battle-loading-cells" role="progressbar" aria-label="Loading" ' +
+      'aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' + new Array(LOADING_CELLS + 1).join("<span></span>") + "</div>" +
+      '<span class="battle-loading-pct" id="battle-loading-pct" aria-hidden="true">0%</span></div>' +
+      '<p class="battle-loading-hint" id="battle-loading-hint" role="status"></p></div>' +
+      '<aside class="battle-loading-tip">' +
+      '<p class="battle-loading-tip-label" id="battle-loading-tip-label">TIP</p>' +
+      '<p class="battle-loading-tip-text" id="battle-loading-tip-text"></p></aside>' +
+      "</div></section>" +
       '<div class="battle-character-dialog" id="battle-character-dialog" hidden>' +
       '<div class="battle-character-panel" role="dialog" aria-modal="true" aria-labelledby="battle-character-title">' +
       '<div class="battle-character-head"><h3 id="battle-character-title">' + esc(g.words.chooseFighter) + "</h3>" +
@@ -794,6 +863,8 @@
    *   logTitle         menu + log screen title, e.g. "BATTLE LOG"
    *   playLabel        stage panel button, e.g. "FIGHT!"
    *   loadingText      loading screen hint while the game gets ready
+   *   loadingTips      the game's own loading screen tips: "text" or { label, text }
+   *                    (label defaults to "TIP"; the shared tips follow)
    *   playScreenId     id of the game's own full-screen play element
    *   setupHtml        extra rows for the stage panel (after the fighter)
    *   words            renames screen words (keys of DEFAULT_WORDS), e.g. { world: "SUBJECT" }
@@ -994,7 +1065,7 @@
         var el = screenEl(s);
         if (el) el.hidden = s !== name;
       });
-      $("battle-loading-screen")?.setAttribute("hidden", "");
+      hideLoading();
       playScreen()?.setAttribute("hidden", "");
       var app = $("wc-app");
       if (app) {
@@ -1017,11 +1088,136 @@
       showScreen("menu");
     }
 
+    /* ---------- loading screen ----------
+     * The lesson opens in a moment. The AI's first questions for a lesson and
+     * difficulty take about 20–40 s, so meanwhile the bar creeps toward 92% (an
+     * estimate) and a clock counts the seconds. */
+    var loadingTips = (Array.isArray(g.loadingTips) ? g.loadingTips : []).concat(SHARED_LOADING_TIPS).map(function (tip) {
+      return typeof tip === "string" ? { label: "TIP", text: tip } : { label: tip.label || "TIP", text: tip.text || "" };
+    });
+    var tipIndex = Math.floor(Math.random() * loadingTips.length);
+    var loader = { ticker: null, tipTimer: null, hideTimer: null, pct: 0, target: 0, aiSince: 0 };
+
+    function setLoadingStep(step, state) {
+      var li = document.querySelector('#battle-loading-screen [data-step="' + step + '"]');
+      if (li) li.setAttribute("data-state", state);
+    }
+
+    function setLoadingPct(pct) {
+      loader.pct = Math.max(0, Math.min(100, pct));
+      var shown = Math.round(loader.pct);
+      var lit = Math.round((loader.pct / 100) * LOADING_CELLS);
+      var cells = $("battle-loading-cells");
+      if (cells) {
+        Array.prototype.forEach.call(cells.children, function (cell, i) {
+          cell.classList.toggle("is-on", i < lit);
+          cell.classList.toggle("is-edge", i === lit - 1 && shown < 100);
+        });
+        cells.setAttribute("aria-valuenow", String(shown));
+      }
+      var label = $("battle-loading-pct");
+      if (label) label.textContent = shown + "%";
+    }
+
+    function showLoadingTip(index) {
+      if (!loadingTips.length) return;
+      tipIndex = (index + loadingTips.length) % loadingTips.length;
+      var label = $("battle-loading-tip-label");
+      var text = $("battle-loading-tip-text");
+      if (label) label.textContent = loadingTips[tipIndex].label;
+      if (text) text.textContent = loadingTips[tipIndex].text;
+    }
+
+    function tickLoading() {
+      if (loader.aiSince) {
+        var secs = (Date.now() - loader.aiSince) / 1000;
+        loader.target = 35 + 57 * (1 - Math.exp(-secs / 20));
+        var clock = $("battle-loading-timer");
+        if (clock) clock.textContent = formatClock(Math.floor(secs));
+      }
+      if (loader.pct < loader.target) setLoadingPct(loader.pct + Math.max(0.4, (loader.target - loader.pct) * 0.18));
+    }
+
+    function stopLoading() {
+      clearInterval(loader.ticker);
+      clearInterval(loader.tipTimer);
+      clearTimeout(loader.hideTimer);
+      loader.ticker = loader.tipTimer = loader.hideTimer = null;
+      loader.aiSince = 0;
+    }
+
+    function hideLoading() {
+      stopLoading();
+      var screen = $("battle-loading-screen");
+      if (!screen) return;
+      screen.setAttribute("hidden", "");
+      screen.classList.remove("is-done");
+    }
+
     function showLoading(hint) {
+      stopLoading();
       $("wc-app")?.setAttribute("hidden", "");
       playScreen()?.setAttribute("hidden", "");
+      var stage = $("battle-loading-stage");
+      if (stage) {
+        stage.hidden = !selectedLesson;
+        $("battle-loading-lesson").textContent = selectedLesson ? stageLabel(selectedLesson) : "";
+        $("battle-loading-diff").textContent = difficultyLabel(selectedDifficulty);
+      }
+      setLoadingStep("lesson", "active");
+      setLoadingStep("questions", "todo");
+      setLoadingStep("ready", "todo");
+      var questions = $("battle-loading-questions");
+      if (questions) questions.textContent = "Getting your questions";
+      $("battle-loading-timer")?.setAttribute("hidden", "");
       setLoadingHint(hint || g.loadingText);
-      $("battle-loading-screen")?.removeAttribute("hidden");
+      showLoadingTip(tipIndex + 1);
+      loader.target = 30;
+      setLoadingPct(4);
+      loader.ticker = setInterval(tickLoading, 120);
+      loader.tipTimer = setInterval(function () {
+        showLoadingTip(tipIndex + 1);
+      }, 6500);
+      var screen = $("battle-loading-screen");
+      if (screen) {
+        screen.classList.remove("is-done", "is-ai");
+        screen.removeAttribute("hidden");
+      }
+    }
+
+    /** The lesson has no questions yet at this difficulty: the AI writes them now. */
+    function showAiWriting(difficulty) {
+      setLoadingStep("lesson", "done");
+      setLoadingStep("questions", "active");
+      var questions = $("battle-loading-questions");
+      if (questions) questions.textContent = "The AI is writing new questions";
+      $("battle-loading-timer")?.removeAttribute("hidden");
+      setLoadingHint(
+        "First game on this lesson at " + (DIFFICULTIES[difficulty] || DIFFICULTIES.normal) +
+          ": the AI writes its questions now. This takes about 20–40 seconds. Next time, the game starts right away."
+      );
+      loader.aiSince = Date.now();
+      $("battle-loading-screen")?.classList.add("is-ai");
+    }
+
+    /** The game is ready: fill the bar, then fade the loading screen out (at once with reduce motion). */
+    function finishLoading() {
+      var screen = $("battle-loading-screen");
+      if (!screen || screen.hidden) return;
+      stopLoading();
+      ["lesson", "questions", "ready"].forEach(function (step) {
+        setLoadingStep(step, "done");
+      });
+      setLoadingPct(100);
+      var still =
+        document.documentElement.classList.contains("reduce-motion") ||
+        (global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      if (still) {
+        hideLoading();
+        return;
+      }
+      screen.classList.add("is-done"); // fades out and lets clicks through to the game
+      loader.hideTimer = setTimeout(hideLoading, 300);
     }
 
     function setLoadingHint(text) {
@@ -1032,7 +1228,7 @@
     function showPlayScreen() {
       playing = true;
       $("wc-app")?.setAttribute("hidden", "");
-      $("battle-loading-screen")?.setAttribute("hidden", "");
+      finishLoading();
       playScreen()?.removeAttribute("hidden");
     }
 
@@ -1547,6 +1743,7 @@
       call("onLeave", api);
       playing = false;
       closePause(true);
+      releaseMusic(false); // also when the pause menu was already hidden (Settings opened from it)
       if (target === "stages" && currentWorldId && subjects.length) {
         openStages(currentWorldId);
       } else {
@@ -1620,6 +1817,7 @@
       var el = $("wc-pause");
       if (!el || !el.hidden) return;
       call("onPause", api);
+      holdMusic();
       el.hidden = false;
       var restart = el.querySelector('[data-wc-pause="restart"]');
       if (restart) restart.hidden = typeof g.canRestart === "function" ? !g.canRestart(api) : false;
@@ -1627,11 +1825,12 @@
       playClickSound();
     }
 
-    /** silent: just hide it (game ending / leaving / restarting) without resuming the clock. */
+    /** silent: just hide it (game ending / leaving / restarting) without resuming the clock or music. */
     function closePause(silent) {
       var el = $("wc-pause");
       if (!el || el.hidden) return;
       el.hidden = true;
+      releaseMusic(!silent);
       if (silent) return;
       call("onResume", api);
     }
@@ -1972,7 +2171,7 @@
           gameName: g.name,
           playWord: String(g.playLabel || "PLAY").replace(/[^A-Za-z ]/g, "").trim() || "PLAY",
           onGenerating: function () {
-            setLoadingHint("Generating " + (DIFFICULTIES[difficulty] || "").toLowerCase() + " questions with AI…");
+            showAiWriting(difficulty);
           },
         });
       },

@@ -1145,6 +1145,11 @@
       logTitle: "BATTLE LOG",
       playLabel: "FIGHT!",
       loadingText: "Preparing your battle…",
+      loadingTips: [
+        "You get 3 hints per battle. Save them for the hardest words.",
+        "A right answer adds 3 seconds to the clock; a wrong one takes 5 away.",
+        "Get 5 answers right in a row to heal 5 HP.",
+      ],
       playScreenId: "battle-fight-screen",
       setupHtml: NEXT_OPPONENT_HTML,
       difficultyNote: function (key) {

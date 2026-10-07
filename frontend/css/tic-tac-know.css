@@ -86,7 +86,8 @@ body.ttk-page .wc-app::-webkit-scrollbar,
 }
 
 /* Chalk dust, instead of Word Clash's drifting stars */
-body.ttk-page .wc-app::before {
+body.ttk-page .wc-app::before,
+body.ttk-page .battle-loading-screen::before {
   opacity: 1;
   animation: none;
   background-image:
@@ -370,25 +371,22 @@ body.ttk-page .wc-stage-alert {
   border: 2px dashed var(--chalk-red);
 }
 
-/* Difficulty + opponent pickers */
-body.ttk-page .wc-seg .battle-difficulty-option,
-body.ttk-page .wc-seg .ttk-opponent-option {
+/* Difficulty picker */
+body.ttk-page .wc-seg .battle-difficulty-option {
   color: var(--chalk);
   background: transparent;
   border: 3px solid var(--chalk-faint);
   box-shadow: 2px 3px 0 var(--chalk-ghost);
 }
 
-body.ttk-page .wc-seg .battle-difficulty-option.is-active,
-body.ttk-page .wc-seg .ttk-opponent-option.is-active {
+body.ttk-page .wc-seg .battle-difficulty-option.is-active {
   color: var(--board-ink);
   text-shadow: none;
   background: var(--chalk-fill), var(--chalk-o);
   border-color: var(--chalk);
 }
 
-body.ttk-page .wc-seg .battle-difficulty-option:focus-visible,
-body.ttk-page .wc-seg .ttk-opponent-option:focus-visible {
+body.ttk-page .wc-seg .battle-difficulty-option:focus-visible {
   outline: 3px dashed var(--chalk-pink);
   outline-offset: 3px;
 }
@@ -635,29 +633,39 @@ body.ttk-page .battle-loading-sprite {
   filter: drop-shadow(3px 4px 0 var(--chalk-ghost));
 }
 
-body.ttk-page .battle-loading-title {
-  color: var(--chalk-o);
-  text-shadow: 0 0 2px rgba(255, 224, 138, 0.5), 3px 4px 0 rgba(255, 224, 138, 0.14);
+body.ttk-page .battle-loading-screen {
+  --ld-soft: var(--chalk-soft);
+  --ld-faint: rgba(238, 243, 234, 0.42);
 }
 
-body.ttk-page .battle-loading-bar span {
+body.ttk-page .battle-loading-lesson {
+  padding: 0;
+  background: none;
+}
+
+body.ttk-page .battle-loading-diff {
+  color: var(--board-dark);
+  background: var(--chalk-o);
+  box-shadow: 2px 3px 0 var(--chalk-ghost);
+}
+
+body.ttk-page .battle-loading-ground {
+  border-top-color: var(--chalk-line);
+}
+
+body.ttk-page .battle-loading-cells {
   border: 2px solid var(--chalk-line);
   background: transparent;
-  animation-name: ttk-chalk-block;
 }
 
-@keyframes ttk-chalk-block {
-  0%,
-  100% {
-    background: transparent;
-  }
-  50% {
-    background: var(--chalk-o);
-  }
+body.ttk-page .battle-loading-cells span.is-on {
+  background: var(--chalk-o);
+  box-shadow: none;
 }
 
-body.ttk-page .battle-loading-hint {
-  color: var(--chalk-soft);
+body.ttk-page .battle-loading-tip {
+  border-color: var(--chalk-line);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 /* ============================================================
@@ -1182,7 +1190,7 @@ body.ttk-page .battle-loading-hint {
   color: var(--chalk-x);
 }
 
-/* The opponent's question (bot or friend) */
+/* The bot's question */
 .ttk-q-panel.is-o .ttk-q-head {
   color: var(--chalk-o);
 }
@@ -1319,18 +1327,6 @@ body.ttk-page .battle-loading-hint {
   text-align: center;
   color: var(--chalk-faint);
   animation: wc-blink 1.1s steps(1, end) infinite;
-}
-
-/* ---- Stage panel: BOT / FRIEND (laid out like the difficulty picker) ---- */
-.wc-seg.ttk-opponent-picker {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.wc-seg .ttk-opponent-option {
-  padding: 0.65rem 0.2rem;
-  font: inherit;
-  font-size: 0.5rem;
-  cursor: pointer;
 }
 
 /* ---- Reduce motion ---- */

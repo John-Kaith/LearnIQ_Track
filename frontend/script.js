@@ -1135,8 +1135,7 @@ const DASHBOARD_SIDEBAR_BY_ROLE = {
     bodyClass: null,
     profileLinkId: "student-profile-chip-link",
     items: [
-      { id: "learniq-dashboard", href: "learniq-dashboard.html", icon: "fa-graduation-cap", label: "LearnIQ Dashboard" },
-      { id: "subjects", href: "subjects.html", icon: "fa-book-open", label: "My lesson" },
+      { id: "subjects", href: "subjects.html", icon: "fa-house", label: "Home" },
       { id: "archived", href: "student-archived.html", icon: "fa-box-archive", label: "Archived" },
       { id: "arcade", href: "arcade.html", icon: "fa-gamepad", label: "Arcade" },
       { id: "leaderboard", href: "leaderboard.html", icon: "fa-trophy", label: "Leaderboard" },
@@ -1171,7 +1170,6 @@ const TEACHER_PATH_TO_SIDEBAR_ID = {
 };
 
 const STUDENT_PATH_TO_SIDEBAR_ID = {
-  "learniq-dashboard.html": "learniq-dashboard",
   "my-lesson.html": "subjects",
   "subjects.html": "subjects",
   "student-archived.html": "archived",
@@ -1523,7 +1521,7 @@ async function initLearniqDashboardIfPresent() {
       const prev = Array.isArray(d.leaderboard_preview) ? d.leaderboard_preview : [];
       if (!prev.length) {
         ul.innerHTML =
-          '<li class="small-note">No rankings yet. Finish a scored quiz in My lesson to appear here.</li>';
+          '<li class="small-note">No rankings yet. Finish a scored quiz from Home to appear here.</li>';
       } else {
         const medals = { 1: "🥇 ", 2: "🥈 ", 3: "🥉 " };
         ul.innerHTML = prev
@@ -1721,7 +1719,7 @@ function hydrateTeacherOverviewInsights(d) {
   const attempts = Number(d.quiz_attempts_total || 0);
   if (attempts === 0 && total > 0 && Number(d.lessons_published || 0) > 0) {
     items.push({
-      html: "Published lessons have no quiz attempts yet — remind students to practice in My lesson.",
+      html: "Published lessons have no quiz attempts yet — remind students to practice from Home.",
       tone: "info",
     });
   }
@@ -1856,7 +1854,7 @@ function setupLeaderboardPage() {
     if (emptyTitle) emptyTitle.textContent = "No rankings yet";
     if (emptyBody) {
       emptyBody.innerHTML =
-        "When students complete quizzes in <strong>My lesson</strong>, scores appear here. Be the first on the board.";
+        "When students complete quizzes in their lessons, scores appear here. Be the first on the board.";
     }
     if (emptyCta) emptyCta.hidden = false;
     if (retryBtn) retryBtn.hidden = true;
@@ -3411,7 +3409,7 @@ function setupTeacherStudentRegistrationPage() {
     return;
   }
   if (role !== "teacher" && role !== "admin") {
-    window.location.href = role === "student" ? "learniq-dashboard.html" : "login.html";
+    window.location.href = role === "student" ? "subjects.html" : "login.html";
     return;
   }
 
@@ -5950,7 +5948,7 @@ async function joinSubjectWithCode(joinCode) {
 
 /**
  * Global "Join a class" modal, opened from the sidebar nav on any student
- * page (not just My lesson) — built once on demand, reuses joinSubjectWithCode().
+ * page (not just Home) — built once on demand, reuses joinSubjectWithCode().
  */
 /** Sidebar "+" button turns into an "×" while the Join a class modal is open. */
 function setJoinClassButtonsOpen(open) {
@@ -8656,7 +8654,7 @@ async function setupModuleSelectionPage() {
   const role = String(user.role || "").trim().toLowerCase();
 
   if (learniqLink) {
-    learniqLink.href = role === "teacher" ? "teacher-learniq-dashboard.html" : "learniq-dashboard.html";
+    learniqLink.href = role === "teacher" ? "teacher-learniq-dashboard.html" : "subjects.html";
   }
 
   if (!immersionLink) return;
@@ -10421,7 +10419,7 @@ function buildHistoryItemHtml(type, item, index) {
     const outcome = String(item.outcome || "").toLowerCase();
     const correct = Number(item.correct_answers || 0);
     const extras = [`${correct} correct`];
-    if (item.opponent === "friend" || item.opponent === "bot") extras.unshift(item.opponent === "friend" ? "vs Friend" : "vs Bot");
+    if (item.opponent === "bot") extras.unshift("vs Bot");
     if (item.difficulty) extras.unshift(String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1));
     if (item.exp_gained != null) extras.push(`+${Number(item.exp_gained)} EXP`);
     const label = outcome === "win" ? "Victory" : outcome === "draw" ? "Draw" : "Defeat";
@@ -10473,15 +10471,15 @@ function renderStudentHistoryList(tab) {
     const labels = {
       quiz: {
         title: "No quiz history yet",
-        body: "Generate or finish a quiz from My lesson — completed attempts and generated quizzes appear here.",
+        body: "Generate or finish a quiz from Home — completed attempts and generated quizzes appear here.",
       },
       reviewer: {
         title: "No reviewer history yet",
-        body: "Generate or open a reviewer from My lesson and it will appear here.",
+        body: "Generate or open a reviewer from Home and it will appear here.",
       },
       activity: {
         title: "No activity history yet",
-        body: "Generate or open activities from My lesson and they will appear here.",
+        body: "Generate or open activities from Home and they will appear here.",
       },
       arcade: {
         title: "No Arcade games yet",
@@ -10763,7 +10761,7 @@ function renderGameDetailIntoModal(item) {
   const rows = [
     ["Game", arcadeGameName("game", item)],
     item.difficulty ? ["Difficulty", String(item.difficulty).charAt(0).toUpperCase() + String(item.difficulty).slice(1)] : null,
-    item.opponent === "friend" || item.opponent === "bot" ? ["Opponent", item.opponent === "friend" ? "Friend (same device)" : "Bot"] : null,
+    item.opponent === "bot" ? ["Opponent", "Bot"] : null,
     item.match_score ? ["Final score", String(item.match_score)] : null,
     ["Correct answers", item.questions_answered != null ? `${correct} of ${Number(item.questions_answered)}` : String(correct)],
     item.exp_gained != null ? ["EXP earned", `+${Number(item.exp_gained)}`] : null,

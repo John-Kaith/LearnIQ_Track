@@ -576,6 +576,10 @@
       logTitle: "RACE LOG",
       playLabel: "CLIMB!",
       loadingText: "Greasing the poles…",
+      loadingTips: [
+        { label: "ALAM MO BA?", text: "Palosebo is a fiesta game: players climb a greased bamboo pole to reach the prize at the top." },
+        "The faster you answer right, the higher you climb.",
+      ],
       playScreenId: "pb-play-screen",
       setupHtml: SETUP_HTML,
       words: S.CLASSROOM_WORDS,

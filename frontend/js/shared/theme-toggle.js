@@ -164,8 +164,8 @@
     remount();
   });
 
-  // Clicking the LearnIQ logo goes to the signed-in user's own dashboard (student /
-  // teacher / admin). With no session (e.g. the login page) it just refreshes.
+  // Clicking the LearnIQ logo goes to the signed-in user's main page (student Home,
+  // teacher / admin dashboard). With no session (e.g. the login page) it just refreshes.
   // It used to link to login.html, which signed the user out.
   function dashboardForCurrentUser() {
     var user = null;
@@ -180,7 +180,7 @@
     if (role === "teacher") return "teacher-learniq-dashboard.html";
     if (role === "student") {
       var page = (window.location.pathname.split("/").pop() || "").toLowerCase();
-      return page.indexOf("immersion") !== -1 ? "immersion-dashboard.html" : "learniq-dashboard.html";
+      return page.indexOf("immersion") !== -1 ? "immersion-dashboard.html" : "subjects.html";
     }
     return null;
   }

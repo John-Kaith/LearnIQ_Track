@@ -162,12 +162,23 @@ class SecurityMiddleware:
                 )(scope, receive, send)
                 return
 
+        is_code = path.endswith((".js", ".css"))
+        versioned = b"v=" in scope.get("query_string", b"")
+
         async def send_with_security_headers(message):
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
                 for name, value in _SECURITY_HEADERS:
                     if name not in headers:
                         headers.append(name, value)
+                # Pages, and scripts/styles without ?v=, are checked with the server every
+                # time (a quick 304 when unchanged). Without this, browsers kept showing old
+                # pages after an update, e.g. a sidebar link that no longer exists.
+                content_type = headers.get("content-type", "")
+                if "cache-control" not in headers and (
+                    content_type.startswith("text/html") or (is_code and not versioned)
+                ):
+                    headers.append("Cache-Control", "no-cache")
             await send(message)
 
         await self.app(scope, receive, send_with_security_headers)
@@ -346,6 +357,49 @@ def _can_view_teacher_data(authorization: str | None, target_teacher_id_number: 
     if role == "admin":
         return True, None
     return False, JSONResponse({"error": "You don't have access to this teacher's data."}, status_code=403)
+
+
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_BACKUP_MODEL = "gemini-2.5-flash-lite"  # lighter, with its own quota: used when the main model is busy
+GEMINI_BUSY_STATUSES = (429, 500, 503)
+
+
+def gemini_generate(payload: dict, timeout: float = 120, budget_sec: float = 85) -> requests.Response:
+    """POST a generateContent request to Gemini and return the response.
+
+    Google answers 503 ("high demand" / "overloaded") when the model is busy and
+    429 when a model's quota is used up. A busy answer is tried again after a
+    short wait, then once on the backup model. All of it stays within budget_sec:
+    the site is behind Cloudflare, which gives up on a request after 100 seconds.
+    The key goes in a header, not the URL, so it never shows up in error logs.
+    Raises the last network error only when no attempt got an answer at all.
+    """
+    deadline = time.monotonic() + budget_sec
+    response = None
+    error: Exception | None = None
+    for model, wait in ((GEMINI_MODEL, 0), (GEMINI_MODEL, 2), (GEMINI_BACKUP_MODEL, 1)):
+        if wait:
+            time.sleep(wait)
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            break
+        try:
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                headers={"x-goog-api-key": str(API_KEY or "").strip()},
+                json=payload,
+                timeout=min(timeout, remaining),
+            )
+        except requests.RequestException as e:
+            error = e
+            print(f"AI REQUEST FAILED ({model}):", type(e).__name__)
+            continue
+        if response.status_code not in GEMINI_BUSY_STATUSES:
+            return response
+        print(f"AI BUSY ({model} answered {response.status_code}), trying again")
+    if response is None:
+        raise error or requests.RequestException("No time left to ask the AI.")
+    return response
 
 
 def gemini_text_from_result(result: dict) -> str:
@@ -982,7 +1036,7 @@ def get_admin_dashboard_stats(authorization: str | None = Header(default=None)):
     try:
         return db_supabase.get_admin_dashboard_stats()
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/admin/attendance-logs")
@@ -999,7 +1053,7 @@ def admin_list_attendance_logs(
     try:
         return {"logs": db_supabase.list_all_attendance_logs(limit)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/admin/journals-feed")
@@ -1017,7 +1071,7 @@ def admin_list_journals_feed(
     try:
         return {"journals": db_supabase.list_all_journals_admin(limit)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/admin/profile/{id_number}")
@@ -1037,7 +1091,7 @@ def admin_get_profile_by_id_number(id_number: str, authorization: str | None = H
         out.pop("password", None)
         return out
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/admin/recent-activity")
@@ -1055,7 +1109,7 @@ def admin_recent_activity(
     try:
         return {"items": db_supabase.get_admin_recent_activity(limit)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 # --- Lessons & AI (Supabase) ---
@@ -1079,7 +1133,7 @@ def list_teacher_lessons(
         import traceback
         print("TEACHER LESSONS ERROR:", repr(e))
         traceback.print_exc()
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/dashboard-stats")
@@ -1098,7 +1152,7 @@ def get_teacher_dashboard_stats(authorization: str | None = Header(default=None)
             return JSONResponse({"error": "Teacher access only."}, status_code=403)
         return db_supabase.get_teacher_learniq_dashboard_stats(idn)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 def _profile_response_payload(prof: dict) -> dict:
     """Shared shape returned by GET /me and PATCH /me/profile."""
@@ -1120,7 +1174,7 @@ def get_me(authorization: str | None = Header(default=None)):
             return JSONResponse({"error": "Profile not found."}, status_code=404)
         return _profile_response_payload(prof)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.patch("/me/profile")
@@ -1182,7 +1236,7 @@ async def patch_my_profile(
                 },
                 status_code=500,
             )
-        return JSONResponse({"error": msg}, status_code=502)
+        return JSONResponse({"error": msg}, status_code=503)
 
 
 @app.get("/lessons")
@@ -1210,7 +1264,7 @@ def list_all_lessons_admin(authorization: str | None = Header(default=None)):
             )
         return {"lessons": lessons_out, "count": len(lessons_out)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/publish-lesson")
@@ -1231,7 +1285,7 @@ async def publish_lesson(body: dict, authorization: str | None = Header(default=
         db_supabase.publish_lesson(str(lesson_id))
         return {"published_file_id": lesson_id, "message": "Students can now open this lesson on their dashboard."}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/unpublish-lesson")
@@ -1254,7 +1308,7 @@ async def unpublish_lesson(body: dict, authorization: str | None = Header(defaul
         db_supabase.unpublish_lesson(str(lesson_id))
         return {"unpublished_file_id": lesson_id, "message": "Lesson is no longer visible to students."}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/lessons")
@@ -1297,7 +1351,7 @@ def get_student_lessons(
         return {"lessons": lessons}
     except Exception as e:
         print("STUDENT LESSONS ERROR:", str(e))
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/subjects")
@@ -1328,7 +1382,7 @@ def list_student_enrolled_subjects_endpoint(
         )
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/subjects/archived")
@@ -1354,7 +1408,7 @@ def list_student_archived_subjects_endpoint(
         subjects = db_supabase.list_archived_subjects_for_student(student_uuid, period_id)
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.patch("/student/subjects/{subject_id}/enrollment")
@@ -1407,7 +1461,7 @@ async def patch_student_subject_enrollment_endpoint(
             student_uuid, str(subject_id), period_id, new_status
         )
         if not updated:
-            return JSONResponse({"error": "Could not update enrollment"}, status_code=502)
+            return JSONResponse({"error": "Could not update enrollment"}, status_code=503)
         return {
             "ok": True,
             "action": action,
@@ -1417,7 +1471,7 @@ async def patch_student_subject_enrollment_endpoint(
     except ValueError as ve:
         return JSONResponse({"error": str(ve)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _attach_subject_aggregate_counts(subjects: list[dict]) -> None:
@@ -1476,7 +1530,7 @@ def list_subjects_endpoint(
                     s["join_code"] = None
         return {"subjects": subjects, "count": len(subjects)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/subjects")
@@ -1527,7 +1581,7 @@ async def create_subject_endpoint(body: dict, authorization: str | None = Header
         # Friendly error if the database uniqueness constraint is violated.
         if "duplicate" in msg.lower() or "unique" in msg.lower():
             return JSONResponse({"error": "A subject with this name already exists."}, status_code=409)
-        return JSONResponse({"error": msg}, status_code=502)
+        return JSONResponse({"error": msg}, status_code=503)
 
 
 @app.post("/subjects/join")
@@ -1564,7 +1618,7 @@ async def join_subject_with_code_endpoint(body: dict = Body(...), authorization:
             return JSONResponse({"error": msg}, status_code=404)
         return JSONResponse({"error": msg}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/subjects/{subject_id}/people")
@@ -1595,7 +1649,7 @@ def subject_people_endpoint(subject_id: str, authorization: str | None = Header(
         teacher = db_supabase.serialize_public_profile(teacher_prof) if teacher_prof else None
         return {"teacher": teacher, "students": students, "count": len(students)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _subject_people_access(subject: dict, caller_prof: dict | None, caller_idn: str) -> bool:
@@ -1632,7 +1686,7 @@ def list_subject_announcements_endpoint(subject_id: str, authorization: str | No
     try:
         return {"announcements": db_supabase.list_subject_announcements(subject_id, viewer_id_number=caller_idn)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/subjects/{subject_id}/announcements")
@@ -1665,7 +1719,7 @@ async def create_subject_announcement_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.delete("/subjects/{subject_id}/announcements/{announcement_id}")
@@ -1696,7 +1750,7 @@ async def delete_subject_announcement_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _announcement_access_or_403(subject_id: str, announcement_id: str, authorization: str | None):
@@ -1745,7 +1799,7 @@ async def create_announcement_comment_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/subjects/{subject_id}/announcements/{announcement_id}/react")
@@ -1766,7 +1820,7 @@ async def toggle_announcement_reaction_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/subjects/{subject_id}/regenerate-code")
@@ -1798,7 +1852,7 @@ async def regenerate_subject_join_code_endpoint(
     except PermissionError as pe:
         return JSONResponse({"error": str(pe)}, status_code=403)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.put("/subjects/{subject_id}")
@@ -1834,7 +1888,7 @@ async def update_subject_endpoint(subject_id: str, body: dict, authorization: st
         msg = str(e)
         if "duplicate" in msg.lower() or "unique" in msg.lower():
             return JSONResponse({"error": "Another subject already uses this name."}, status_code=409)
-        return JSONResponse({"error": msg}, status_code=502)
+        return JSONResponse({"error": msg}, status_code=503)
 
 
 _LESSON_FILE_MEDIA = {
@@ -1954,10 +2008,6 @@ def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]], prompt: str | Non
     if not images or not API_KEY or not str(API_KEY).strip():
         return ""
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.5-flash:generateContent?key={API_KEY}"
-    )
     if prompt is None:
         prompt = (
             "These images are consecutive slides from a lesson presentation. "
@@ -1976,11 +2026,7 @@ def _gemini_ocr_lesson_images(images: list[tuple[str, bytes]], prompt: str | Non
             }
         )
     try:
-        response = requests.post(
-            url,
-            json={"contents": [{"parts": parts}]},
-            timeout=180,
-        )
+        response = gemini_generate({"contents": [{"parts": parts}]}, timeout=180, budget_sec=95)
         result = response.json()
         if response.status_code != 200:
             print(f"_gemini_ocr_lesson_images status {response.status_code}: {result}")
@@ -2271,7 +2317,7 @@ def view_lesson_file(
             return JSONResponse({"error": "You can only view your own lessons."}, status_code=403)
         return _lesson_file_response(str(lesson_id), lesson, as_attachment=download)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/lessons/{lesson_id}/file")
@@ -2305,7 +2351,7 @@ def view_student_lesson_file(
             )
         return _lesson_file_response(str(lesson_id), lesson, as_attachment=download)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.delete("/lessons/{lesson_id}")
@@ -2325,7 +2371,7 @@ async def delete_lesson_endpoint(lesson_id: str, authorization: str | None = Hea
         db_supabase.delete_lesson(str(lesson_id))
         return {"deleted_lesson_id": lesson_id}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.delete("/subjects/{subject_id}")
@@ -2348,7 +2394,7 @@ async def delete_subject_endpoint(subject_id: str, authorization: str | None = H
         db_supabase.delete_subject(subject_id)
         return {"deleted_subject_id": subject_id}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/lesson/subject")
@@ -2373,7 +2419,7 @@ async def set_lesson_subject(body: dict, authorization: str | None = Header(defa
         db_supabase.update_lesson_subject(str(lesson_id), subject_id)
         return {"lesson_id": lesson_id, "subject_id": subject_id}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/lesson")
@@ -2433,7 +2479,7 @@ def get_student_lesson(authorization: str | None = Header(default=None)):
         print(f"[DEBUG] /student/lesson returning activities: {activities}")
         return result
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/leaderboard")
@@ -2445,7 +2491,7 @@ def get_student_leaderboard(limit: int = Query(50, ge=1, le=200)):
     try:
         return db_supabase.get_learniq_leaderboard(limit=limit)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/dashboard-stats")
@@ -2460,7 +2506,7 @@ def get_student_dashboard_stats(authorization: str | None = Header(default=None)
     try:
         return db_supabase.get_student_learniq_dashboard_stats(sid)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/learning-iq")
@@ -2475,7 +2521,7 @@ def get_student_learning_iq_endpoint(authorization: str | None = Header(default=
     try:
         return db_supabase.compute_student_learning_iq(sid)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/upload-lesson")
@@ -2515,7 +2561,7 @@ async def upload_lesson_json(body: dict, authorization: str | None = Header(defa
         )
         return lesson
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/upload-file")
@@ -2607,7 +2653,7 @@ async def upload_file(
 
         print(f"UPLOAD FAILED: {e}")
         traceback.print_exc()
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/generate-reviewer")
@@ -2645,11 +2691,10 @@ def generate_reviewer(body: dict, authorization: str | None = Header(default=Non
     if len(source) > REVIEWER_SOURCE_MAX_CHARS:
         source = source[:REVIEWER_SOURCE_MAX_CHARS] + "\n\n[…excerpt truncated for length…]"
     prompt = REVIEWER_PROMPT_TEMPLATE.format(source=source)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     print("SENDING TO AI API (reviewer)")
-    response = requests.post(url, json=payload, timeout=120)
+    response = gemini_generate(payload)
     result = response.json()
     print("AI RAW RESPONSE STATUS (reviewer):", response.status_code)
     try:
@@ -2658,17 +2703,17 @@ def generate_reviewer(body: dict, authorization: str | None = Header(default=Non
         print("AI RAW RESPONSE PRINT ERROR (reviewer):", str(e))
 
     if response.status_code != 200:
-        return JSONResponse({"error": result}, status_code=502)
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=503)
 
     reviewer_text = strip_outer_markdown_code_fence(gemini_text_from_result(result))
     if not reviewer_text:
-        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
+        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=503)
 
     try:
         db_supabase.set_reviewer(str(file_id), reviewer_text)
     except Exception as e:
         print("AI GENERATION ERROR (db write reviewer):", str(e))
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
     if not body.get("skip_cooldown"):
         start_ai_generation_cooldown("reviewer", str(file_id))
@@ -2725,11 +2770,10 @@ def generate_question(body: dict, authorization: str | None = Header(default=Non
         "LESSON TEXT:\n"
         f"{text}"
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     print("SENDING TO AI API (quiz)")
-    response = requests.post(url, json=payload, timeout=120)
+    response = gemini_generate(payload)
     result = response.json()
     print("AI RAW RESPONSE STATUS (quiz):", response.status_code)
     try:
@@ -2738,11 +2782,11 @@ def generate_question(body: dict, authorization: str | None = Header(default=Non
         print("AI RAW RESPONSE PRINT ERROR (quiz):", str(e))
 
     if response.status_code != 200:
-        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=503)
 
     raw_output = gemini_text_from_result(result)
     if not raw_output:
-        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
+        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=503)
 
     try:
         parsed = parse_model_json(raw_output)
@@ -2751,7 +2795,7 @@ def generate_question(body: dict, authorization: str | None = Header(default=Non
         print("AI GENERATION ERROR: failed to parse questions JSON")
         return JSONResponse(
             {"error": "Failed to parse quiz questions. Please retry."},
-            status_code=502,
+            status_code=503,
         )
 
     try:
@@ -2761,7 +2805,7 @@ def generate_question(body: dict, authorization: str | None = Header(default=Non
             db_supabase.append_quiz_question(str(file_id), question)
     except Exception as e:
         print("AI GENERATION ERROR (db write quiz):", str(e))
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
     if not body.get("skip_cooldown"):
         start_ai_generation_cooldown("quiz", str(file_id))
@@ -2883,30 +2927,29 @@ def _ai_battle_questions(
         "LESSON TEXT:\n"
         f"{text}"
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     print(f"SENDING TO AI API (battle_questions, {difficulty}, {count}, avoiding {len(avoid_answers)})")
     try:
-        response = requests.post(url, json=payload, timeout=120)
+        response = gemini_generate(payload)
     except requests.RequestException as e:
         print("AI REQUEST FAILED (battle_questions):", str(e))
-        return [], JSONResponse({"error": "The AI is not responding right now. Try again in a moment."}, status_code=502)
+        return [], JSONResponse({"error": "The AI is not responding right now. Try again in a moment."}, status_code=503)
     try:
         result = response.json()
     except ValueError:
         result = {}
     print("AI RAW RESPONSE STATUS (battle_questions):", response.status_code)
     if response.status_code != 200:
-        return [], JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
+        return [], JSONResponse({"error": friendly_ai_error(result)}, status_code=503)
 
     raw_output = gemini_text_from_result(result)
     if not raw_output:
-        return [], JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
+        return [], JSONResponse({"error": "AI returned no text. Try again."}, status_code=503)
     try:
         parsed = parse_model_json(raw_output)
     except (json.JSONDecodeError, ValueError):
-        return [], JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=502)
+        return [], JSONResponse({"error": "Failed to parse battle questions. Please retry."}, status_code=503)
     questions = normalize_battle_questions(
         parsed.get("questions") if isinstance(parsed, dict) else None, difficulty, limit=count
     )
@@ -2999,7 +3042,7 @@ async def generate_battle_questions(
 
         text, text_err = await run_in_threadpool(lesson_text_for_ai, lesson, allow_vision_fallback=True)
         if text_err:
-            return JSONResponse({"error": text_err}, status_code=502 if text_err == LESSON_TEXT_AI_UNAVAILABLE else 400)
+            return JSONResponse({"error": text_err}, status_code=503 if text_err == LESSON_TEXT_AI_UNAVAILABLE else 400)
         known = [str(q.get("answer") or "") for q in bank if q.get("answer")]
         new, err = await run_in_threadpool(_ai_battle_questions, text, difficulty, BATTLE_FIRST_BATCH, known)
         if err is not None:
@@ -3008,13 +3051,13 @@ async def generate_battle_questions(
         merged = bank + [q for q in new if q["answer"] not in known_set]
         if len(merged) < BATTLE_MIN_TO_PLAY:
             return JSONResponse(
-                {"error": "AI could not build enough usable questions from this lesson."}, status_code=502
+                {"error": "AI could not build enough usable questions from this lesson."}, status_code=503
             )
         try:
             await _save_battle_bank(file_id, difficulty, merged)
         except Exception as e:
             print("AI GENERATION ERROR (db write battle_questions):", str(e))
-            return JSONResponse({"error": str(e)}, status_code=502)
+            return JSONResponse({"error": str(e)}, status_code=503)
         return {"questions": merged, "difficulty": difficulty}
 
 
@@ -3105,22 +3148,21 @@ def generate_activities(body: dict, authorization: str | None = Header(default=N
         "LESSON TEXT:\n"
         f"{text}"
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    response = requests.post(url, json=payload, timeout=120)
+    response = gemini_generate(payload)
     result = response.json()
     print(f"[DEBUG] Gemini API response status: {response.status_code}")
 
     if response.status_code != 200:
         print(f"[DEBUG] Gemini API error: {result}")
-        return JSONResponse({"error": friendly_ai_error(result)}, status_code=502)
+        return JSONResponse({"error": friendly_ai_error(result)}, status_code=503)
 
     raw_output = gemini_text_from_result(result)
     print(f"[DEBUG] Raw output from Gemini: {raw_output}")
     if not raw_output:
         print(f"[DEBUG] Gemini returned no text")
-        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=502)
+        return JSONResponse({"error": "AI returned no text. Try again."}, status_code=503)
 
     try:
         activity_data = parse_model_json(raw_output)
@@ -3128,7 +3170,7 @@ def generate_activities(body: dict, authorization: str | None = Header(default=N
             raise ValueError("Invalid activities JSON format")
     except (json.JSONDecodeError, ValueError) as e:
         print(f"[DEBUG] JSON parsing error: {e}")
-        return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)
+        return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=503)
 
     # Normalize to DB storage format: list of dicts, or a single deck object for flashcards.
     normalized_activities = []
@@ -3140,7 +3182,7 @@ def generate_activities(body: dict, authorization: str | None = Header(default=N
             if isinstance(c, dict) and c.get("front") and c.get("back")
         ]
         if not cards:
-            return JSONResponse({"error": "Failed to generate flashcards. Please retry."}, status_code=502)
+            return JSONResponse({"error": "Failed to generate flashcards. Please retry."}, status_code=503)
         normalized_activities = [{"activity_type": "flashcards", "cards": cards}]
     else:
         acts = activity_data.get("activities") if isinstance(activity_data.get("activities"), list) else []
@@ -3160,7 +3202,7 @@ def generate_activities(body: dict, authorization: str | None = Header(default=N
                     continue
             normalized_activities.append({"activity_type": activity_type, "question": q, "answer": ans})
         if not normalized_activities:
-            return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=502)
+            return JSONResponse({"error": "Failed to generate activities. Please retry."}, status_code=503)
 
     try:
         # Replace activities cleanly (stable regeneration)
@@ -3169,7 +3211,7 @@ def generate_activities(body: dict, authorization: str | None = Header(default=N
         print(f"[DEBUG] Activities saved successfully")
     except Exception as e:
         print(f"[DEBUG] Database save error: {e}")
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
     if not body.get("skip_cooldown"):
         start_ai_generation_cooldown("activity", str(file_id))
@@ -3212,7 +3254,7 @@ async def save_ai_content(body: dict, authorization: str | None = Header(default
             "activities": gen.get("activities"),
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _can_open_lesson_content(caller_idn: str, lesson: dict) -> bool:
@@ -3252,7 +3294,7 @@ def get_content(file_id: str, authorization: str | None = Header(default=None)):
             "battle_questions": gen.get("battle_questions") or [],
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 # --- Quiz, attendance, journals ---
@@ -3291,7 +3333,7 @@ def student_learning_history_endpoint(
             },
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/battle-stats")
@@ -3312,7 +3354,7 @@ def student_battle_stats_endpoint(
     try:
         return {"student_id_number": sid, **db_supabase.get_student_battle_stats(sid)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/arcade-stats")
@@ -3333,7 +3375,7 @@ def student_arcade_stats_endpoint(
     try:
         return {"student_id_number": sid, **db_supabase.get_student_arcade_stats(sid)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/student/learning-history")
@@ -3377,7 +3419,7 @@ async def student_learning_history_post_endpoint(
                 {"error": "Run backend/migrations/student_learning_events_game.sql in Supabase first."},
                 status_code=503,
             )
-        return JSONResponse({"error": msg}, status_code=502)
+        return JSONResponse({"error": msg}, status_code=503)
 
 
 @app.post("/quiz-attempt")
@@ -3401,7 +3443,7 @@ async def quiz_attempt(body: dict, authorization: str | None = Header(default=No
         )
         return row
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _parse_capture_timestamp_iso(raw: str) -> datetime:
@@ -3538,7 +3580,7 @@ async def time_in(
                 },
                 status_code=503,
             )
-        return JSONResponse({"error": err_text}, status_code=502)
+        return JSONResponse({"error": err_text}, status_code=503)
 
 
 @app.post("/time-out")
@@ -3638,7 +3680,7 @@ async def time_out(
                 },
                 status_code=503,
             )
-        return JSONResponse({"error": err_text}, status_code=502)
+        return JSONResponse({"error": err_text}, status_code=503)
 
 
 IMMERSION_QR_TTL_SECONDS = 20  # a bit longer than the 15s client refresh so an
@@ -3732,7 +3774,7 @@ def teacher_immersion_recent_checkins_endpoint(
         events = db_supabase.list_recent_immersion_checkins_for_teacher(tid, since=since)
         return {"events": events, "server_time": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _immersion_display_token(teacher_id_number: str) -> str:
@@ -3811,7 +3853,7 @@ def public_immersion_recent_checkins_endpoint(
         events = db_supabase.list_recent_immersion_checkins_for_teacher(tid, since=since)
         return {"events": events, "server_time": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/student/immersion/qr-checkin")
@@ -3848,7 +3890,7 @@ async def student_immersion_qr_checkin_endpoint(
         record = db_supabase.insert_time_in(student_id, now_iso)
         return {"action": "time_in", "record": record}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/attendance-history")
@@ -3880,7 +3922,7 @@ def attendance_history(
             "total_hours_rendered": round(total, 2),
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/submit-journal")
@@ -3912,7 +3954,7 @@ async def submit_journal(
         row = db_supabase.insert_journal_linked(student_id, attendance_id, journal_body)
         return row
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/attendance/{student_id}")
@@ -3926,7 +3968,7 @@ def get_attendance(student_id: str, authorization: str | None = Header(default=N
     try:
         return db_supabase.list_attendance_by_student(student_id)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/journals/{student_id}")
@@ -3944,7 +3986,7 @@ def get_journals(student_id: str, authorization: str | None = Header(default=Non
     try:
         return db_supabase.list_journals_for_student(student_id)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/attendance")
@@ -3964,7 +4006,7 @@ async def attendance(body: dict, authorization: str | None = Header(default=None
             )
         return db_supabase.insert_attendance(sid, ev)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/attendance")
@@ -3978,7 +4020,7 @@ def attendance_list(student_id_number: str, authorization: str | None = Header(d
     try:
         return db_supabase.list_attendance_for_student(student_id_number)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/journals")
@@ -3995,7 +4037,7 @@ async def journals_create(body: dict, authorization: str | None = Header(default
             return JSONResponse({"error": "body (or journal_text) is required."}, status_code=400)
         return db_supabase.insert_journal(sid, text_body, entry_date=body.get("entry_date"))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.delete("/journals/{journal_id}")
@@ -4015,7 +4057,7 @@ def journals_delete(journal_id: str, authorization: str | None = Header(default=
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/journals")
@@ -4035,7 +4077,7 @@ def journals_list(
             return bad
         return db_supabase.list_journals_for_student(sid)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 # ============================================================
@@ -4052,7 +4094,7 @@ def list_grading_periods_endpoint():
         current = db_supabase.get_current_grading_period() or {}
         return {"periods": rows, "current_id": current.get("id")}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/grading-periods/current")
@@ -4069,7 +4111,7 @@ def current_grading_period_endpoint():
             )
         return period
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/gradecard/strands")
@@ -4091,7 +4133,7 @@ def teacher_gradecard_strands_endpoint(
         strands = db_supabase.list_gradecard_strands_for_teacher(tid)
         return {"strands": strands, "count": len(strands)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _resolve_teacher_or_admin_id(
@@ -4173,7 +4215,7 @@ async def admin_create_section_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.delete("/admin/sections/{section_id}")
@@ -4193,7 +4235,7 @@ async def admin_delete_section_endpoint(
             return JSONResponse({"error": "Section not found."}, status_code=404)
         return {"ok": True}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/admin/students-without-section")
@@ -4210,7 +4252,7 @@ def admin_students_without_section_endpoint(
         students = db_supabase.list_students_without_section()
         return {"students": students, "count": len(students)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/admin/students/section")
@@ -4234,7 +4276,7 @@ async def admin_set_student_section_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/immersion/strands")
@@ -4255,7 +4297,7 @@ def teacher_immersion_strands_endpoint(
         strands = db_supabase.list_gradecard_strands_for_teacher(tid)
         return {"strands": strands, "grade_level": "12", "count": len(strands)}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/immersion/students")
@@ -4289,7 +4331,7 @@ def teacher_immersion_students_endpoint(
             "count": len(students),
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 def _bearer_token(authorization: str | None, access_token: str | None = None) -> str | None:
@@ -4346,7 +4388,7 @@ def teacher_immersion_attendance_photo_endpoint(
             headers={"Cache-Control": "private, max-age=300"},
         )
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/immersion/attendance-session")
@@ -4380,7 +4422,7 @@ def teacher_immersion_attendance_session_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/immersion/student-overview")
@@ -4411,7 +4453,7 @@ def teacher_immersion_student_overview_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/teacher/class-attendance/start")
@@ -4454,7 +4496,7 @@ async def teacher_class_attendance_start_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/teacher/class-attendance/end")
@@ -4482,7 +4524,7 @@ async def teacher_class_attendance_end_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/class-attendance/live")
@@ -4508,7 +4550,7 @@ def teacher_class_attendance_live_endpoint(
     except PermissionError as e:
         return JSONResponse({"error": str(e)}, status_code=403)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/student/class-attendance/status")
@@ -4535,7 +4577,7 @@ def student_class_attendance_status_endpoint(
             student_uuid, student_id, sid
         )
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/student/class-attendance/check-in")
@@ -4628,7 +4670,7 @@ async def student_class_attendance_check_in_endpoint(
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/teacher/class-attendance/scan")
@@ -4676,7 +4718,7 @@ async def teacher_class_attendance_scan_endpoint(
         status_code = 409 if "already checked in" in msg.lower() else 400
         return JSONResponse({"error": msg}, status_code=status_code)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 CLASS_ATTENDANCE_QR_TTL_SECONDS = 15  # matches the on-screen rotation cadence
@@ -4787,7 +4829,7 @@ async def student_class_attendance_qr_checkin_endpoint(
         status_code = 409 if "already checked out" in msg.lower() else 400
         return JSONResponse({"error": msg}, status_code=status_code)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/teacher/gradecard/students")
@@ -4827,7 +4869,7 @@ def teacher_gradecard_students_endpoint(
             "count": len(students),
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/gradecard")
@@ -4854,7 +4896,7 @@ def get_gradecard_endpoint(
         import traceback
         print("GRADECARD ERROR:", repr(e))
         traceback.print_exc()
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/student-grades")
@@ -4922,7 +4964,7 @@ async def save_student_grade_endpoint(body: dict = Body(...), authorization: str
         row = db_supabase.upsert_student_grade(db_payload)
         return {"ok": True, "grade": row}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/gradecards")
@@ -4971,7 +5013,7 @@ async def save_gradecard_endpoint(body: dict = Body(...), authorization: str | N
         row = db_supabase.upsert_gradecard(db_payload)
         return {"ok": True, "gradecard": row}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.get("/enrollments")
@@ -4999,7 +5041,7 @@ def list_enrollments_endpoint(
         rows = db_supabase.list_enrollments_for_student(student_uuid, period_id)
         return {"enrollments": rows}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/enrollments")
@@ -5041,7 +5083,7 @@ async def upsert_enrollment_endpoint(body: dict = Body(...), authorization: str 
         )
         return {"ok": True, "enrollment": row}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 @app.post("/submit-activity")
@@ -5078,7 +5120,7 @@ async def submit_activity_endpoint(
         })
         return {"ok": True, "attempt": row}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        return JSONResponse({"error": str(e)}, status_code=503)
 
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

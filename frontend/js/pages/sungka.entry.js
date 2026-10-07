@@ -12,7 +12,7 @@
  *
  * Learning: a question from the lesson before every move. Right: you pick the
  * bahay. Wrong: the game picks one at random. The bot (Normal / Medium / Hard)
- * answers right more often and plays smarter; or play a friend on this device.
+ * answers right more often and plays smarter.
  */
 (function () {
   "use strict";
@@ -36,7 +36,6 @@
   var STEP_MS = 150;
   var QUESTION_SECONDS = { normal: 20, medium: 15, hard: 10 };
   var BOT_ACCURACY = { normal: 0.6, medium: 0.75, hard: 0.9 };
-  var OPPONENT_STORAGE_KEY = "learniq-sungka-opponent";
   var MAX_LOGGED_ANSWERS = 60;
   var SPOTS = [[50, 50], [34, 36], [66, 64], [64, 34], [36, 66], [50, 22], [50, 78], [22, 50], [78, 50]];
 
@@ -93,13 +92,6 @@
 
   var playMusic = sound.createTrack(null, true, "music");
 
-  var opponent = (function () {
-    try {
-      return localStorage.getItem(OPPONENT_STORAGE_KEY) === "friend" ? "friend" : "bot";
-    } catch (e) {
-      return "bot";
-    }
-  })();
   var match = null;
 
   function $(id) {
@@ -267,17 +259,8 @@
   /* ----------------------------------------------------------
    * Players
    * ---------------------------------------------------------- */
-  function isFriendMatch() {
-    return !!match && match.opponent === "friend";
-  }
-
   function nameOf(player) {
-    if (player === "x") {
-      if (!isFriendMatch()) return "YOU";
-      var first = String(S.playerName() || "").trim().split(/\s+/)[0] || "PLAYER 1";
-      return first.toUpperCase().slice(0, 12);
-    }
-    return isFriendMatch() ? "PLAYER 2" : "BOT";
+    return player === "x" ? "YOU" : "BOT";
   }
 
   /* ----------------------------------------------------------
@@ -374,13 +357,13 @@
     var live = match.started && !match.ended;
     $("sg-player-x").classList.toggle("is-turn", live && match.turn === "x");
     $("sg-player-o").classList.toggle("is-turn", live && match.turn === "o");
-    $("sg-turn").textContent = !live ? "SUNGKA" : match.turn === "x" ? (isFriendMatch() ? nameOf("x") + "'S TURN" : "YOUR TURN") : nameOf("o") + "'S TURN";
+    $("sg-turn").textContent = !live ? "SUNGKA" : match.turn === "x" ? "YOUR TURN" : "BOT'S TURN";
   }
 
   function renderAvatars() {
     S.renderCharacterInto($("sg-avatar-x"));
     var o = $("sg-avatar-o");
-    if (o) o.innerHTML = isFriendMatch() ? SP.sprite("kid", SP.KIDS[2], { cls: "sg-avatar-art" }) : SP.sprite("bot", null, { cls: "sg-avatar-art" });
+    if (o) o.innerHTML = SP.sprite("bot", null, { cls: "sg-avatar-art" });
   }
 
   function markHand(pos, hand) {
@@ -432,7 +415,7 @@
         resolve(pos);
       };
       renderBoard();
-      setStatus(player === "x" && !isFriendMatch() ? "PICK ONE OF YOUR BAHAY" : nameOf(player) + ": PICK A BAHAY");
+      setStatus("PICK ONE OF YOUR BAHAY");
       var first = document.querySelector("#sg-board .sg-pit.is-pickable");
       if (first) first.focus({ preventScroll: true });
     });
@@ -489,14 +472,14 @@
     }
     match.moves += 1;
     $("sg-moves").textContent = "MOVE " + match.moves;
-    var human = player === "x" || isFriendMatch();
+    var human = player === "x";
     var pos;
     if (human) {
       var q = nextQuestion();
       match.shown.push(q.answer);
-      setStatus(player === "x" && !isFriendMatch() ? "ANSWER TO PICK YOUR BAHAY" : nameOf(player) + ": ANSWER TO PICK A BAHAY");
+      setStatus("ANSWER TO PICK YOUR BAHAY");
       var res = await quiz.ask({
-        label: player === "x" && !isFriendMatch() ? "YOUR MOVE" : nameOf(player) + "'S MOVE",
+        label: "YOUR MOVE",
         who: player,
         question: q.question,
         choices: Q.choicesFor(q, match.bank, 4),
@@ -506,7 +489,7 @@
         continueMs: { correct: 900, wrong: 2400 },
       });
       if (!res || !match || match.token !== token) return;
-      if (player === "x") logAnswer(q, res);
+      logAnswer(q, res);
       if (res.correct) {
         pos = await pickPit(player, token);
         if (pos == null || !match || match.token !== token) return;
@@ -529,7 +512,7 @@
     var result = await animateMove(pos, player, token);
     if (!result || !match || match.token !== token) return;
     if (result.extra && legalMoves(match.board, player).length) {
-      showToast(player === "x" && !isFriendMatch() ? "ULO! ANOTHER MOVE" : nameOf(player) + " GETS ANOTHER MOVE", "is-info", 1100);
+      showToast(player === "x" ? "ULO! ANOTHER MOVE" : "BOT GETS ANOTHER MOVE", "is-info", 1100);
       if (!(await wait(700, token))) return;
     } else {
       match.turn = other(player);
@@ -621,7 +604,7 @@
       lesson_id: match.lessonId,
       outcome: outcome,
       difficulty: match.difficulty,
-      opponent: match.opponent,
+      opponent: "bot",
       match_score: progress.score,
       shells_won: x,
       correct_answers: match.correct,
@@ -640,12 +623,9 @@
     var ended = match;
     setTimeout(function () {
       if (match !== ended) return;
-      var friend = isFriendMatch();
-      var title;
-      if (friend) title = outcome === "draw" ? "TABLA!" : (outcome === "win" ? nameOf("x") : nameOf("o")) + " WINS!";
-      else title = outcome === "win" ? "PANALO!" : outcome === "draw" ? "TABLA!" : "TALO!";
+      var title = outcome === "win" ? "PANALO!" : outcome === "draw" ? "TABLA!" : "TALO!";
       var sub =
-        (friend ? nameOf("x") + " collected " + x + " shells, " + nameOf("o") + " " + o + ". " : "You collected " + x + " shells, the bot " + o + ". ") +
+        "You collected " + x + " shells, the bot " + o + ". " +
         match.correct + " correct answer" + (match.correct === 1 ? "" : "s") + ".";
       shell.showResults({
         outcome: outcome,
@@ -672,7 +652,6 @@
       token: String(Date.now()) + Math.random(),
       lessonId: lessonId,
       difficulty: difficulty,
-      opponent: opponent,
       bank: bank,
       bankSize: bank.length,
       unseenKeys: pick.unseenKeys,
@@ -811,7 +790,7 @@
           ? '<i class="fa-solid fa-equals" aria-hidden="true"></i> DRAW'
           : '<i class="fa-solid fa-xmark" aria-hidden="true"></i> LOST',
       cls: o === "win" ? "is-win" : o === "draw" ? "is-draw" : "is-loss",
-      meta: [S.formatLogDate(m.timestamp), S.difficultyLabel(m.difficulty), m.opponent === "friend" ? "VS FRIEND" : "VS BOT", m.subject_name || ""],
+      meta: [S.formatLogDate(m.timestamp), S.difficultyLabel(m.difficulty), m.opponent === "bot" ? "VS BOT" : "", m.subject_name || ""],
       score: m.match_score || "",
     };
   }
@@ -824,7 +803,7 @@
       chips: [
         S.formatLogDate(m.timestamp),
         S.difficultyLabel(m.difficulty),
-        m.opponent === "friend" ? "VS FRIEND" : "VS BOT",
+        m.opponent === "bot" ? "VS BOT" : "",
         m.match_score ? "SHELLS " + m.match_score : "",
         m.exp_gained != null ? "+" + Number(m.exp_gained) + " EXP" : "",
         Number(m.correct_answers || 0) + " CORRECT",
@@ -834,42 +813,7 @@
 
   function difficultyNote(key) {
     var seconds = QUESTION_SECONDS[key] || QUESTION_SECONDS.normal;
-    var note = seconds + " seconds per question";
-    if (opponent === "bot") note += " · the bot is right " + Math.round((BOT_ACCURACY[key] || 0.6) * 100) + "% of the time";
-    return note;
-  }
-
-  var OPPONENT_HTML =
-    '<div class="wc-setup">' +
-    '<p class="wc-setup-label" id="sg-opponent-label">OPPONENT</p>' +
-    '<div class="wc-seg sk-seg-2 sg-opponent-picker" role="radiogroup" aria-labelledby="sg-opponent-label">' +
-    '<button type="button" class="sk-option" role="radio" data-opponent="bot">BOT</button>' +
-    '<button type="button" class="sk-option" role="radio" data-opponent="friend">FRIEND</button>' +
-    "</div>" +
-    '<p class="wc-setup-note" id="sg-opponent-note"></p></div>';
-
-  function renderOpponentPicker() {
-    document.querySelectorAll(".sg-opponent-picker .sk-option").forEach(function (btn) {
-      var on = btn.getAttribute("data-opponent") === opponent;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      btn.tabIndex = on ? 0 : -1;
-    });
-    var note = $("sg-opponent-note");
-    if (note) note.textContent = opponent === "friend" ? "Take turns on this device. Only your answers are saved." : "Play against the computer.";
-    var diffNote = $("wc-diff-note");
-    if (diffNote && shell) diffNote.textContent = difficultyNote(shell.difficulty());
-  }
-
-  function setOpponent(value) {
-    opponent = value === "friend" ? "friend" : "bot";
-    try {
-      localStorage.setItem(OPPONENT_STORAGE_KEY, opponent);
-    } catch (e) {
-      /* ignore */
-    }
-    shell.setStageAlert("");
-    renderOpponentPicker();
+    return seconds + " seconds per question · the bot is right " + Math.round((BOT_ACCURACY[key] || 0.6) * 100) + "% of the time";
   }
 
   function isWin(m) {
@@ -892,8 +836,12 @@
       logTitle: "GAME LOG",
       playLabel: "PLAY!",
       loadingText: "Setting out the shells…",
+      loadingTips: [
+        { label: "ALAM MO BA?", text: "Sungka is played with sigay (small shells) on a long wooden board called a sungkaan." },
+        "Drop your last shell in your own ulo to get another move.",
+        "Last shell in an empty bahay on your side? KAIN! You take the shells across from it too.",
+      ],
       playScreenId: "sg-play-screen",
-      setupHtml: OPPONENT_HTML,
       words: S.CLASSROOM_WORDS,
       menuMusic: function () {
         return makeMusic(MENU_SONG);
@@ -903,7 +851,6 @@
       playAgain: function () {
         void playAgain();
       },
-      onStagesOpen: renderOpponentPicker,
       isCleared: isWin,
       logRow: logRow,
       logDetail: logDetail,
@@ -948,20 +895,6 @@
     $("sg-pause-btn")?.addEventListener("click", shell.openPause);
     $("sg-start-btn")?.addEventListener("click", onStartClick);
     $("sg-board")?.addEventListener("click", onBoardClick);
-    document.querySelector(".sg-opponent-picker")?.addEventListener("click", function (e) {
-      var btn = e.target.closest(".sk-option");
-      if (!btn) return;
-      sound.click();
-      setOpponent(btn.getAttribute("data-opponent"));
-    });
-    document.querySelector(".sg-opponent-picker")?.addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      e.preventDefault();
-      e.stopPropagation();
-      setOpponent(opponent === "bot" ? "friend" : "bot");
-      document.querySelector('.sg-opponent-picker [data-opponent="' + opponent + '"]')?.focus();
-    });
-    renderOpponentPicker();
   }
 
   document.addEventListener("DOMContentLoaded", function () {
