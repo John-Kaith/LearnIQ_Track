@@ -47,8 +47,8 @@
     document.querySelectorAll(sel).forEach((a) => a.classList.remove("is-active"));
 
     const map = [
-      ["learniq-dashboard.html", "home"],
-      ["my-lesson.html", "lessons"],
+      ["subjects.html", "home"],
+      ["my-lesson.html", "home"],
       ["leaderboard.html", "leaderboard"],
       ["immersion-dashboard.html", "immersion"],
       ["student-settings.html", "settings"],

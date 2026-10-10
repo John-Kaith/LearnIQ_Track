@@ -76,7 +76,7 @@
       cls: "ttk",
       desc: "Every square hides a question from your lesson. Answer right to claim it, then get three in a row.",
       card: "Answer a question to claim a square. Get three in a row to win.",
-      tags: ["Multiple choice", "vs Bot or Friend", "All subjects"],
+      tags: ["Multiple choice", "vs Bot", "All subjects"],
       firstPlay: "You haven't played yet. Press Play to start your first match!",
       cover: function (hero) {
         return (
@@ -93,7 +93,7 @@
       cls: "sungka",
       desc: "The Filipino shell game. Answer right to pick your bahay; most shells in your ulo wins.",
       card: "Answer right to pick your bahay. Most shells in your ulo wins.",
-      tags: ["Board game", "vs Bot or Friend", "Larong Pinoy"],
+      tags: ["Board game", "vs Bot", "Larong Pinoy"],
       firstPlay: "You haven't played yet. Press Play to start your first game!",
       cover: function () {
         return logo("LARONG PINOY", "SUNGKA") + '<span class="arcade-sg-board">' + sungkaPits() + sungkaPits() + "</span>";

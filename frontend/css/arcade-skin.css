@@ -78,7 +78,8 @@ body.arcade-skin .aq-card {
   text-shadow: var(--sk-glow);
 }
 
-body.arcade-skin .wc-app::before {
+body.arcade-skin .wc-app::before,
+body.arcade-skin .battle-loading-screen::before {
   opacity: 1;
   animation: none;
   background: var(--sk-decor);
@@ -303,9 +304,8 @@ body.arcade-skin .wc-stage-alert {
   border: 2px solid var(--sk-bad);
 }
 
-/* Difficulty and other pickers */
-body.arcade-skin .wc-seg .battle-difficulty-option,
-body.arcade-skin .wc-seg .sk-option {
+/* Difficulty picker */
+body.arcade-skin .wc-seg .battle-difficulty-option {
   padding: 0.65rem 0.2rem;
   font: inherit;
   font-size: 0.5rem;
@@ -317,22 +317,16 @@ body.arcade-skin .wc-seg .sk-option {
   cursor: pointer;
 }
 
-body.arcade-skin .wc-seg .battle-difficulty-option.is-active,
-body.arcade-skin .wc-seg .sk-option.is-active {
+body.arcade-skin .wc-seg .battle-difficulty-option.is-active {
   color: var(--sk-accent-ink);
   text-shadow: none;
   background: var(--sk-accent-fill);
   border-color: var(--sk-line);
 }
 
-body.arcade-skin .wc-seg .battle-difficulty-option:focus-visible,
-body.arcade-skin .wc-seg .sk-option:focus-visible {
+body.arcade-skin .wc-seg .battle-difficulty-option:focus-visible {
   outline: 3px solid var(--sk-select);
   outline-offset: 2px;
-}
-
-body.arcade-skin .wc-seg.sk-seg-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* ---- Buttons ---- */
@@ -530,29 +524,36 @@ body.arcade-skin .learniq-confirm-actions .btn-secondary {
 }
 
 /* ---- Loading ---- */
-body.arcade-skin .battle-loading-title {
-  color: var(--sk-accent);
-  text-shadow: var(--sk-title-shadow);
+body.arcade-skin .battle-loading-screen {
+  --ld-soft: var(--sk-ink-soft);
+  --ld-faint: var(--sk-ink-faint);
 }
 
-body.arcade-skin .battle-loading-bar span {
-  border: 2px solid var(--sk-line);
-  background: transparent;
-  animation-name: sk-loading-block;
+body.arcade-skin .battle-loading-sprite {
+  filter: drop-shadow(3px 3px 0 var(--sk-ghost));
 }
 
-@keyframes sk-loading-block {
-  0%,
-  100% {
-    background: transparent;
-  }
-  50% {
-    background: var(--sk-accent);
-  }
+body.arcade-skin .battle-loading-diff {
+  color: var(--sk-accent-ink);
+  background: var(--sk-accent-fill);
+  border-radius: var(--sk-radius);
+  box-shadow: 2px 2px 0 var(--sk-ghost);
 }
 
-body.arcade-skin .battle-loading-hint {
-  color: var(--sk-ink-soft);
+body.arcade-skin .battle-loading-ground {
+  border-top-color: var(--sk-line);
+}
+
+body.arcade-skin .battle-loading-cells {
+  border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
+  border-radius: var(--sk-radius);
+  background: var(--sk-btn);
+}
+
+body.arcade-skin .battle-loading-tip {
+  border-color: var(--sk-line-soft);
+  border-radius: var(--sk-radius);
+  background: var(--sk-panel);
 }
 
 /* ============================================================

@@ -653,6 +653,10 @@
       logTitle: "GAME LOG",
       playLabel: "PLAY!",
       loadingText: "Drawing the lines…",
+      loadingTips: [
+        { label: "ALAM MO BA?", text: "Patintero is played on lines drawn on the ground. The taya guard the lines while the runners cross and come back." },
+        "Answer right to slip past the taya. Grab the bonus star, then run back home!",
+      ],
       playScreenId: "pt-play-screen",
       setupHtml: SETUP_HTML,
       words: S.CLASSROOM_WORDS,

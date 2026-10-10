@@ -677,6 +677,10 @@
       logTitle: "GAME LOG",
       playLabel: "PLAY!",
       loadingText: "Setting up the can…",
+      loadingTips: [
+        { label: "ALAM MO BA?", text: "In tumbang preso, the can is the preso (prisoner). Players throw their tsinelas to knock it down." },
+        "Answer right to earn a throw at the can.",
+      ],
       playScreenId: "tp-play-screen",
       setupHtml: SETUP_HTML,
       words: S.CLASSROOM_WORDS,

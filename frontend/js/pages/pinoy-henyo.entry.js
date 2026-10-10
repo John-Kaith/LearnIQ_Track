@@ -712,6 +712,11 @@
       logTitle: "GAME LOG",
       playLabel: "PLAY!",
       loadingText: "Writing the words…",
+      loadingTips: [
+        { label: "ALAM MO BA?", text: "Pinoy Henyo became a favorite guessing game on Filipino noontime TV." },
+        "Pick question cards to learn about your word. The answer is always OO, HINDI or PWEDE.",
+        "CLUE shows the lesson question but costs 10 seconds. PASS skips the word.",
+      ],
       playScreenId: "ph-play-screen",
       setupHtml: SETUP_HTML,
       words: S.CLASSROOM_WORDS,

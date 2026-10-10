@@ -631,11 +631,6 @@
   .battle-words-used h4 {
     font-size: 0.7rem;
   }
-
-  .battle-loading-title {
-    font-size: clamp(0.95rem, 5vw, 1.4rem);
-    letter-spacing: 0.08em;
-  }
 }
 
 /* Keep "Hint 3" on one line */

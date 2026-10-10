@@ -3,7 +3,7 @@
  * lesson to claim a square; three in a row wins the round, best of 3.
  *
  * Play the bot (Normal / Medium / Hard: it answers right more often and plays
- * smarter) or a friend on the same device. Questions come from the lesson's
+ * smarter). Questions come from the lesson's
  * shared question bank (the same one Word Clash uses) as multiple choice: the
  * answer plus three other answers from the lesson. A wrong answer leaves the
  * square open with a new question. The menus, results, Match Log, settings and
@@ -34,16 +34,8 @@
   var MAX_LOGGED_ANSWERS = 60;
   var QUESTION_SECONDS = { normal: 20, medium: 15, hard: 10 };
   var BOT_ACCURACY = { normal: 0.6, medium: 0.75, hard: 0.9 };
-  var OPPONENT_STORAGE_KEY = "learniq-ttk-opponent";
   var CHOICE_KEYS = ["A", "B", "C", "D"];
 
-  var opponent = (function () {
-    try {
-      return localStorage.getItem(OPPONENT_STORAGE_KEY) === "friend" ? "friend" : "bot";
-    } catch (e) {
-      return "bot";
-    }
-  })();
   var match = null;
 
   /*
@@ -138,22 +130,13 @@
   /* ----------------------------------------------------------
    * Players
    * ---------------------------------------------------------- */
-  function isFriendMatch() {
-    return !!match && match.opponent === "friend";
-  }
-
   function nameOf(mark) {
-    if (mark === "x") {
-      if (!isFriendMatch()) return "YOU";
-      var first = String(S.playerName() || "").trim().split(/\s+/)[0] || "PLAYER 1";
-      return first.toUpperCase().slice(0, 12);
-    }
-    return isFriendMatch() ? "PLAYER 2" : "BOT";
+    return mark === "x" ? "YOU" : "BOT";
   }
 
-  /** The student plays X; O is the bot, or a friend taking turns on this device. */
+  /** The student plays X; the bot plays O. */
   function isHumanTurn() {
-    return !!match && (match.turn === "x" || match.opponent === "friend");
+    return !!match && match.turn === "x";
   }
 
   function canPickSquare() {
@@ -272,7 +255,7 @@
   function renderAvatars() {
     S.renderCharacterInto($("ttk-avatar-x"));
     var o = $("ttk-avatar-o");
-    if (o) o.textContent = isFriendMatch() ? "🧑" : "🤖";
+    if (o) o.textContent = "🤖";
   }
 
   /** Rounds won, as chalk tally marks. */
@@ -425,15 +408,11 @@
     });
   }
 
-  function feedbackHtml(correct, picked, q, mark, isBot) {
-    var who = isBot ? "BOT" : isFriendMatch() ? nameOf(mark) : "";
+  function feedbackHtml(correct, picked, q, isBot) {
     var head;
     if (correct) {
       head = isBot ? "BOT GOT IT." : "CORRECT!";
-      return (
-        "<strong>" + head + "</strong> " +
-        (isBot ? "The bot takes the square." : who ? "The square goes to " + esc(who) + "." : "The square is yours.")
-      );
+      return "<strong>" + head + "</strong> " + (isBot ? "The bot takes the square." : "The square is yours.");
     }
     head = isBot ? "BOT MISSED." : picked ? "WRONG." : "TIME'S UP.";
     return (
@@ -489,7 +468,7 @@
         reveal(picked);
         var fb = $("ttk-q-feedback");
         fb.className = "ttk-q-feedback " + (correct ? "is-correct" : "is-wrong");
-        fb.innerHTML = feedbackHtml(correct, picked, q, mark, isBot);
+        fb.innerHTML = feedbackHtml(correct, picked, q, isBot);
         fb.hidden = false;
         sound.play(correct ? sfxCorrect : sfxWrong);
         void waitForContinue(correct ? 1300 : 2600, token).then(function (ok) {
@@ -578,7 +557,7 @@
     renderScoreboard();
     renderBoard();
     if (isHumanTurn()) {
-      setStatus(isFriendMatch() ? nameOf(match.turn) + "'S TURN — PICK A SQUARE" : "YOUR TURN — PICK A SQUARE");
+      setStatus("YOUR TURN — PICK A SQUARE");
       return; // waits for a square to be clicked
     }
     match.busy = true;
@@ -614,10 +593,6 @@
       text = "DRAW ROUND";
       cls = "is-draw";
       sound.tone(440, 0.1, "square");
-    } else if (isFriendMatch()) {
-      text = nameOf(winner) + " WINS THE ROUND";
-      cls = "is-win";
-      sound.victory();
     } else if (winner === "x") {
       text = "YOU WIN THE ROUND!";
       cls = "is-win";
@@ -698,7 +673,7 @@
       lesson_id: match.lessonId,
       outcome: outcome,
       difficulty: match.difficulty,
-      opponent: match.opponent,
+      opponent: "bot",
       match_score: progress.score,
       rounds_won: match.scores.x,
       rounds_lost: match.scores.o,
@@ -722,23 +697,15 @@
   }
 
   function showMatchResults(outcome, progress) {
-    var friend = isFriendMatch();
     var x = match.scores.x;
     var o = match.scores.o;
-    var title;
-    var sub;
-    if (friend) {
-      title = outcome === "draw" ? "DRAW!" : (outcome === "win" ? nameOf("x") : "PLAYER 2") + " WINS!";
-      sub = outcome === "draw" ? "It's a tie, " + x + "-" + o + ". " : "Final score " + x + "-" + o + ". ";
-    } else {
-      title = outcome === "win" ? "YOU WIN!" : outcome === "lose" ? "YOU LOSE" : "DRAW!";
-      sub =
-        outcome === "win"
-          ? "You beat the Bot " + x + "-" + o + ". "
-          : outcome === "lose"
-          ? "The Bot won " + o + "-" + x + ". "
-          : "It's a tie, " + x + "-" + o + ". ";
-    }
+    var title = outcome === "win" ? "YOU WIN!" : outcome === "lose" ? "YOU LOSE" : "DRAW!";
+    var sub =
+      outcome === "win"
+        ? "You beat the Bot " + x + "-" + o + ". "
+        : outcome === "lose"
+        ? "The Bot won " + o + "-" + x + ". "
+        : "It's a tie, " + x + "-" + o + ". ";
     sub += match.correctX + " correct answer" + (match.correctX === 1 ? "" : "s") + ".";
     shell.showResults({
       outcome: outcome,
@@ -755,7 +722,6 @@
       token: String(Date.now()) + Math.random(),
       lessonId: lessonId,
       difficulty: difficulty,
-      opponent: opponent,
       bank: bank,
       bankSize: bank.length,
       unseenKeys: pick.unseenKeys,
@@ -811,7 +777,7 @@
     startRound("x");
   }
 
-  /** Same lesson and opponent, a fresh pick of questions, back on the Ready screen. */
+  /** Same lesson, a fresh pick of questions, back on the Ready screen. */
   function restartMatch() {
     if (!match) return;
     var old = match;
@@ -848,7 +814,7 @@
     var cell = Number(btn.getAttribute("data-cell"));
     if (match.board[cell]) return;
     sound.click();
-    void playSquare(cell, match.turn, false);
+    void playSquare(cell, "x", false);
   }
 
   function onChoiceClick(e) {
@@ -916,7 +882,7 @@
       meta: [
         S.formatLogDate(m.timestamp),
         S.difficultyLabel(m.difficulty),
-        m.opponent === "friend" ? "VS FRIEND" : "VS BOT",
+        m.opponent === "bot" ? "VS BOT" : "",
         m.subject_name || "",
       ],
       score: m.match_score || "",
@@ -931,7 +897,7 @@
       chips: [
         S.formatLogDate(m.timestamp),
         S.difficultyLabel(m.difficulty),
-        m.opponent === "friend" ? "VS FRIEND" : "VS BOT",
+        m.opponent === "bot" ? "VS BOT" : "",
         m.match_score ? "SCORE " + m.match_score : "",
         m.exp_gained != null ? "+" + Number(m.exp_gained) + " EXP" : "",
         Number(m.correct_answers || 0) + " CORRECT",
@@ -941,43 +907,7 @@
 
   function difficultyNote(key) {
     var seconds = QUESTION_SECONDS[key] || QUESTION_SECONDS.normal;
-    var note = seconds + " seconds per question";
-    if (opponent === "bot") note += " · the bot is right " + Math.round((BOT_ACCURACY[key] || 0.6) * 100) + "% of the time";
-    return note;
-  }
-
-  /* Stage panel row: play the bot, or a friend on this device. */
-  var OPPONENT_HTML =
-    '<div class="wc-setup">' +
-    '<p class="wc-setup-label" id="ttk-opponent-label">OPPONENT</p>' +
-    '<div class="wc-seg ttk-opponent-picker" role="radiogroup" aria-labelledby="ttk-opponent-label">' +
-    '<button type="button" class="ttk-opponent-option" role="radio" data-opponent="bot">BOT</button>' +
-    '<button type="button" class="ttk-opponent-option" role="radio" data-opponent="friend">FRIEND</button>' +
-    "</div>" +
-    '<p class="wc-setup-note" id="ttk-opponent-note"></p></div>';
-
-  function renderOpponentPicker() {
-    document.querySelectorAll(".ttk-opponent-option").forEach(function (btn) {
-      var on = btn.getAttribute("data-opponent") === opponent;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      btn.tabIndex = on ? 0 : -1;
-    });
-    var note = $("ttk-opponent-note");
-    if (note) note.textContent = opponent === "friend" ? "Take turns on this device. Only your answers are saved." : "Play against the computer.";
-    var diffNote = $("wc-diff-note");
-    if (diffNote && shell) diffNote.textContent = difficultyNote(shell.difficulty());
-  }
-
-  function setOpponent(value) {
-    opponent = value === "friend" ? "friend" : "bot";
-    try {
-      localStorage.setItem(OPPONENT_STORAGE_KEY, opponent);
-    } catch (e) {
-      /* ignore */
-    }
-    shell.setStageAlert("");
-    renderOpponentPicker();
+    return seconds + " seconds per question · the bot is right " + Math.round((BOT_ACCURACY[key] || 0.6) * 100) + "% of the time";
   }
 
   function setup() {
@@ -990,8 +920,12 @@
       logTitle: "MATCH LOG",
       playLabel: "PLAY!",
       loadingText: "Setting up the board…",
+      loadingTips: [
+        "Answer right to claim the square. Three in a row wins!",
+        "The middle square is part of four lines, more than any other square.",
+        "On Medium and Hard, the bot answers right more often and picks smarter squares.",
+      ],
       playScreenId: "ttk-play-screen",
-      setupHtml: OPPONENT_HTML,
       menuMusic: function () {
         return makeMusic(MENU_SONG);
       },
@@ -1022,7 +956,6 @@
       playAgain: function () {
         void playAgain();
       },
-      onStagesOpen: renderOpponentPicker,
       isCleared: isWin,
       logRow: logRow,
       logDetail: logDetail,
@@ -1069,20 +1002,6 @@
     $("ttk-start-btn")?.addEventListener("click", onStartClick);
     $("ttk-choices")?.addEventListener("click", onChoiceClick);
     $("ttk-question")?.addEventListener("click", onCardClick);
-    document.querySelector(".ttk-opponent-picker")?.addEventListener("click", function (e) {
-      var btn = e.target.closest(".ttk-opponent-option");
-      if (!btn) return;
-      sound.click();
-      setOpponent(btn.getAttribute("data-opponent"));
-    });
-    document.querySelector(".ttk-opponent-picker")?.addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      e.preventDefault();
-      e.stopPropagation();
-      setOpponent(opponent === "bot" ? "friend" : "bot");
-      document.querySelector('.ttk-opponent-option[data-opponent="' + opponent + '"]')?.focus();
-    });
-    renderOpponentPicker();
   }
 
   document.addEventListener("DOMContentLoaded", function () {

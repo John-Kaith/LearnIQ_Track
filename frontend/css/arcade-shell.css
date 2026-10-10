@@ -36,104 +36,358 @@
 }
 
 /* ============================================================
- * Loading screen
+ * Loading screen: the game's logo, the lesson, the player's fighter running,
+ * three steps with a pixel progress bar, and a tip that changes. Colours come
+ * from the --arcade-* palette, so every game's skin restyles it.
  * ============================================================ */
 .battle-loading-screen {
+  --ld-soft: color-mix(in srgb, var(--arcade-ink) 74%, transparent);
+  --ld-faint: color-mix(in srgb, var(--arcade-ink) 34%, transparent);
   position: fixed;
   inset: 0;
   z-index: 5500;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--arcade-bg-deep);
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1.5rem 1rem;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.38), transparent 55%),
+    radial-gradient(circle at 8% 110%, rgba(103, 232, 249, 0.12), transparent 45%),
+    var(--arcade-bg-deep);
   color: var(--arcade-ink);
   font-family: "Press Start 2P", "Inter", system-ui, sans-serif;
+  transition: opacity 0.28s ease;
 }
 
 .battle-loading-screen[hidden] {
   display: none;
 }
 
+/* The menus' drifting stars and scanlines (each skin swaps in its own decoration) */
+.battle-loading-screen::before,
+.battle-loading-screen::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.battle-loading-screen::before {
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 70% 20%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(2px 2px at 40% 70%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 85% 60%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(1px 1px at 10% 85%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(2px 2px at 55% 45%, rgba(103, 232, 249, 0.5), transparent 60%);
+  background-size: 260px 260px;
+  opacity: 0.75;
+  animation: wc-stars 40s linear infinite;
+}
+
+.battle-loading-screen::after {
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
+}
+
+/* Ready: fades out over the game, which already gets the clicks and keys */
+.battle-loading-screen.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .battle-loading-inner {
+  position: relative;
+  z-index: 1;
+  width: min(34rem, 100%);
+  margin: auto; /* centred; on short screens it scrolls from the top */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
   text-align: center;
-  padding: 1.5rem;
+}
+
+/* The menu's logo, smaller (beats each game's own logo sizes) */
+.battle-loading-screen .battle-loading-logo {
+  gap: 0.65rem;
+}
+
+.battle-loading-screen .battle-loading-logo .wc-logo-top {
+  font-size: clamp(0.95rem, 3.6vw, 1.9rem);
+}
+
+.battle-loading-screen .battle-loading-logo .wc-logo-main {
+  font-size: clamp(1.6rem, 6vw, 3rem);
+}
+
+/* Which lesson and difficulty is loading */
+.battle-loading-stage {
+  margin: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem 0.6rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.battle-loading-stage[hidden] {
+  display: none;
+}
+
+/* On a dark chip, so it reads on any game's background (clouds, mats, curtains) */
+.battle-loading-lesson {
+  min-width: 0;
+  padding: 0.25rem 0.55rem;
+  overflow-wrap: anywhere;
+  background: var(--sk-panel, rgba(0, 0, 0, 0.35));
+}
+
+.battle-loading-diff {
+  padding: 0.35rem 0.5rem 0.3rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.55rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--sk-accent-ink, var(--arcade-bg-deep));
+  background: var(--arcade-yellow);
+  box-shadow: 2px 2px 0 #000;
+}
+
+/* The fighter runs on a scrolling pixel ground */
+.battle-loading-scene {
+  position: relative;
+  width: min(17rem, 78%);
+  height: 6.4rem;
 }
 
 .battle-loading-sprite {
-  font-size: 5rem;
+  position: absolute;
+  left: calc(50% - 2.5rem);
+  bottom: 0.85rem;
+  width: 5rem;
+  display: grid;
+  place-items: end center;
+  font-size: 4rem;
+  line-height: 1;
   filter: drop-shadow(3px 3px 0 #000);
-  animation: fighter-idle 1s ease-in-out infinite;
+  animation: ld-run 0.42s steps(2) infinite;
 }
 
-.battle-loading-title {
+.battle-loading-sprite .battle-avatar-img {
+  width: 5rem;
+  height: 5rem;
+}
+
+@keyframes ld-run {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.battle-loading-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.85rem;
+  border-top: 3px solid var(--arcade-ink);
+  background: repeating-linear-gradient(90deg, var(--ld-faint) 0 0.6rem, transparent 0.6rem 1.6rem);
+  animation: ld-ground 0.5s linear infinite;
+}
+
+@keyframes ld-ground {
+  to {
+    background-position: -1.6rem 0;
+  }
+}
+
+/* Steps, bar and hint: a .wc-card, so each skin draws the panel its own way */
+.battle-loading-panel {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.battle-loading-steps {
   margin: 0;
-  font-size: 1.4rem;
-  letter-spacing: 0.12em;
-  color: var(--arcade-yellow);
-  text-shadow: 3px 3px 0 #000;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.9rem;
 }
 
-.battle-loading-dots span {
-  animation: loading-dot-blink 1.2s ease-in-out infinite;
+.battle-loading-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  color: var(--ld-faint);
 }
 
-.battle-loading-dots span:nth-child(2) {
-  animation-delay: 0.2s;
+.battle-loading-steps li[data-state="active"] {
+  color: var(--arcade-ink);
+  font-weight: 700;
 }
 
-.battle-loading-dots span:nth-child(3) {
-  animation-delay: 0.4s;
+.battle-loading-steps li[data-state="done"] {
+  color: var(--ld-soft);
 }
 
-@keyframes loading-dot-blink {
-  0%, 80%, 100% {
+/* Step box: empty (to do), a blinking square (now), filled with a tick (done) */
+.battle-loading-steps i {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  font-style: normal;
+}
+
+.battle-loading-steps li[data-state="active"] i {
+  color: var(--arcade-sky);
+}
+
+.battle-loading-steps li[data-state="active"] i::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  background: currentColor;
+  animation: ld-blink 0.8s steps(2) infinite;
+}
+
+.battle-loading-steps li[data-state="done"] i {
+  color: var(--arcade-green);
+  background: var(--arcade-green);
+}
+
+.battle-loading-steps li[data-state="done"] i::before {
+  content: "";
+  width: 0.22rem;
+  height: 0.45rem;
+  margin-top: -0.12rem;
+  border: solid #000;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+@keyframes ld-blink {
+  50% {
     opacity: 0;
   }
-  40% {
-    opacity: 1;
-  }
 }
 
-.battle-loading-bar {
+/* Seconds the AI has been writing */
+.battle-loading-timer {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.6rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--arcade-sky);
+}
+
+/* Pixel progress bar: 20 cells, the newest one blinks */
+.battle-loading-meter {
   display: flex;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.battle-loading-bar span {
-  width: 1.1rem;
-  height: 1.1rem;
-  border: 2px solid var(--arcade-ink);
-  background: var(--arcade-bg-mid);
-  animation: loading-block-pulse 1.2s ease-in-out infinite;
+.battle-loading-cells {
+  flex: 1;
+  min-width: 0;
+  height: 1.25rem;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 3px solid var(--arcade-ink);
+  background: rgba(0, 0, 0, 0.28);
 }
 
-.battle-loading-bar span:nth-child(1) { animation-delay: 0s; }
-.battle-loading-bar span:nth-child(2) { animation-delay: 0.1s; }
-.battle-loading-bar span:nth-child(3) { animation-delay: 0.2s; }
-.battle-loading-bar span:nth-child(4) { animation-delay: 0.3s; }
-.battle-loading-bar span:nth-child(5) { animation-delay: 0.4s; }
-.battle-loading-bar span:nth-child(6) { animation-delay: 0.5s; }
-.battle-loading-bar span:nth-child(7) { animation-delay: 0.6s; }
-.battle-loading-bar span:nth-child(8) { animation-delay: 0.7s; }
+.battle-loading-cells span.is-on {
+  background: var(--arcade-yellow);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
 
-@keyframes loading-block-pulse {
-  0%, 100% {
-    background: var(--arcade-bg-mid);
-  }
-  50% {
-    background: var(--arcade-yellow);
-  }
+.battle-loading-cells span.is-edge {
+  animation: ld-blink 0.5s steps(2) infinite;
+}
+
+.battle-loading-pct {
+  min-width: 4.2em;
+  text-align: right;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--arcade-yellow);
 }
 
 .battle-loading-hint {
   margin: 0;
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 0.85rem;
-  color: rgba(244, 241, 255, 0.7);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ld-soft);
+}
+
+/* Tip card */
+.battle-loading-tip {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.8rem 0.95rem;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+  border: 2px dashed var(--ld-faint);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.battle-loading-tip-label {
+  margin: 0;
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  color: var(--arcade-yellow);
+}
+
+.battle-loading-tip-text {
+  margin: 0;
+  min-height: 2.9em; /* two lines, so the card doesn't jump when the tip changes */
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+/* Short screens (phones held sideways) */
+@media (max-height: 640px) {
+  .battle-loading-inner {
+    gap: 0.7rem;
+  }
+
+  .battle-loading-scene {
+    height: 4.6rem;
+  }
+
+  .battle-loading-sprite {
+    left: calc(50% - 1.8rem);
+    width: 3.6rem;
+    font-size: 2.8rem;
+  }
+
+  .battle-loading-sprite .battle-avatar-img {
+    width: 3.6rem;
+    height: 3.6rem;
+  }
 }
 
 /* ============================================================
@@ -388,11 +642,6 @@ body.arcade-game {
   width: 4.5rem;
   height: 4.5rem;
   image-rendering: pixelated;
-}
-
-.battle-loading-sprite .battle-avatar-img {
-  width: 5.5rem;
-  height: 5.5rem;
 }
 
 /* ============================================================
@@ -1429,16 +1678,34 @@ body.arcade-game {
 html.reduce-motion .wc-app::before,
 html.reduce-motion .wc-logo-main,
 html.reduce-motion .wc-press-start,
-html.reduce-motion .wc-menu-item::before {
+html.reduce-motion .wc-menu-item::before,
+html.reduce-motion .battle-loading-screen::before,
+html.reduce-motion .battle-loading-sprite,
+html.reduce-motion .battle-loading-ground,
+html.reduce-motion .battle-loading-cells span.is-edge,
+html.reduce-motion .battle-loading-steps i::before {
   animation: none;
+}
+
+html.reduce-motion .battle-loading-screen {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wc-app::before,
   .wc-logo-main,
   .wc-press-start,
-  .wc-menu-item::before {
+  .wc-menu-item::before,
+  .battle-loading-screen::before,
+  .battle-loading-sprite,
+  .battle-loading-ground,
+  .battle-loading-cells span.is-edge,
+  .battle-loading-steps i::before {
     animation: none;
+  }
+
+  .battle-loading-screen {
+    transition: none;
   }
 }
 
