@@ -8,8 +8,9 @@ import os
 import re
 import secrets
 import urllib.parse
+import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 CLASS_ATTENDANCE_DEFAULT_RADIUS_M = 150
@@ -17,10 +18,14 @@ CLASS_ATTENDANCE_DEFAULT_RADIUS_M = 150
 JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 from grading_shs import (
+    PASSING_GRADE,
+    average_grade,
     compute_weighted_final,
     format_weights_label,
+    grade_descriptor,
     resolve_component_scores,
     shs_component_weights,
+    transmute,
 )
 from supabase_client import supabase
 
@@ -1361,15 +1366,24 @@ def _leaderboard_tagline(entry: dict[str, Any]) -> str:
 
 
 def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
-    """Aggregate quiz_attempts by student (profiles.role = student). Sorted by total points then accuracy."""
+    """Aggregate quiz_attempts by student (profiles.role = student). Sorted by total points then accuracy.
+
+    Counts only the current school year (quiz points and Arcade EXP since it
+    began), so the board starts fresh every S.Y. without deleting anything."""
     now_iso = datetime.now(timezone.utc).isoformat()
+    since = current_school_year_start_utc()
+    period = get_current_grading_period() or {}
+    scope = {"school_year": period.get("school_year") if since else None, "since": since}
     try:
         res = _sb().table("quiz_attempts").select("*").execute()
     except Exception as e:
         print(f"get_learniq_leaderboard attempts: {e}")
-        return {"updated_at": now_iso, "entries": []}
+        return {"updated_at": now_iso, "entries": [], **scope}
 
     rows = res.data or []
+    if since:
+        since_dt = _dt_from_lesson_created(since)
+        rows = [r for r in rows if (_quiz_attempt_ts_utc(r) or since_dt) >= since_dt]
     agg: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"total_score": 0, "total_questions": 0, "attempts": 0, "last_ts": ""}
     )
@@ -1404,13 +1418,13 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
         if ts and ts > a["last_ts"]:
             a["last_ts"] = ts
 
-    battle_stats = get_all_battle_stats()
-    game_exp = get_all_game_exp()
+    battle_stats = get_all_battle_stats(since)
+    game_exp = get_all_game_exp(since)
     for sid in list(battle_stats) + list(game_exp):
         agg[sid]  # students who only played Arcade games still appear
 
     if not agg:
-        return {"updated_at": now_iso, "entries": []}
+        return {"updated_at": now_iso, "entries": [], **scope}
 
     ids = list(agg.keys())
     profiles_map: dict[str, dict[str, Any]] = {}
@@ -1469,7 +1483,7 @@ def get_learniq_leaderboard(limit: int = 100) -> dict[str, Any]:
         row["tagline"] = _leaderboard_tagline(row)
         out.append(row)
 
-    return {"updated_at": now_iso, "entries": out}
+    return {"updated_at": now_iso, "entries": out, **scope}
 
 
 def count_published_lessons() -> int:
@@ -2776,7 +2790,27 @@ def lesson_to_api_list_item(row: dict[str, Any]) -> dict[str, Any]:
 # ============================================================
 
 
-def list_grading_periods() -> list[dict[str, Any]]:
+# A school year has two semesters, and each semester has a Midterm and a
+# Finals grading period (grading_periods.semester = 1|2, .term = 'midterm'|
+# 'finals'). Grades, quizzes and attendance are counted per grading period;
+# enrollment lasts the whole semester.
+
+_PH_TZ = timezone(timedelta(hours=8))
+_PERIODS_TTL_SECONDS = 30.0
+_periods_cache: tuple[float, list[dict[str, Any]]] | None = None
+
+
+def _today_ph_iso() -> str:
+    return datetime.now(_PH_TZ).date().isoformat()
+
+
+def _grading_periods_cached() -> list[dict[str, Any]]:
+    """All grading periods, newest start first. Cached briefly: several helpers
+    look up the current period on every request."""
+    global _periods_cache
+    now = datetime.now().timestamp()
+    if _periods_cache and now - _periods_cache[0] < _PERIODS_TTL_SECONDS:
+        return _periods_cache[1]
     try:
         res = (
             _sb()
@@ -2785,60 +2819,295 @@ def list_grading_periods() -> list[dict[str, Any]]:
             .order("start_date", desc=True)
             .execute()
         )
-        return res.data or []
+        rows = res.data or []
     except Exception as e:
         print(f"list_grading_periods: {e}")
-        return []
+        # Keep serving the last good list rather than "no period" on a blip.
+        return _periods_cache[1] if _periods_cache else []
+    _periods_cache = (now, rows)
+    return rows
+
+
+def list_grading_periods() -> list[dict[str, Any]]:
+    return [dict(r) for r in _grading_periods_cached()]
 
 
 def get_current_grading_period() -> dict[str, Any] | None:
-    """Return the row flagged is_current=true, or the most recent one as fallback."""
-    try:
-        res = (
-            _sb()
-            .table("grading_periods")
-            .select("*")
-            .eq("is_current", True)
-            .limit(1)
-            .execute()
-        )
-        if res.data:
-            return res.data[0]
-    except Exception as e:
-        print(f"get_current_grading_period (is_current): {e}")
-    # Fallback: most recent by start_date
-    try:
-        res = (
-            _sb()
-            .table("grading_periods")
-            .select("*")
-            .order("start_date", desc=True)
-            .limit(1)
-            .execute()
-        )
-        return res.data[0] if res.data else None
-    except Exception as e:
-        print(f"get_current_grading_period (fallback): {e}")
+    """The grading period today's date (Philippine time) falls in.
+
+    Between two periods (a break) it's the one that started most recently.
+    Only when no period has dates around today does the is_current flag,
+    then the newest period, decide.
+    """
+    rows = _grading_periods_cached()
+    if not rows:
         return None
+    today = _today_ph_iso()
+    if _auto_create_school_year_if_due(today, rows):
+        rows = _grading_periods_cached()
+    dated = [r for r in rows if r.get("start_date") and r.get("end_date")]
+    for r in dated:
+        if str(r["start_date"]) <= today <= str(r["end_date"]):
+            return dict(r)
+    started = [r for r in dated if str(r["start_date"]) <= today]
+    if started:
+        return dict(max(started, key=lambda r: str(r["start_date"])))
+    flagged = [r for r in rows if r.get("is_current")]
+    return dict(flagged[0] if flagged else rows[0])
 
 
 def get_grading_period(period_id: str | None) -> dict[str, Any] | None:
     if not period_id:
         return get_current_grading_period()
-    try:
-        res = (
-            _sb()
-            .table("grading_periods")
-            .select("*")
-            .eq("id", period_id)
-            .limit(1)
-            .execute()
-        )
-        if res.data:
-            return res.data[0]
-    except Exception as e:
-        print(f"get_grading_period: {e}")
+    for r in _grading_periods_cached():
+        if str(r.get("id")) == str(period_id):
+            return dict(r)
     return get_current_grading_period()
+
+
+def semester_period_ids(period_id: str | None) -> list[str]:
+    """Ids of every grading period in the same semester as period_id
+    (its Midterm and Finals). A period without a semester stands alone."""
+    if not period_id:
+        return []
+    rows = _grading_periods_cached()
+    period = next((r for r in rows if str(r.get("id")) == str(period_id)), None)
+    if not period or period.get("semester") is None or not period.get("school_year"):
+        return [str(period_id)]
+    return [
+        str(r["id"])
+        for r in rows
+        if r.get("school_year") == period["school_year"]
+        and r.get("semester") == period["semester"]
+    ]
+
+
+# ---------- School years: dates the admin can adjust, next year made automatically ----------
+# Each semester is set by three dates: its start, the last day of Midterm and
+# its last day; Finals starts the day after Midterm ends. When today passes the
+# last period on file, the next school year is created from this one's dates
+# (one year later, same weekdays) and flagged for the admin to check.
+
+_SEMESTER_SHORT = {1: "1st Sem", 2: "2nd Sem"}
+_TERM_TITLES = {"midterm": "Midterm", "finals": "Finals"}
+_SCHOOL_YEAR_RE = re.compile(r"^(\d{4})-(\d{4})$")
+_auto_school_year_checked_on: str | None = None
+
+
+def invalidate_grading_periods_cache() -> None:
+    global _periods_cache
+    _periods_cache = None
+
+
+def grading_period_name(semester: int, term: str) -> str:
+    return f"{_SEMESTER_SHORT.get(semester, f'Semester {semester}')} – {_TERM_TITLES.get(term, term.title())}"
+
+
+def _iso_day(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def list_school_years() -> list[dict[str, Any]]:
+    """School years (newest first), each as two semesters of three dates."""
+    by_year: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in _grading_periods_cached():
+        if r.get("school_year") and r.get("semester") and r.get("term"):
+            by_year[str(r["school_year"])].append(r)
+
+    out: list[dict[str, Any]] = []
+    for sy, rows in by_year.items():
+        semesters = []
+        for sem in (1, 2):
+            mid = next((r for r in rows if r.get("semester") == sem and r.get("term") == "midterm"), None)
+            fin = next((r for r in rows if r.get("semester") == sem and r.get("term") == "finals"), None)
+            semesters.append({
+                "semester": sem,
+                "label": _SEMESTER_LABELS.get(sem, f"Semester {sem}"),
+                "start": (mid or {}).get("start_date"),
+                "midterm_end": (mid or {}).get("end_date"),
+                "finals_start": (fin or {}).get("start_date"),
+                "end": (fin or {}).get("end_date"),
+            })
+        starts = [str(r["start_date"]) for r in rows if r.get("start_date")]
+        ends = [str(r["end_date"]) for r in rows if r.get("end_date")]
+        out.append({
+            "school_year": sy,
+            "semesters": semesters,
+            "start": min(starts) if starts else None,
+            "end": max(ends) if ends else None,
+            # Rows made automatically (or placeholder dates) wait for the admin.
+            "dates_confirmed": all(r.get("dates_confirmed") is not False for r in rows),
+        })
+    out.sort(key=lambda s: s["school_year"], reverse=True)
+    return out
+
+
+def school_years_needing_review() -> list[str]:
+    """Current or upcoming school years whose dates the admin hasn't checked."""
+    today = _today_ph_iso()
+    return [
+        s["school_year"] for s in list_school_years()
+        if not s["dates_confirmed"] and (s["end"] or "9999") >= today
+    ]
+
+
+def _validate_school_year(school_year: str, semesters: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str | None]:
+    """Turn {semester, start, midterm_end, end} x2 into the four period rows,
+    or explain what's wrong."""
+    m = _SCHOOL_YEAR_RE.match(str(school_year or "").strip())
+    if not m or int(m.group(2)) != int(m.group(1)) + 1:
+        return [], "School year must look like 2026-2027."
+    by_sem = {int(s.get("semester") or 0): s for s in (semesters or []) if isinstance(s, dict)}
+    if set(by_sem) != {1, 2}:
+        return [], "Give the dates for both semesters."
+
+    rows: list[dict[str, Any]] = []
+    prev_end: date | None = None
+    for sem in (1, 2):
+        label = _SEMESTER_LABELS[sem]
+        start = _iso_day(by_sem[sem].get("start"))
+        mid_end = _iso_day(by_sem[sem].get("midterm_end"))
+        end = _iso_day(by_sem[sem].get("end"))
+        if not (start and mid_end and end):
+            return [], f"{label}: fill in all three dates."
+        if not start <= mid_end < end:
+            return [], f"{label}: Midterm must end after the semester starts and before it ends."
+        if prev_end and start <= prev_end:
+            return [], "The 2nd Semester must start after the 1st Semester ends."
+        prev_end = end
+        rows.append({"semester": sem, "term": "midterm", "start_date": start, "end_date": mid_end})
+        rows.append({"semester": sem, "term": "finals", "start_date": mid_end + timedelta(days=1), "end_date": end})
+
+    if (rows[-1]["end_date"] - rows[0]["start_date"]).days > 400:
+        return [], "A school year can't be longer than about 13 months."
+    for other in list_school_years():
+        if other["school_year"] == school_year or not (other["start"] and other["end"]):
+            continue
+        if str(rows[0]["start_date"]) <= other["end"] and other["start"] <= str(rows[-1]["end_date"]):
+            return [], f"These dates overlap S.Y. {other['school_year']}."
+    return rows, None
+
+
+def save_school_year(
+    school_year: str,
+    semesters: list[dict[str, Any]],
+    *,
+    confirmed: bool = True,
+) -> dict[str, Any]:
+    """Create or update the four grading periods of a school year.
+    Raises ValueError with a message for the admin when the dates don't fit."""
+    rows, problem = _validate_school_year(school_year, semesters)
+    if problem:
+        raise ValueError(problem)
+    existing = {
+        (r.get("semester"), r.get("term")): r
+        for r in _grading_periods_cached()
+        if r.get("school_year") == school_year
+    }
+    for row in rows:
+        payload: dict[str, Any] = {
+            "name": grading_period_name(row["semester"], row["term"]),
+            "school_year": school_year,
+            "semester": row["semester"],
+            "term": row["term"],
+            "start_date": row["start_date"].isoformat(),
+            "end_date": row["end_date"].isoformat(),
+            "dates_confirmed": confirmed,
+        }
+        current = existing.get((row["semester"], row["term"]))
+        for attempt in (payload, {k: v for k, v in payload.items() if k != "dates_confirmed"}):
+            try:
+                if current:
+                    _sb().table("grading_periods").update(attempt).eq("id", current["id"]).execute()
+                else:
+                    _sb().table("grading_periods").insert({"id": str(uuid.uuid4()), **attempt}).execute()
+                break
+            except Exception as e:
+                # Before school_year_dates_confirmed.sql runs the column is missing.
+                if "dates_confirmed" in str(e) and attempt is payload:
+                    continue
+                raise
+    invalidate_grading_periods_cache()
+    return next((s for s in list_school_years() if s["school_year"] == school_year), {})
+
+
+def _same_weekday_next_year(d: date) -> date:
+    """The same calendar spot one year later, moved to the same weekday
+    (a Monday start stays a Monday)."""
+    try:
+        target = d.replace(year=d.year + 1)
+    except ValueError:  # Feb 29
+        target = d.replace(year=d.year + 1, day=28)
+    shift = (d.weekday() - target.weekday() + 3) % 7 - 3  # -3..3 days
+    return target + timedelta(days=shift)
+
+
+def next_school_year_plan() -> dict[str, Any] | None:
+    """The school year after the latest complete one, with its dates moved
+    one year later."""
+    for sy in list_school_years():  # newest first
+        if not all(s["start"] and s["midterm_end"] and s["end"] for s in sy["semesters"]):
+            continue
+        first = int(sy["school_year"][:4]) + 1
+        return {
+            "school_year": f"{first}-{first + 1}",
+            "semesters": [
+                {
+                    "semester": s["semester"],
+                    "start": _same_weekday_next_year(_iso_day(s["start"])).isoformat(),
+                    "midterm_end": _same_weekday_next_year(_iso_day(s["midterm_end"])).isoformat(),
+                    "end": _same_weekday_next_year(_iso_day(s["end"])).isoformat(),
+                }
+                for s in sy["semesters"]
+            ],
+        }
+    return None
+
+
+def create_next_school_year(*, confirmed: bool) -> dict[str, Any] | None:
+    plan = next_school_year_plan()
+    if not plan:
+        return None
+    if any(s["school_year"] == plan["school_year"] for s in list_school_years()):
+        return next(s for s in list_school_years() if s["school_year"] == plan["school_year"])
+    return save_school_year(plan["school_year"], plan["semesters"], confirmed=confirmed)
+
+
+def _auto_create_school_year_if_due(today: str, rows: list[dict[str, Any]]) -> bool:
+    """Once today is past every period on file, make next year's periods.
+    Tried at most once a day per server process."""
+    global _auto_school_year_checked_on
+    if _auto_school_year_checked_on == today:
+        return False
+    ends = [str(r["end_date"]) for r in rows if r.get("end_date")]
+    if not ends or today <= max(ends):
+        return False
+    _auto_school_year_checked_on = today
+    try:
+        return create_next_school_year(confirmed=False) is not None
+    except Exception as e:
+        print(f"auto-create next school year: {e}")
+        return False
+
+
+def current_school_year_start_utc() -> str | None:
+    """When the current school year began (midnight, Philippine time) as a UTC
+    ISO timestamp — the leaderboard counts from here. None without semesters."""
+    period = get_current_grading_period() or {}
+    sy = period.get("school_year")
+    if not sy or not period.get("semester"):
+        return None
+    starts = [
+        str(r["start_date"]) for r in _grading_periods_cached()
+        if r.get("school_year") == sy and r.get("start_date")
+    ]
+    if not starts:
+        return None
+    start = datetime.combine(_iso_day(min(starts)), datetime.min.time(), tzinfo=_PH_TZ)
+    return start.astimezone(timezone.utc).isoformat()
 
 
 def _period_date_range(period: dict[str, Any] | None) -> tuple[str | None, str | None]:
@@ -2894,7 +3163,7 @@ def list_enrollments_for_student(
         )
         # Some PostgREST versions don't accept the inverse FK alias above; fallback below.
         if period_id:
-            q = q.eq("grading_period_id", period_id)
+            q = q.in_("grading_period_id", semester_period_ids(period_id))
         res = q.execute()
         return res.data or []
     except Exception:
@@ -2902,7 +3171,7 @@ def list_enrollments_for_student(
         try:
             q = _sb().table("enrollments").select("*").eq("student_id", student_uuid)
             if period_id:
-                q = q.eq("grading_period_id", period_id)
+                q = q.in_("grading_period_id", semester_period_ids(period_id))
             res = q.execute()
             rows = res.data or []
             subject_ids = list({r.get("subject_id") for r in rows if r.get("subject_id")})
@@ -2945,6 +3214,26 @@ def upsert_enrollment(
         "grading_period_id": grading_period_id,
         "enrollment_status": ENROLLMENT_STATUS_ACTIVE,
     }
+    if grading_period_id:
+        # Already enrolled this semester (e.g. joined at Midterm, now Finals):
+        # reactivate that row instead of adding a second one.
+        existing = get_student_enrollment_row(student_uuid, str(subject_id), grading_period_id)
+        if existing and existing.get("id"):
+            try:
+                res = (
+                    _sb()
+                    .table("enrollments")
+                    .update({
+                        "teacher_id_number": teacher_id_number,
+                        "enrollment_status": ENROLLMENT_STATUS_ACTIVE,
+                    })
+                    .eq("id", existing["id"])
+                    .execute()
+                )
+                return (res.data or [None])[0]
+            except Exception as e:
+                print(f"upsert_enrollment (update): {e}")
+                return None
     try:
         res = (
             _sb()
@@ -2974,7 +3263,7 @@ def get_student_enrollment_row(
             .eq("subject_id", str(subject_id))
         )
         if grading_period_id:
-            q = q.eq("grading_period_id", grading_period_id)
+            q = q.in_("grading_period_id", semester_period_ids(grading_period_id))
         res = q.limit(1).execute()
         return res.data[0] if res.data else None
     except Exception as e:
@@ -4718,7 +5007,10 @@ def _battle_event_rows(student_uuid: str | None = None, student_id_number: str |
 
 
 def _learning_event_rows(
-    event_type: str, student_uuid: str | None = None, student_id_number: str | None = None
+    event_type: str,
+    student_uuid: str | None = None,
+    student_id_number: str | None = None,
+    since: str | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     page = 1000
@@ -4730,6 +5022,8 @@ def _learning_event_rows(
             .select("student_id, student_id_number, metadata")
             .eq("event_type", event_type)
         )
+        if since:
+            q = q.gte("created_at", since)
         if student_uuid:
             q = q.eq("student_id", student_uuid)
         elif student_id_number:
@@ -4759,10 +5053,10 @@ def get_student_battle_stats(student_id_number: str) -> dict[str, Any]:
     return summarize_battle_events([_event_meta(r) for r in rows])
 
 
-def get_all_battle_stats() -> dict[str, dict[str, Any]]:
-    """Battle stats for every student, keyed by profile uuid."""
+def get_all_battle_stats(since: str | None = None) -> dict[str, dict[str, Any]]:
+    """Battle stats for every student (optionally only since a UTC ISO time), keyed by profile uuid."""
     try:
-        rows = _battle_event_rows()
+        rows = _learning_event_rows("battle", since=since)
     except Exception as e:
         print(f"get_all_battle_stats: {e}")
         return {}
@@ -4833,10 +5127,10 @@ def get_student_arcade_stats(student_id_number: str) -> dict[str, Any]:
     }
 
 
-def get_all_game_exp() -> dict[str, int]:
-    """Total EXP from "game" events for every student, keyed by profile uuid."""
+def get_all_game_exp(since: str | None = None) -> dict[str, int]:
+    """Total EXP from "game" events for every student (optionally only since a UTC ISO time), keyed by profile uuid."""
     try:
-        rows = _learning_event_rows("game")
+        rows = _learning_event_rows("game", since=since)
     except Exception as e:
         print(f"get_all_game_exp: {e}")
         return {}
@@ -5026,7 +5320,7 @@ def _student_uuids_enrolled_in_teacher_subjects(
             .in_("subject_id", subject_ids)
         )
         if grading_period_id:
-            q = q.eq("grading_period_id", grading_period_id)
+            q = q.in_("grading_period_id", semester_period_ids(grading_period_id))
         res = q.execute()
         return {
             str(r["student_id"])
@@ -5622,18 +5916,22 @@ def merge_and_compute_student_grade(
     a = compute_activity_average_for_subject(student_uuid, subject_id, period)
     qa_auto = compute_quarterly_assessment_for_subject(student_uuid, subject_id, period)
 
-    def _pick(key: str, auto: float | None) -> float | None:
-        if key in partial and partial[key] is not None:
-            return float(partial[key])
-        if existing.get(key) is not None:
-            return float(existing[key])
-        return auto
+    def _entered(key: str) -> float | None:
+        """The teacher's own score for a component (None = use the automatic
+        one). A key sent as null clears an earlier entry."""
+        if key in partial:
+            return None if partial[key] is None else float(partial[key])
+        return None if existing.get(key) is None else float(existing[key])
 
-    ww = _pick("written_work_score", q["average"])
-    pt = _pick("performance_task_score", a["average"])
-    qa = _pick("quarterly_assessment_score", qa_auto["average"])
+    ww_entered = _entered("written_work_score")
+    pt_entered = _entered("performance_task_score")
+    qa_entered = _entered("quarterly_assessment_score")
+    ww = ww_entered if ww_entered is not None else q["average"]
+    pt = pt_entered if pt_entered is not None else a["average"]
+    qa = qa_entered if qa_entered is not None else qa_auto["average"]
 
-    computed_final = compute_weighted_final(ww, pt, qa, weights)
+    # Initial grade (weighted) -> transmuted period grade, as on the report card.
+    computed_final = transmute(compute_weighted_final(ww, pt, qa, weights))
     final_is_manual = bool(
         partial["final_is_manual"]
         if "final_is_manual" in partial
@@ -5656,9 +5954,10 @@ def merge_and_compute_student_grade(
         "subject_id": subject_id,
         "grading_period_id": grading_period_id,
         "teacher_id_number": partial.get("teacher_id_number") or existing.get("teacher_id_number"),
-        "written_work_score": ww,
-        "performance_task_score": pt,
-        "quarterly_assessment_score": qa,
+        # Only teacher entries are stored, so automatic scores keep updating.
+        "written_work_score": ww_entered,
+        "performance_task_score": pt_entered,
+        "quarterly_assessment_score": qa_entered,
         "quiz_average": ww,
         "activity_average": pt,
         "attendance_percent": partial.get("attendance_percent") or existing.get("attendance_percent"),
@@ -5742,15 +6041,16 @@ def get_gradecard_row(
 
 
 def _classify_standing(avg: float | None) -> str:
+    """Honors per DepEd Order No. 36, s. 2016 (98 / 95 / 90), else passed or failed."""
     if avg is None:
         return "—"
-    if avg >= 95:
+    if avg >= 98:
         return "With Highest Honors"
-    if avg >= 90:
+    if avg >= 95:
         return "With High Honors"
-    if avg >= 85:
+    if avg >= 90:
         return "With Honors"
-    if avg >= 75:
+    if avg >= PASSING_GRADE:
         return "Passed"
     return "Failed"
 
@@ -5759,7 +6059,11 @@ def _generate_reference_no(student_id_number: str | None, period: dict[str, Any]
     if not period or not student_id_number:
         return "GR-XXXX-XXXX"
     sy = str(period.get("school_year") or "").replace(" ", "")
-    name = str(period.get("name") or "").replace(" ", "")
+    term = str(period.get("term") or "").strip().lower()
+    if period.get("semester") and term in ("midterm", "finals"):
+        name = f"S{period['semester']}{'M' if term == 'midterm' else 'F'}"
+    else:
+        name = re.sub(r"[^A-Za-z0-9]", "", str(period.get("name") or ""))
     return f"GR-{sy}-{name}-{student_id_number}"
 
 
@@ -5839,7 +6143,8 @@ def _collect_subject_ids_for_student(
     """
     subject_ids: set[str] = set()
 
-    # 1) From enrollments
+    # 1) From enrollments (enrollment lasts the whole semester)
+    semester_ids = set(semester_period_ids(period.get("id"))) if period else set()
     try:
         q = _sb().table("enrollments").select("subject_id, grading_period_id").eq("student_id", student_uuid)
         res = q.execute()
@@ -5847,9 +6152,9 @@ def _collect_subject_ids_for_student(
             sid = r.get("subject_id")
             if not sid:
                 continue
-            # If row has no period, include it; if it has a period, match it
+            # If row has no period, include it; if it has a period, match its semester
             row_period = r.get("grading_period_id")
-            if not row_period or not period or str(row_period) == str(period.get("id")):
+            if not row_period or not period or str(row_period) in semester_ids:
                 subject_ids.add(str(sid))
     except Exception as e:
         print(f"_collect_subject_ids_for_student enrollments: {e}")
@@ -5908,7 +6213,7 @@ def _fetch_subjects_map(subject_ids: list[str]) -> dict[str, dict[str, Any]]:
         res = (
             _sb()
             .table("subjects")
-            .select("id, name, color, description, deped_category")
+            .select("id, name, color, description, deped_category, created_by_teacher_id_number")
             .in_("id", subject_ids)
             .execute()
         )
@@ -5971,19 +6276,15 @@ def _profile_lookup_by_id_numbers(idns: list[str]) -> dict[str, dict[str, Any]]:
         return {}
 
 
-def build_full_gradecard(
+def _gradecard_subject_rows(
+    student: dict[str, Any],
+    student_uuid: str,
     student_id_number: str,
-    grading_period_id: str | None = None,
-) -> dict[str, Any]:
-    """Return a complete gradecard JSON ready for the frontend."""
-    student = get_profile_by_id_number(student_id_number)
-    if not student:
-        raise RuntimeError(f"Student profile not found for id_number={student_id_number}")
-    student_uuid = str(student["id"])
-
-    period = get_grading_period(grading_period_id)
-
-    # Subjects derived from enrollments + activity
+    period: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """One row per subject for one grading period: component scores (teacher
+    entries win over auto values), the initial grade and the transmuted
+    period grade. teacher_name is filled in by the caller."""
     subject_ids = _collect_subject_ids_for_student(student_uuid, period)
     subjects_map = _fetch_subjects_map(subject_ids)
 
@@ -6005,10 +6306,10 @@ def build_full_gradecard(
         except Exception as e:
             print(f"build_full_gradecard student_grades: {e}")
 
-    # Build subject rows
-    subjects_out: list[dict[str, Any]] = []
-    teacher_idns_needed: set[str] = set()
+    # Attendance isn't per subject: count it once for the period.
+    att = compute_attendance_stats(student_uuid, student_id_number, period)
 
+    rows: list[dict[str, Any]] = []
     for sid in subject_ids:
         subj = subjects_map.get(sid, {"id": sid, "name": "Unknown subject"})
         existing = grade_rows_by_subject.get(sid) or {}
@@ -6016,11 +6317,8 @@ def build_full_gradecard(
         q = compute_quiz_average_for_subject(student_uuid, sid, period)
         a = compute_activity_average_for_subject(student_uuid, sid, period)
         qa_lesson = compute_quarterly_assessment_for_subject(student_uuid, sid, period)
-        att = compute_attendance_stats(student_uuid, student_id_number, period)
 
         teacher_idn = existing.get("teacher_id_number") or _fetch_teacher_for_subject(student_uuid, sid)
-        if teacher_idn:
-            teacher_idns_needed.add(teacher_idn)
 
         deped_category = (subj.get("deped_category") or "academic_standard").strip().lower()
         weights = shs_component_weights(student.get("strand"), deped_category)
@@ -6031,33 +6329,35 @@ def build_full_gradecard(
             auto_qa=qa_lesson["average"],
             stored=existing,
         )
-        computed_final = compute_weighted_final(ww, pt, qa, weights)
+        initial_grade = compute_weighted_final(ww, pt, qa, weights)
+        computed_final = transmute(initial_grade)
         final_is_manual = bool(existing.get("final_is_manual"))
         if final_is_manual and existing.get("final_grade") is not None:
             display_final = float(existing["final_grade"])
-        elif computed_final is not None:
-            display_final = computed_final
-        elif existing.get("final_grade") is not None:
-            display_final = float(existing["final_grade"])
         else:
-            display_final = None
+            # Stored non-manual finals may predate transmutation; always recompute.
+            display_final = computed_final
 
-        subjects_out.append({
+        rows.append({
             "subject_id": sid,
             "subject_name": subj.get("name"),
             "subject_color": subj.get("color"),
+            "owner_teacher_id_number": (subj.get("created_by_teacher_id_number") or "").strip() or None,
             "deped_category": deped_category,
             "weights": weights,
             "weights_label": format_weights_label(weights),
             "teacher_id_number": teacher_idn,
-            "teacher_name": None,  # filled below
+            "teacher_name": None,  # filled by the caller
             "written_work_score": ww,
+            "written_work_entered": existing.get("written_work_score"),
             "written_work_auto": q["average"],
             "written_work_attempts": q["attempts"],
             "performance_task_score": pt,
+            "performance_task_entered": existing.get("performance_task_score"),
             "performance_task_auto": a["average"],
             "performance_task_attempts": a["attempts"],
             "quarterly_assessment_score": qa,
+            "quarterly_assessment_entered": existing.get("quarterly_assessment_score"),
             "quarterly_assessment_auto": qa_lesson["average"],
             "quarterly_assessment_attempts": qa_lesson["attempts"],
             "quiz_average": q["average"],
@@ -6068,8 +6368,11 @@ def build_full_gradecard(
             "attendance_present": att["present"],
             "attendance_absent": att["absent"],
             "attendance_tardy": att["tardy"],
+            "initial_grade": initial_grade,
             "computed_final": computed_final,
             "final_grade": display_final,
+            "descriptor": grade_descriptor(display_final),
+            "passed": None if display_final is None else display_final >= PASSING_GRADE,
             "final_is_manual": final_is_manual,
             "final_is_override": final_is_manual,
             "grade_complete": computed_final is not None,
@@ -6077,8 +6380,86 @@ def build_full_gradecard(
             "teacher_comments": existing.get("teacher_comments"),
             "finalized_at": existing.get("finalized_at"),
         })
+    return rows
+
+
+_SEMESTER_LABELS = {1: "1st Semester", 2: "2nd Semester"}
+_TERM_ORDER = {"midterm": 0, "finals": 1}
+
+
+def _semester_summary(
+    student: dict[str, Any],
+    student_uuid: str,
+    student_id_number: str,
+    period: dict[str, Any] | None,
+    period_rows: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Semester final grades: per subject the average of its Midterm and
+    Finals grades, and the semester general average once every subject has
+    both. None when the period isn't part of a semester."""
+    if not period or not period.get("semester"):
+        return None
+    siblings = [get_grading_period(pid) for pid in semester_period_ids(period.get("id"))]
+    siblings = [p for p in siblings if p]
+    if len(siblings) < 2:
+        return None
+    siblings.sort(key=lambda p: (_TERM_ORDER.get(str(p.get("term") or ""), 9), str(p.get("start_date") or "")))
+
+    finals_by_period: dict[str, dict[str, float | None]] = {}
+    names: dict[str, str] = {}
+    for p in siblings:
+        if str(p["id"]) == str(period["id"]):
+            rows = period_rows
+        else:
+            rows = _gradecard_subject_rows(student, student_uuid, student_id_number, p)
+        finals_by_period[str(p["id"])] = {r["subject_id"]: r.get("final_grade") for r in rows}
+        for r in rows:
+            names.setdefault(r["subject_id"], r.get("subject_name") or "Subject")
+
+    subjects: dict[str, dict[str, Any]] = {}
+    for sid, name in names.items():
+        grades = [finals_by_period[str(p["id"])].get(sid) for p in siblings]
+        sem_grade = average_grade(grades) if all(g is not None for g in grades) else None
+        subjects[sid] = {
+            "subject_name": name,
+            "grades": {str(p["id"]): finals_by_period[str(p["id"])].get(sid) for p in siblings},
+            "semester_grade": sem_grade,
+            "descriptor": grade_descriptor(sem_grade),
+        }
+
+    sem_grades = [s["semester_grade"] for s in subjects.values()]
+    complete = bool(sem_grades) and all(g is not None for g in sem_grades)
+    general = average_grade(sem_grades) if complete else None
+    return {
+        "school_year": period.get("school_year"),
+        "semester": period.get("semester"),
+        "label": _SEMESTER_LABELS.get(period.get("semester"), f"Semester {period.get('semester')}"),
+        "periods": [{"id": p["id"], "name": p.get("name"), "term": p.get("term")} for p in siblings],
+        "subjects": subjects,
+        "complete": complete,
+        "general_average": general,
+        "descriptor": grade_descriptor(general),
+        "standing": _classify_standing(general) if general is not None else None,
+    }
+
+
+def build_full_gradecard(
+    student_id_number: str,
+    grading_period_id: str | None = None,
+) -> dict[str, Any]:
+    """Return a complete gradecard JSON ready for the frontend."""
+    student = get_profile_by_id_number(student_id_number)
+    if not student:
+        raise RuntimeError(f"Student profile not found for id_number={student_id_number}")
+    student_uuid = str(student["id"])
+
+    period = get_grading_period(grading_period_id)
+
+    subjects_out = _gradecard_subject_rows(student, student_uuid, student_id_number, period)
+    semester = _semester_summary(student, student_uuid, student_id_number, period, subjects_out)
 
     # Resolve teacher names + adviser
+    teacher_idns_needed = {r["teacher_id_number"] for r in subjects_out if r.get("teacher_id_number")}
     adviser_idn = (student.get("adviser_id_number") or "").strip() if student.get("adviser_id_number") else ""
     if adviser_idn:
         teacher_idns_needed.add(adviser_idn)
@@ -6087,26 +6468,32 @@ def build_full_gradecard(
         tidn = row.get("teacher_id_number")
         if tidn and tidn in profile_map:
             row["teacher_name"] = profile_display_name(profile_map[tidn])
+        if semester:
+            sem_row = semester["subjects"].get(row["subject_id"]) or {}
+            row["semester_grade"] = sem_row.get("semester_grade")
+            row["semester_grades"] = sem_row.get("grades")
 
     adviser_profile = profile_map.get(adviser_idn) if adviser_idn else None
 
-    # Top-level summary
-    finals = [s["final_grade"] for s in subjects_out if s.get("final_grade") is not None]
-    auto_general = round(sum(finals) / len(finals), 2) if finals else None
+    # Top-level summary: the period's general average is a whole number, like
+    # the report card.
+    auto_general = average_grade([s.get("final_grade") for s in subjects_out])
 
     auto_att = compute_attendance_stats(student_uuid, student_id_number, period)
 
     summary_row = get_gradecard_row(student_uuid, period["id"] if period else None) or {}
+    general_average = (
+        summary_row.get("general_average")
+        if summary_row.get("general_average") is not None else auto_general
+    )
     summary_out = {
         "id": summary_row.get("id"),
         "reference_no": summary_row.get("reference_no")
             or _generate_reference_no(profile_lrn_from_row(student), period),
-        "general_average": summary_row.get("general_average")
-            if summary_row.get("general_average") is not None else auto_general,
+        "general_average": general_average,
         "general_average_auto": auto_general,
-        "standing": summary_row.get("standing")
-            or _classify_standing(summary_row.get("general_average")
-                                  if summary_row.get("general_average") is not None else auto_general),
+        "descriptor": grade_descriptor(general_average),
+        "standing": summary_row.get("standing") or _classify_standing(general_average),
         "conduct": summary_row.get("conduct"),
         "days_present": summary_row.get("days_present")
             if summary_row.get("days_present") is not None else auto_att["present"],
@@ -6143,6 +6530,7 @@ def build_full_gradecard(
         } if adviser_profile else None),
         "period": period,
         "subjects": subjects_out,
+        "semester": semester,
         "summary": summary_out,
     }
 

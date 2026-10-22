@@ -10,14 +10,16 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
 <link rel="stylesheet" href="style.css?v=2026100804" />
+  <link rel="stylesheet" href="css/gradecard.css?v=2026102303" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026100803" defer></script>
-  <script src="js/pages/admin-student-gradecard.entry.js?v=2026051302" defer></script>
+  <script src="script.js?v=2026102301" defer></script>
+  <script src="js/shared/gradecard-view.js?v=2026102302" defer></script>
+  <script src="js/pages/admin-student-gradecard.entry.js?v=2026102303" defer></script>
 </head>
-<body data-sidebar-active="gradecard" class="admin-student-gradecard-page">
+<body data-sidebar-active="gradecard" class="admin-student-gradecard-page gc-page">
   <main class="page-shell container">
     <div class="dashboard-shell">
       <aside class="sidebar lq-sidebar fade-up">
@@ -48,150 +50,126 @@
         </div>
       </aside>
 
-      <section class="main-panel">
+      <section class="main-panel gc-main">
         <section class="glass-card panel-header fade-up delay-1">
           <div class="panel-title">
             <h1><i class="fa-solid fa-id-card"></i> Student Gradecard</h1>
-            <p>Search for a student and review their performance across subjects.</p>
-          </div>
-          <div class="panel-header-actions">
-            <span class="badge badge-soft"><i class="fa-solid fa-flask"></i> Template view</span>
+            <p>Pick a student to see their grades for a term.</p>
           </div>
         </section>
 
-        <!-- Student selector -->
-        <section class="glass-card content-card fade-up delay-2">
-          <div class="gradecard-search">
-            <label class="form-field" style="flex:1; min-width: 240px;">
-              <span class="small-note">Find student</span>
-              <input
-                id="gradecard-search-input"
-                type="text"
-                class="form-input"
-                placeholder="Search by name or ID number…"
-                autocomplete="off" />
+        <!-- Step 1: pick a student -->
+        <section class="glass-card content-card gc-picker fade-up delay-2" id="gc-picker">
+          <div class="gc-picker-row">
+            <label class="form-field gc-search-field">
+              <span class="gc-label">Find a student</span>
+              <span class="gc-search-box">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input
+                  id="gradecard-search-input"
+                  type="search"
+                  class="form-input"
+                  placeholder="Type a name or ID number…"
+                  autocomplete="off"
+                  role="combobox"
+                  aria-expanded="false"
+                  aria-controls="gc-results"
+                  aria-autocomplete="list" />
+              </span>
             </label>
-            <label class="form-field" style="flex:1; min-width: 240px;">
-              <span class="small-note">Term</span>
-              <select id="gradecard-term-select" class="form-select">
-                <option value="current">Current term (2026 Q2)</option>
-                <option value="prev">Previous term (2026 Q1)</option>
-                <option value="full">Full school year</option>
-              </select>
-            </label>
+            <div class="gc-term-slot" id="gc-term-slot-picker">
+              <label class="form-field gc-term-field" id="gc-term-field">
+                <span class="gc-label">Term</span>
+                <select id="gradecard-term-select" class="form-select">
+                  <option value="">Loading terms…</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <p class="gc-hint" id="gc-hint">Loading students…</p>
+          <ul class="gc-results" id="gc-results" role="listbox" aria-label="Matching students" hidden></ul>
+        </section>
+
+        <!-- Step 2: the gradecard -->
+        <div class="gc-toolbar" id="gc-toolbar" hidden>
+          <button type="button" class="btn btn-secondary" id="gc-change-btn">
+            <i class="fa-solid fa-arrow-left"></i> Change student
+          </button>
+          <div class="gc-toolbar-right">
+            <div class="gc-term-slot" id="gc-term-slot-report"></div>
             <button type="button" id="gradecard-print-btn" class="btn btn-secondary">
               <i class="fa-solid fa-print"></i> Print
             </button>
           </div>
-        </section>
+        </div>
 
-        <!-- Gradecard preview (template) -->
-        <article class="glass-card gradecard-sheet fade-up delay-3" id="gradecard-sheet">
-          <header class="gradecard-header">
-            <div class="gradecard-school">
-              <div class="gradecard-school-logo"><span>LQ</span></div>
-              <div>
-                <strong>LearnIQ Academy</strong>
-                <p class="small-note">Official Student Gradecard · 2026 — 2027 · Q2</p>
-              </div>
+        <article class="glass-card gradecard-sheet gc-report" id="gradecard-sheet" hidden aria-live="polite">
+          <!-- Printed copy only -->
+          <header class="gc-print-only gc-print-head">
+            <div>
+              <strong>LearnIQ Academy</strong>
+              <span id="gc-print-term">Official Student Gradecard</span>
             </div>
-            <div class="gradecard-id-block">
-              <p class="small-note">Reference</p>
-              <strong id="gradecard-ref">GR-2026Q2-000000</strong>
+            <div class="gc-print-ref">
+              <span>Reference</span>
+              <strong id="gradecard-ref">—</strong>
             </div>
           </header>
 
-          <section class="gradecard-student">
-            <div class="gradecard-avatar" id="gradecard-avatar">JD</div>
-            <div class="gradecard-student-info">
-              <h3 id="gradecard-student-name">Sample Student Name</h3>
-              <p class="small-note" id="gradecard-student-meta">
-                ID No. 2026-XXXXX · Grade 12 · STEM · Section A
-              </p>
-              <p class="small-note" id="gradecard-student-adviser">Adviser: —</p>
-            </div>
-            <div class="gradecard-summary">
-              <div class="gradecard-summary-item">
-                <span class="small-note">General Average</span>
+          <div class="gc-status" id="gc-status" hidden></div>
+
+          <div id="gc-body">
+            <section class="gc-student">
+              <div class="gc-avatar" id="gradecard-avatar" aria-hidden="true">?</div>
+              <div class="gc-student-text">
+                <h2 id="gradecard-student-name">—</h2>
+                <p id="gradecard-student-meta">—</p>
+              </div>
+              <p class="gc-term-tag" id="gc-term-tag"></p>
+            </section>
+
+            <section class="gc-stats" aria-label="Summary">
+              <div class="gc-stat">
+                <span id="gc-term-avg-label">Term average</span>
                 <strong id="gradecard-gpa">—</strong>
+                <small id="gc-term-avg-note"></small>
               </div>
-              <div class="gradecard-summary-item">
-                <span class="small-note">Standing</span>
+              <div class="gc-stat" id="gc-sem-stat" hidden>
+                <span id="gc-sem-label">Semester average</span>
+                <strong id="gc-sem-avg">—</strong>
+                <small id="gc-sem-note"></small>
+              </div>
+              <div class="gc-stat">
+                <span>Standing</span>
                 <strong id="gradecard-standing">—</strong>
+                <small id="gc-standing-note"></small>
               </div>
-            </div>
-          </section>
+              <div class="gc-stat">
+                <span>Attendance</span>
+                <strong id="gc-attendance">—</strong>
+                <small id="gc-attendance-note"></small>
+              </div>
+            </section>
 
-          <section class="gradecard-section">
-            <h4><i class="fa-solid fa-table-list"></i> Subjects</h4>
-            <div class="table-responsive">
-              <table class="data-table gradecard-table">
-                <thead>
-                  <tr>
-                    <th>Subject</th>
-                    <th>Teacher</th>
-                    <th class="num">WW</th>
-                    <th class="num">PT</th>
-                    <th class="num">QA</th>
-                    <th class="num">Weights</th>
-                    <th class="num">Final</th>
-                    <th>Remarks</th>
-                  </tr>
-                </thead>
-                <tbody id="gradecard-subjects-body">
-                  <tr>
-                    <td colspan="8" class="empty-state">
-                      <i class="fa-solid fa-id-card"></i>
-                      <p>Search for a student above to load their gradecard.</p>
-                      <p class="small-note">This is a template view — data will be populated once the gradecard API is connected.</p>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+            <section class="gc-subjects">
+              <div class="gc-subjects-head">
+                <h3>Subjects</h3>
+                <span>Final</span>
+                <span>Status</span>
+                <span aria-hidden="true"></span>
+              </div>
+              <div id="gradecard-subjects-body" class="gc-subject-list"></div>
+              <p class="gc-footnote">Tap a subject to see how its grade was computed.</p>
+            </section>
 
-          <section class="gradecard-section">
-            <h4><i class="fa-solid fa-pen-to-square"></i> Conduct &amp; Comments</h4>
-            <div class="gradecard-conduct-grid">
-              <div class="gradecard-conduct-item">
-                <span class="small-note">Conduct</span>
-                <strong id="gradecard-conduct">—</strong>
-              </div>
-              <div class="gradecard-conduct-item">
-                <span class="small-note">Days present</span>
-                <strong id="gradecard-days-present">—</strong>
-              </div>
-              <div class="gradecard-conduct-item">
-                <span class="small-note">Days absent</span>
-                <strong id="gradecard-days-absent">—</strong>
-              </div>
-              <div class="gradecard-conduct-item">
-                <span class="small-note">Times tardy</span>
-                <strong id="gradecard-tardy">—</strong>
-              </div>
-            </div>
-            <div class="gradecard-comments">
-              <span class="small-note">Adviser comments</span>
-              <p id="gradecard-comments-text" class="gradecard-comments-text">
-                Comments and remarks from the student's adviser will appear here once the gradecard data is connected.
-              </p>
-            </div>
-          </section>
+            <section class="gc-notes" id="gc-notes"></section>
+          </div>
 
-          <footer class="gradecard-footer">
-            <div class="gradecard-sig">
-              <div class="gradecard-sig-line"></div>
-              <p class="small-note">Class Adviser</p>
-            </div>
-            <div class="gradecard-sig">
-              <div class="gradecard-sig-line"></div>
-              <p class="small-note">Principal</p>
-            </div>
-            <div class="gradecard-sig">
-              <div class="gradecard-sig-line"></div>
-              <p class="small-note">Parent / Guardian</p>
-            </div>
+          <!-- Printed copy only -->
+          <footer class="gc-print-only gc-print-sigs">
+            <div><span class="gc-sig-line"></span>Class Adviser</div>
+            <div><span class="gc-sig-line"></span>Principal</div>
+            <div><span class="gc-sig-line"></span>Parent / Guardian</div>
           </footer>
         </article>
       </section>

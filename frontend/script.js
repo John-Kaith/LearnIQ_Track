@@ -1333,6 +1333,7 @@ const ADMIN_SIDEBAR_ITEMS = [
   { id: "attendance", href: "admin-attendance-logs.html", icon: "fa-calendar-check", label: "Attendance Logs" },
   { id: "journals", href: "admin-journals.html", icon: "fa-book", label: "Journals" },
   { id: "reports", href: "admin-reports.html", icon: "fa-file-lines", label: "Reports" },
+  { id: "school-year", href: "admin-school-year.html", icon: "fa-calendar-days", label: "School Year" },
   { id: "settings", href: "admin-settings.html", icon: "fa-gear", label: "Settings" },
 ];
 
@@ -1350,6 +1351,7 @@ const ADMIN_PATH_TO_SIDEBAR_ID = {
   "admin-attendance-logs.html": "attendance",
   "admin-journals.html": "journals",
   "admin-reports.html": "reports",
+  "admin-school-year.html": "school-year",
   "admin-settings.html": "settings",
   "admin-profile.html": "settings",
 };
@@ -1951,12 +1953,14 @@ function setupLeaderboardPage() {
       defaultEmptyCopy();
 
       if (liveLine) {
+        // The board starts fresh every school year.
+        const sy = data.school_year ? `S.Y. ${data.school_year} · ` : "";
         if (updated) {
           const d = new Date(updated);
           const t = !Number.isNaN(d.getTime()) ? d.toLocaleString() : String(updated);
-          liveLine.textContent = `Last updated: ${t} · Auto-refresh every 45s`;
+          liveLine.textContent = `${sy}Last updated: ${t} · Auto-refresh every 45s`;
         } else {
-          liveLine.textContent = "Live from quiz submissions";
+          liveLine.textContent = `${sy}Live from quiz submissions`;
         }
       }
 
@@ -4576,7 +4580,10 @@ async function loadLeaderboard() {
           </tr>`
       )
       .join("");
-    list.innerHTML = `
+    const syNote = data && data.school_year
+      ? `<p class="small-note" style="margin:0 0 0.6rem;">Counting S.Y. ${escapeHtml(data.school_year)} only — the board starts fresh every school year.</p>`
+      : "";
+    list.innerHTML = `${syNote}
       <div class="table-overflow">
         <table class="data-table">
           <thead>
@@ -4745,6 +4752,7 @@ function setupAdminPage() {
   renderSystemStatus();
   setupDashboardActions();
   setupAdminNavigation();
+  showSchoolYearReviewBanner();
 
   const adminSearchInput = document.getElementById("admin-search");
   const adminResetButton = document.getElementById("admin-reset");
@@ -4757,6 +4765,32 @@ function setupAdminPage() {
       renderAdminTable();
       renderMetrics();
     });
+  }
+}
+
+/** Admin dashboard: when a school year's dates were filled in automatically
+ * (or are placeholders), remind the admin to check them on the School Year page. */
+async function showSchoolYearReviewBanner() {
+  try {
+    const res = await fetch(apiUrl("/admin/school-years"), { headers: adminAuthHeaders() });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    const years = Array.isArray(data.needs_review) ? data.needs_review : [];
+    const header = document.querySelector(".main-panel > .panel-header");
+    if (!years.length || !header || document.getElementById("sy-review-banner")) return;
+    const banner = document.createElement("div");
+    banner.id = "sy-review-banner";
+    banner.setAttribute("role", "status");
+    banner.style.cssText =
+      "display:flex;flex-wrap:wrap;align-items:center;gap:0.6rem 1rem;padding:0.85rem 1.1rem;" +
+      "border-radius:14px;border:1px solid rgba(245,158,11,0.45);background:rgba(245,158,11,0.12);color:var(--text);";
+    banner.innerHTML = `
+      <i class="fa-solid fa-calendar-days" style="color:#d97706" aria-hidden="true"></i>
+      <span style="flex:1 1 260px">The dates of S.Y. ${years.map(escapeHtml).join(", ")} were filled in automatically. Please check them against the school calendar.</span>
+      <a class="btn btn-secondary btn-sm" href="admin-school-year.html">Check dates</a>`;
+    header.insertAdjacentElement("afterend", banner);
+  } catch (_) {
+    /* the dashboard works without the reminder */
   }
 }
 

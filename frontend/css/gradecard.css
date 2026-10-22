@@ -1,0 +1,795 @@
+/* ============================================================
+   Student Gradecard (admin-student-gradecard.html and
+   teacher-student-gradecard.html; both bodies carry .gc-page).
+   A simple gradecard: header, summary tiles, one row per subject.
+   Light is the default theme; html[data-theme="dark"] overrides the
+   few local tokens below.
+   ============================================================ */
+
+.gc-main {
+  --gc-accent-bg: rgba(var(--lq-accent-blue-rgb), 0.08);
+  --gc-accent-border: rgba(var(--lq-accent-blue-rgb), 0.28);
+  --gc-surface: rgba(255, 255, 255, 0.7);
+  --gc-pass: #15803d;
+  --gc-pass-bg: rgba(34, 197, 94, 0.14);
+  --gc-fail: #b91c1c;
+  --gc-fail-bg: rgba(239, 68, 68, 0.12);
+  --gc-wait: #b45309;
+  --gc-wait-bg: rgba(245, 158, 11, 0.16);
+  --gc-none-bg: rgba(120, 113, 108, 0.12);
+}
+
+html[data-theme="dark"] .gc-main {
+  --gc-surface: rgba(2, 6, 23, 0.35);
+  --gc-pass: #4ade80;
+  --gc-fail: #f87171;
+  --gc-wait: #fbbf24;
+  --gc-none-bg: rgba(148, 163, 184, 0.14);
+}
+
+/* Some cards set display:grid, which would beat the hidden attribute. */
+.gc-main [hidden] {
+  display: none !important;
+}
+
+.gc-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.gc-muted,
+.gc-hint,
+.gc-footnote {
+  color: var(--muted);
+}
+
+/* ---------- Step 1: picker ---------- */
+
+.gc-picker {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.gc-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.gc-search-field {
+  flex: 2 1 320px;
+  min-width: 0;
+}
+
+.gc-term-slot {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.gc-term-field {
+  width: 100%;
+}
+
+.gc-search-box {
+  position: relative;
+  display: block;
+}
+
+.gc-search-box i {
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.gc-search-box .form-input {
+  width: 100%;
+  min-height: 48px;
+  padding-left: 2.6rem;
+  font-size: 1rem;
+}
+
+.gc-hint {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.gc-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.gc-result {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--gc-surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.gc-result:hover,
+.gc-result.is-active {
+  border-color: var(--gc-accent-border);
+  background: var(--gc-accent-bg);
+}
+
+.gc-result > i {
+  color: var(--muted);
+}
+
+.gc-result-avatar,
+.gc-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-weight: 700;
+  color: #fff;
+  background: var(--lq-accent-blue);
+}
+
+.gc-result-avatar {
+  width: 38px;
+  height: 38px;
+  font-size: 0.85rem;
+}
+
+.gc-result-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.gc-result-text strong,
+.gc-result-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gc-result-text small {
+  color: var(--muted);
+}
+
+/* ---------- Step 2: toolbar ---------- */
+
+.gc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.gc-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex: 0 1 460px;
+  min-width: 0;
+}
+
+.gc-toolbar-right .gc-term-slot {
+  flex: 1 1 240px;
+}
+
+/* ---------- Step 2: gradecard ---------- */
+
+.gc-report {
+  display: grid;
+  gap: 1.35rem;
+  padding: 1.5rem 1.6rem 1.7rem;
+}
+
+#gc-body {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.gc-status {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.gc-status.is-error {
+  color: var(--gc-fail);
+}
+
+.gc-student {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.gc-avatar {
+  width: 56px;
+  height: 56px;
+  font-size: 1.2rem;
+}
+
+.gc-student-text h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.3rem;
+  text-wrap: balance;
+}
+
+.gc-student-text p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.gc-term-tag {
+  margin: 0;
+  align-self: start;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--gc-accent-border);
+  background: var(--gc-accent-bg);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gc-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.gc-stat {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.9rem 1.05rem;
+  border-radius: 14px;
+  background: var(--gc-accent-bg);
+  border: 1px solid var(--gc-accent-border);
+}
+
+.gc-stat span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gc-stat strong {
+  font-size: 1.6rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-stat small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Subjects: one row per subject, breakdown on tap */
+.gc-subjects h3,
+.gc-notes h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.gc-subjects-head,
+.gc-subject > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5rem 8.25rem 1rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gc-subjects-head {
+  padding: 0 1rem 0.55rem;
+}
+
+.gc-subjects-head span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gc-subjects-head span:nth-of-type(1) {
+  text-align: center;
+}
+
+.gc-subject-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.gc-subject {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--gc-surface);
+}
+
+.gc-subject[open] {
+  border-color: var(--gc-accent-border);
+}
+
+.gc-subject > summary {
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.gc-subject > summary::-webkit-details-marker {
+  display: none;
+}
+
+.gc-subject > summary:focus-visible {
+  outline: 2px solid var(--lq-accent-blue);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.gc-subject-name {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.gc-subject-name small {
+  color: var(--muted);
+}
+
+.gc-final {
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-pill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gc-pill.is-pass { color: var(--gc-pass); background: var(--gc-pass-bg); }
+.gc-pill.is-fail { color: var(--gc-fail); background: var(--gc-fail-bg); }
+.gc-pill.is-wait { color: var(--gc-wait); background: var(--gc-wait-bg); }
+.gc-pill.is-none { color: var(--muted); background: var(--gc-none-bg); }
+
+.gc-caret {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.gc-subject[open] .gc-caret {
+  transform: rotate(180deg);
+}
+
+.gc-breakdown {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px dashed var(--border);
+}
+
+.gc-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.gc-part {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: var(--gc-accent-bg);
+}
+
+.gc-part span,
+.gc-part small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.gc-part strong {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-chip {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.gc-remark {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.gc-calc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.gc-calc strong {
+  color: var(--text);
+}
+
+.gc-remark span {
+  color: var(--muted);
+}
+
+.gc-empty {
+  margin: 0;
+  padding: 1.75rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.gc-empty i {
+  display: block;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.gc-footnote {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+}
+
+/* Adviser notes: one quiet block */
+.gc-notes {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+
+.gc-notes p {
+  margin: 0;
+}
+
+.gc-note-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+}
+
+.gc-note-line em {
+  font-style: normal;
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+
+.gc-note-text {
+  padding: 0.75rem 0.95rem;
+  border-radius: 10px;
+  background: var(--gc-accent-bg);
+  white-space: pre-line;
+}
+
+/* ---------- Teacher: editing scores ---------- */
+
+.gc-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.gc-edit-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(0, 2fr);
+  gap: 0.75rem;
+}
+
+.gc-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.gc-field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.gc-field .form-input {
+  width: 100%;
+  min-height: 42px;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gc-field small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.gc-field > span em {
+  font-style: normal;
+  font-weight: 500;
+}
+
+.gc-subject.is-dirty {
+  border-color: var(--gc-wait);
+}
+
+.gc-dirty-tag {
+  display: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gc-wait);
+}
+
+.gc-subject.is-dirty .gc-dirty-tag {
+  display: inline;
+}
+
+.gc-teacher-notes textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+}
+
+.gc-savebar {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.gc-save-status {
+  margin-right: auto;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.gc-save-status.is-dirty { color: var(--gc-wait); }
+.gc-save-status.is-ok { color: var(--gc-pass); }
+.gc-save-status.is-error { color: var(--gc-fail); }
+
+/* ---------- Printed copy ---------- */
+
+.gc-print-only,
+.gc-print-list {
+  display: none;
+}
+
+@media print {
+  /* The shared print rule pins .gradecard-sheet absolutely to one page,
+     which overlaps a gradecard that runs onto page 2. Here the rest of the
+     page is removed instead, so the sheet flows across pages. */
+  html,
+  body.gc-page {
+    background: #fff !important;
+  }
+
+  .gc-page .sidebar,
+  .gc-page .panel-header,
+  .gc-page .sidebar-toggle,
+  .gc-page #gradecard-picker,
+  .gc-savebar,
+  .gc-field small,
+  .gc-toolbar,
+  .gc-picker,
+  .gc-caret,
+  .gc-footnote,
+  .gc-term-tag {
+    display: none !important;
+  }
+
+  .gc-page .page-shell,
+  .gc-page .dashboard-shell,
+  .gc-page .main-panel {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    background: none !important;
+  }
+
+  .gc-main .gc-print-only {
+    display: flex !important;
+  }
+
+  .gc-main .gc-print-list {
+    display: block !important;
+  }
+
+  .gc-main .gc-screen-only {
+    display: none !important;
+  }
+
+  .gc-report,
+  .gc-report * {
+    color: #111 !important;
+    box-shadow: none !important;
+  }
+
+  .gc-page .gc-report {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    border: none !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+  }
+
+  .gc-print-head {
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #999;
+  }
+
+  .gc-print-head > div:first-child {
+    display: grid;
+  }
+
+  .gc-print-head strong {
+    font-size: 1.1rem;
+  }
+
+  .gc-print-ref {
+    display: grid;
+    text-align: right;
+    font-size: 0.8rem;
+  }
+
+  .gc-print-ref strong {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+  }
+
+  .gc-stat,
+  .gc-part,
+  .gc-term-tag,
+  .gc-note-text,
+  .gc-pill,
+  .gc-subject {
+    background: none !important;
+    border: 1px solid #bbb !important;
+  }
+
+  .gc-avatar {
+    background: #ddd !important;
+  }
+
+  /* Teacher copy: entered values print as plain text. */
+  .gc-field .form-input,
+  .gc-teacher-notes textarea {
+    border: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    background: none !important;
+    resize: none;
+  }
+
+  /* Chrome overlaps grid rows that split across pages: use plain blocks. */
+  .gc-report,
+  #gc-body,
+  .gc-subjects,
+  .gc-subject-list,
+  .gc-notes {
+    display: block !important;
+  }
+
+  #gc-body > * + *,
+  .gc-notes > * + * {
+    margin-top: 1.1rem;
+  }
+
+  .gc-subject {
+    break-inside: avoid;
+    margin-bottom: 0.5rem;
+  }
+
+  .gc-notes {
+    break-inside: avoid;
+  }
+
+  .gc-print-sigs {
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-top: 3.5rem;
+    break-inside: avoid;
+  }
+
+  .gc-print-sigs > div {
+    flex: 1;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+
+  .gc-sig-line {
+    display: block;
+    border-top: 1px solid #333;
+    margin: 0 0.5rem 0.35rem;
+  }
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 640px) {
+  .gc-report {
+    padding: 1.15rem 1rem 1.3rem;
+  }
+
+  .gc-student {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .gc-term-tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .gc-subjects-head span {
+    display: none;
+  }
+
+  .gc-subject > summary {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    row-gap: 0.45rem;
+  }
+
+  .gc-subject-name {
+    grid-column: 1 / -1;
+  }
+
+  .gc-final {
+    text-align: left;
+  }
+
+  .gc-toolbar-right {
+    flex-basis: 100%;
+  }
+
+  .gc-edit-grid,
+  .gc-edit-row {
+    grid-template-columns: 1fr;
+  }
+}

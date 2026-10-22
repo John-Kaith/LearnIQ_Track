@@ -1,8 +1,12 @@
-"""DepEd SHS grading weights (Table 5) and weighted final computation."""
+"""DepEd SHS grading (DepEd Order No. 8, s. 2015): component weights
+(Table 5), the initial grade, transmutation, descriptors and rounding."""
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
+
+PASSING_GRADE = 75
 
 TVL_STRANDS = frozenset({"TVL-HE", "TVL", "TVLHE"})
 VALID_DEPED_CATEGORIES = frozenset(
@@ -23,11 +27,11 @@ def shs_component_weights(
     if category not in VALID_DEPED_CATEGORIES:
         category = "academic_standard"
 
-    if normalize_strand(strand) in TVL_STRANDS:
-        return {"ww": 0.20, "pt": 0.60, "qa": 0.20}
-
+    # Core subjects weigh the same in every track (Table 5).
     if category == "core":
         return {"ww": 0.25, "pt": 0.50, "qa": 0.25}
+    if normalize_strand(strand) in TVL_STRANDS:
+        return {"ww": 0.20, "pt": 0.60, "qa": 0.20}
     if category == "academic_specialized":
         return {"ww": 0.35, "pt": 0.40, "qa": 0.25}
     return {"ww": 0.25, "pt": 0.45, "qa": 0.30}
@@ -46,7 +50,8 @@ def compute_weighted_final(
     quarterly_assessment: float | None,
     weights: dict[str, float],
 ) -> float | None:
-    """DepEd-style weighted final; requires all three component scores."""
+    """The DepEd *initial* grade (sum of weighted scores, 2 decimals); needs all
+    three component scores. transmute() turns it into the period grade."""
     if written_work is None or performance_task is None or quarterly_assessment is None:
         return None
     total = (
@@ -75,3 +80,50 @@ def resolve_component_scores(
         float(qa) if qa is not None else auto_qa,
     )
 # .
+
+
+def round_half_up(value: float | None) -> int | None:
+    """Whole-number rounding as on report cards (89.5 -> 90, not banker's 90/88)."""
+    if value is None:
+        return None
+    return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def transmute(initial_grade: float | None) -> int | None:
+    """DepEd transmutation table: initial grade -> grading-period grade.
+
+    60.00 and up: every 1.60 points is one grade step from 75 (60 -> 75,
+    84.86 -> 90, 100 -> 100). Below 60: every 4 points is one step from 60
+    (0 -> 60, 59.99 -> 74). Done in hundredths so float noise can't flip a step.
+    """
+    if initial_grade is None:
+        return None
+    hundredths = int(Decimal(str(initial_grade)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) * 100)
+    hundredths = max(0, min(10000, hundredths))
+    if hundredths >= 6000:
+        return min(100, 75 + (hundredths - 6000) // 160)
+    return 60 + hundredths // 400
+
+
+def grade_descriptor(grade: float | None) -> str | None:
+    """DepEd descriptor for a period, semester or general average grade."""
+    if grade is None:
+        return None
+    g = float(grade)
+    if g >= 90:
+        return "Outstanding"
+    if g >= 85:
+        return "Very Satisfactory"
+    if g >= 80:
+        return "Satisfactory"
+    if g >= PASSING_GRADE:
+        return "Fairly Satisfactory"
+    return "Did Not Meet Expectations"
+
+
+def average_grade(grades: list[float | None]) -> int | None:
+    """Whole-number average of the grades that exist (None when there are none)."""
+    present = [float(g) for g in grades if g is not None]
+    if not present:
+        return None
+    return round_half_up(sum(present) / len(present))

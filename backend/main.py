@@ -4097,6 +4097,72 @@ def list_grading_periods_endpoint():
         return JSONResponse({"error": str(e)}, status_code=503)
 
 
+@app.get("/admin/school-years")
+def list_school_years_endpoint(authorization: str | None = Header(default=None)):
+    """School years with their semester dates, the current period, and which
+    years still need the admin to check their (automatic) dates."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        current = db_supabase.get_current_grading_period() or {}
+        return {
+            "school_years": db_supabase.list_school_years(),
+            "current_period": current or None,
+            "needs_review": db_supabase.school_years_needing_review(),
+            "next_plan": db_supabase.next_school_year_plan(),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
+@app.put("/admin/school-years/{school_year}")
+async def save_school_year_endpoint(
+    school_year: str,
+    body: dict = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Admin sets a school year's dates: per semester its start, the last day
+    of Midterm and its last day. Saving also marks the dates as checked."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    payload = body if isinstance(body, dict) else {}
+    try:
+        saved = db_supabase.save_school_year(school_year, payload.get("semesters") or [], confirmed=True)
+        return {"ok": True, "school_year": saved}
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
+@app.post("/admin/school-years/next")
+def create_next_school_year_endpoint(authorization: str | None = Header(default=None)):
+    """Make next school year's periods now (dates copied from the latest year)."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    try:
+        created = db_supabase.create_next_school_year(confirmed=False)
+        if not created:
+            return JSONResponse({"error": "Set up the current school year's dates first."}, status_code=400)
+        return {"ok": True, "school_year": created}
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
 @app.get("/grading-periods/current")
 def current_grading_period_endpoint():
     err = require_supabase()
@@ -4925,6 +4991,16 @@ async def save_student_grade_endpoint(body: dict = Body(...), authorization: str
             status_code=400,
         )
 
+    # A teacher may only grade their own subjects; admins may grade any.
+    if caller_role == "teacher":
+        subj = db_supabase.get_subject_row(str(subject_id)) or {}
+        owner = str(subj.get("created_by_teacher_id_number") or "").strip()
+        if not owner or owner != caller_idn:
+            return JSONResponse(
+                {"error": "You can only save grades for your own subjects."},
+                status_code=403,
+            )
+
     if not period_id:
         cur = db_supabase.get_current_grading_period() or {}
         period_id = cur.get("id")
@@ -4940,16 +5016,22 @@ async def save_student_grade_endpoint(body: dict = Body(...), authorization: str
     # whatever teacher_id_number the request body claims.
     partial: dict = {
         "teacher_id_number": caller_idn if caller_role == "teacher" else payload.get("teacher_id_number"),
-        "written_work_score": payload.get("written_work_score"),
-        "performance_task_score": payload.get("performance_task_score"),
-        "quarterly_assessment_score": payload.get("quarterly_assessment_score"),
-        "attendance_percent": payload.get("attendance_percent"),
-        "final_grade": payload.get("final_grade"),
-        "final_is_manual": payload.get("final_is_manual"),
-        "remarks": payload.get("remarks"),
-        "teacher_comments": payload.get("teacher_comments"),
-        "finalized_at": payload.get("finalized_at"),
     }
+    # Only fields the request sent: a missing score keeps the saved one, while
+    # an explicit null clears it (back to the automatic score).
+    for key in (
+        "written_work_score",
+        "performance_task_score",
+        "quarterly_assessment_score",
+        "attendance_percent",
+        "final_grade",
+        "final_is_manual",
+        "remarks",
+        "teacher_comments",
+        "finalized_at",
+    ):
+        if key in payload:
+            partial[key] = payload[key]
     if payload.get("final_is_override") is True and "final_is_manual" not in payload:
         partial["final_is_manual"] = True
 
@@ -4986,6 +5068,10 @@ async def save_gradecard_endpoint(body: dict = Body(...), authorization: str | N
 
     if not student_id_number:
         return JSONResponse({"error": "student_id_number is required"}, status_code=400)
+    # Teachers only for students in their own subjects (admins: anyone).
+    allowed, _, bad = _can_view_student_data(authorization, student_id_number)
+    if not allowed:
+        return bad
 
     period = db_supabase.get_grading_period(period_id)
     if not period:
