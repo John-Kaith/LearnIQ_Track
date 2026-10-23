@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 export function MySubjectsHeader({ onRefresh }: { onRefresh: () => void }) {
   return (
@@ -31,16 +32,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: WebTheme.softBg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
+    borderColor: WebTheme.softBorder,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   pressed: { opacity: 0.85 },
   btnText: {
-    color: Colors.text,
+    color: WebTheme.softText,
     fontSize: 13,
     fontWeight: '600',
   },

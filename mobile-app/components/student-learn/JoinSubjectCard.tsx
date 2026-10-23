@@ -3,6 +3,8 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 
 import { Colors } from '@/constants/colors';
 import { joinSubjectByCode } from '@/services/lessons';
+import { WebTheme } from '@/constants/learniqTheme';
+import { AccentFill } from '@/components/ui/AccentFill';
 
 export function JoinSubjectCard({ onJoined }: { onJoined?: () => void }) {
   const [code, setCode] = useState('');
@@ -44,6 +46,7 @@ export function JoinSubjectCard({ onJoined }: { onJoined?: () => void }) {
           onPress={handleJoin}
           disabled={isJoining}
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed, isJoining && styles.btnDisabled]}>
+          <AccentFill radius={12} />
           {isJoining ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
@@ -57,10 +60,10 @@ export function JoinSubjectCard({ onJoined }: { onJoined?: () => void }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 18,
     marginBottom: 24,
   },
@@ -100,14 +103,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   btn: {
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 12,
     paddingHorizontal: 16,
     minWidth: 96,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.45)',
+    borderColor: 'transparent',
     shadowColor: '#eab308',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,

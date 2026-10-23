@@ -15,12 +15,13 @@ import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/servic
 import { fetchAttendanceHistory, IMMERSION_REQUIRED_HOURS, formatDisplayTime } from '@/services/immersion';
 import { fetchLatestLessonForHome, fetchStudentSubjects, type LatestLesson } from '@/services/lessons';
 import { useAuthStore } from '@/store/authStore';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 const QUICK_ACCESS = [
-  { id: 'lessons', label: 'My Lessons', icon: 'book-outline' as const, color: '#fbbf24' },
-  { id: 'leaderboard', label: 'Leaderboard', icon: 'trophy-outline' as const, color: '#ca8a04' },
-  { id: 'history', label: 'History', icon: 'time-outline' as const, color: '#f87171' },
-  { id: 'modules', label: 'Module Selection', icon: 'grid-outline' as const, color: '#34d399' },
+  { id: 'lessons', label: 'My Lessons', icon: 'book-outline' as const },
+  { id: 'leaderboard', label: 'Leaderboard', icon: 'trophy-outline' as const },
+  { id: 'history', label: 'History', icon: 'time-outline' as const },
+  { id: 'modules', label: 'Module Selection', icon: 'grid-outline' as const },
 ];
 
 function greetingForNow(): string {
@@ -82,10 +83,10 @@ export default function StudentHomeScreen() {
     .join(' • ');
 
   const statItems = [
-    { icon: 'book' as const, value: subjectCount, label: 'Subjects', color: '#ca8a04' },
-    { icon: 'document-text' as const, value: lessonCount, label: 'Lessons', color: '#fbbf24' },
-    { icon: 'checkmark-circle' as const, value: stats?.quizAttempts ?? 0, label: 'Quiz Attempts', color: '#34d399' },
-    { icon: 'trophy' as const, value: stats?.leaderboardRank ?? 0, label: 'LB Rank', color: '#fb923c' },
+    { icon: 'book' as const, value: subjectCount, label: 'Subjects' },
+    { icon: 'document-text' as const, value: lessonCount, label: 'Lessons' },
+    { icon: 'checkmark-circle' as const, value: stats?.quizAttempts ?? 0, label: 'Quiz Attempts' },
+    { icon: 'trophy' as const, value: stats?.leaderboardRank ?? 0, label: 'LB Rank' },
   ];
 
   const leaderboardLabel =
@@ -98,6 +99,7 @@ export default function StudentHomeScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

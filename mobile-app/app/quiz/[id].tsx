@@ -6,6 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import { fetchLessonDetail, fetchLessonQuiz, submitQuizAttempt, type QuizQuestion } from '@/services/lessons';
+import { WebTheme } from '@/constants/learniqTheme';
+import { WebBackground } from '@/components/ui/WebBackground';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 
 export default function QuizScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,6 +57,7 @@ export default function QuizScreen() {
     const pct = Math.round((result.score / Math.max(1, result.totalQuestions)) * 100);
     return (
       <View style={styles.root}>
+        <WebBackground />
         <StackHeader title="Quiz" />
         <View style={styles.resultWrap}>
           <Text style={styles.resultScore}>
@@ -63,6 +67,7 @@ export default function QuizScreen() {
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => [styles.nextBtn, pressed && styles.pressed]}>
+            <AccentFill radius={14} />
             <Text style={styles.nextText}>Done</Text>
           </Pressable>
         </View>
@@ -72,6 +77,7 @@ export default function QuizScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title="Quiz" />
       <ScrollView
         contentContainerStyle={[
@@ -114,6 +120,7 @@ export default function QuizScreen() {
               pressed && styles.pressed,
               (!pickedForCurrent || isSubmitting) && styles.nextBtnDisabled,
             ]}>
+            <AccentFill radius={14} />
             {isSubmitting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -141,10 +148,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 18,
     marginBottom: 20,
   },
@@ -170,15 +177,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   choiceActive: {
-    borderColor: 'rgba(202, 138, 4, 0.5)',
-    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    borderColor: WebTheme.tabActiveBorder,
+    backgroundColor: WebTheme.tabActiveBg,
   },
   choiceText: {
     color: Colors.text,
     fontSize: 14,
   },
   choiceTextActive: {
-    color: Colors.primary,
+    color: WebTheme.softText,
     fontWeight: '600',
   },
   empty: {
@@ -187,12 +194,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   nextBtn: {
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.4)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   nextBtnDisabled: { opacity: 0.5 },
   pressed: { opacity: 0.9 },

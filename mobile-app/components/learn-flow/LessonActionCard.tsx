@@ -2,30 +2,28 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type ActionType = 'reviewer' | 'quiz' | 'activities';
 
 const CONFIG: Record<
   ActionType,
-  { icon: keyof typeof Feather.glyphMap; title: string; subtitle: string; color: string }
+  { icon: keyof typeof Feather.glyphMap; title: string; subtitle: string }
 > = {
   reviewer: {
     icon: 'book-open',
     title: 'Reviewer',
     subtitle: 'Study guide and key concepts',
-    color: '#ca8a04',
   },
   quiz: {
     icon: 'edit-3',
     title: 'Quiz',
     subtitle: 'Test your understanding',
-    color: '#fbbf24',
   },
   activities: {
     icon: 'folder',
     title: 'Activities',
     subtitle: 'Hands-on tasks and worksheets',
-    color: '#34d399',
   },
 };
 
@@ -42,8 +40,8 @@ export function LessonActionCard({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={[styles.iconWrap, { backgroundColor: `${cfg.color}22` }]}>
-        <Feather name={cfg.icon} size={24} color={cfg.color} />
+      <View style={styles.iconWrap}>
+        <Feather name={cfg.icon} size={24} color={Colors.primary} />
       </View>
       <View style={styles.text}>
         <Text style={styles.title}>{cfg.title}</Text>
@@ -58,10 +56,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 12,
     gap: 14,
@@ -73,6 +71,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: WebTheme.softBg,
   },
   text: { flex: 1 },
   title: {

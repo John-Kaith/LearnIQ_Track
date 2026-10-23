@@ -1,7 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 import type { StudentSubject } from '@/data/studentLearnMock';
 
 export function SubjectCard({
@@ -21,7 +23,7 @@ export function SubjectCard({
           <Text style={styles.lessons}>{lessonLabel}</Text>
         </View>
         <View style={styles.badge}>
-          <Feather name="bookmark" size={12} color="#fbbf24" />
+          <Feather name="bookmark" size={12} color={WebTheme.softText} />
           <Text style={styles.badgeText}>Subject</Text>
         </View>
       </View>
@@ -36,6 +38,7 @@ export function SubjectCard({
             (() => Alert.alert('Open Subject', `Mock open: ${subject.title}`))
           }
           style={({ pressed }) => [styles.openBtn, pressed && styles.openBtnPressed]}>
+          <AccentFill radius={10} />
           <Text style={styles.openBtnText}>Open Subject</Text>
         </Pressable>
       </View>
@@ -45,10 +48,10 @@ export function SubjectCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 12,
   },
@@ -78,17 +81,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(234, 179, 8, 0.15)',
+    backgroundColor: WebTheme.pillBg,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.35)',
-    paddingHorizontal: 8,
+    borderColor: WebTheme.pillBorder,
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 999,
   },
   badgeText: {
-    color: '#fbbf24',
+    color: WebTheme.softText,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   description: {
     color: Colors.textMuted,
@@ -111,15 +114,16 @@ const styles = StyleSheet.create({
   },
   openBtn: {
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.5)',
-    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    borderColor: 'transparent',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    ...accentShadow,
   },
   openBtnPressed: { opacity: 0.88 },
   openBtnText: {
-    color: '#fbbf24',
+    color: WebTheme.onAccent,
     fontSize: 13,
     fontWeight: '700',
   },

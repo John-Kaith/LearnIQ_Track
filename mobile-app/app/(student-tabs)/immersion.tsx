@@ -13,6 +13,7 @@ import { Colors } from '@/constants/colors';
 import { studentImmersionMock, type AttendanceLogEntry } from '@/data/studentImmersionMock';
 import { useImmersionAttendance } from '@/hooks/useImmersionAttendance';
 import { fetchAttendanceHistory, IMMERSION_REQUIRED_HOURS } from '@/services/immersion';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function StudentImmersionScreen() {
   const insets = useSafeAreaInsets();
@@ -51,6 +52,7 @@ export default function StudentImmersionScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

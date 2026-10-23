@@ -10,6 +10,7 @@ import { Colors } from '@/constants/colors';
 import { profileSettingsItems } from '@/data/studentProfileMock';
 import { fetchMyProfileExtra } from '@/services/dashboard';
 import { useAuthStore } from '@/store/authStore';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 function initialsFor(firstName: string, lastName: string): string {
   const a = firstName.trim().charAt(0);
@@ -71,6 +72,7 @@ export default function StudentProfileScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -97,7 +99,6 @@ export default function StudentProfileScreen() {
           <SettingsItem
             key={item.id}
             icon={item.icon}
-            iconColor={item.iconColor}
             title={item.title}
             subtitle={item.subtitle}
           />

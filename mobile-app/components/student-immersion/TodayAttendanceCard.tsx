@@ -4,6 +4,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { CapturePreviewCard } from '@/components/student-immersion/CapturePreviewCard';
 import { Colors } from '@/constants/colors';
 import type { AttendanceCapture, AttendanceRecord, CaptureMode } from '@/types/immersion';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type Props = {
   todayDate: string;
@@ -92,6 +94,7 @@ export function TodayAttendanceCard({
             !pendingCapture &&
             styles.pressed,
         ]}>
+        <AccentFill radius={14} />
         {isCapturing ? (
           <ActivityIndicator color="#fff" size="small" />
         ) : (
@@ -123,6 +126,7 @@ export function TodayAttendanceCard({
             !canTimeIn && styles.btnLocked,
             pressed && canTimeIn && styles.pressed,
           ]}>
+          <AccentFill radius={14} />
           <Ionicons name="log-in-outline" size={20} color="#fff" />
           <Text style={styles.btnText}>Time In</Text>
         </Pressable>
@@ -134,6 +138,7 @@ export function TodayAttendanceCard({
             !canTimeOut && styles.btnLocked,
             pressed && canTimeOut && styles.pressed,
           ]}>
+          <AccentFill radius={14} />
           <Ionicons name="log-out-outline" size={20} color="#fff" />
           <Text style={styles.btnText}>Time Out</Text>
         </Pressable>
@@ -144,10 +149,10 @@ export function TodayAttendanceCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 18,
     marginBottom: 16,
   },
@@ -205,12 +210,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.45)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   cameraBtnDisabled: {
     opacity: 0.55,
@@ -227,7 +233,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   captureStatusError: {
-    color: '#f87171',
+    color: WebTheme.danger,
   },
   actions: {
     flexDirection: 'row',
@@ -239,11 +245,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.4)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   btnOut: {
     flex: 1,
@@ -251,14 +258,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#eab308',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.45)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   btnLocked: {
-    opacity: 0.45,
+    opacity: 0.55, // same as the website's disabled clock buttons
   },
   pressed: { opacity: 0.9 },
   btnText: {

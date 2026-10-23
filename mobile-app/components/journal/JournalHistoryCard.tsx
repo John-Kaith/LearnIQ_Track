@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 import type { JournalEntry } from '@/data/studentJournalMock';
 
 export function JournalHistoryCard({
@@ -49,10 +50,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 10,
     gap: 12,
@@ -73,8 +74,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeSubmitted: {
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
-    borderColor: 'rgba(34, 197, 94, 0.35)',
+    backgroundColor: WebTheme.successBg,
+    borderColor: 'rgba(22, 101, 52, 0.3)',
   },
   badgeMissing: {
     backgroundColor: 'rgba(120, 53, 15, 0.08)',
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  badgeTextSubmitted: { color: '#22c55e' },
+  badgeTextSubmitted: { color: WebTheme.success },
   badgeTextMissing: { color: Colors.textMuted },
 });
 // .

@@ -44,6 +44,7 @@ body.tumbang-page {
   --sk-bad: #ff7b7b;
   --sk-info: #8fd6ff;
   --sk-logo-top: var(--tp-cream);
+  --sk-logo-stroke: 3px; /* the cream title crosses the white clouds / the moon */
   --sk-logo-main: var(--tp-yellow);
   --sk-logo-shadow: 4px 4px 0 var(--tp-red), 8px 8px 0 var(--tp-night);
   --sk-cursor: ">";

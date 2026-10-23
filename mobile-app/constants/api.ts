@@ -24,4 +24,30 @@ function readConfiguredApiBase(): string {
 }
 
 export const API_BASE_URL = readConfiguredApiBase().replace(/\/+$/, '');
+
+/**
+ * The LearnIQ website, opened inside the app for the Arcade games.
+ *
+ * `expo.extra.webBaseUrl` or `EXPO_PUBLIC_WEB_BASE_URL` set it explicitly.
+ * Otherwise it follows the API: `https://api.learniqtrack.site` → the site at
+ * `https://learniqtrack.site`; any other host (a LAN IP, localhost) serves the
+ * website itself, since the backend serves the frontend too.
+ */
+function readConfiguredWebBase(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_WEB_BASE_URL;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+
+  const extra = (Constants.expoConfig?.extra ?? {}) as { webBaseUrl?: string };
+  if (extra.webBaseUrl && extra.webBaseUrl.trim()) return extra.webBaseUrl.trim();
+
+  try {
+    const url = new URL(API_BASE_URL);
+    if (url.hostname.startsWith('api.')) url.hostname = url.hostname.slice(4);
+    return url.origin;
+  } catch {
+    return API_BASE_URL;
+  }
+}
+
+export const WEB_BASE_URL = readConfiguredWebBase().replace(/\/+$/, '');
 // .

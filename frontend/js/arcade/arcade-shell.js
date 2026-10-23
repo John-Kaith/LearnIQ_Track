@@ -47,12 +47,16 @@
     return typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {};
   }
 
-  /** JSON request to the LearnIQ API; errors carry the HTTP status. */
-  async function fetchJson(path, options) {
+  /** JSON request to the LearnIQ API; errors carry the HTTP status. An expired
+   * session (401) is renewed once and the request retried. */
+  async function fetchJson(path, options, isRetry) {
     if (typeof apiUrl !== "function") throw new Error("API helper missing. Check js/core/api.js.");
     var opts = Object.assign({}, options || {});
-    opts.headers = Object.assign({}, authHeaders(), opts.headers || {});
+    opts.headers = Object.assign({}, authHeaders(), (options && options.headers) || {});
     var res = await fetch(apiUrl(path), opts);
+    if (res.status === 401 && !isRetry && typeof global.learniqRefreshSession === "function") {
+      if (await global.learniqRefreshSession()) return fetchJson(path, options, true);
+    }
     var data = await res.json().catch(function () {
       return {};
     });
@@ -726,7 +730,7 @@
       menuItem("settings", "SETTINGS") +
       menuItem("quit", "QUIT") +
       "</nav>" +
-      '<p class="wc-hint">↑ ↓ select · Enter confirm</p></section>' +
+      '<p class="wc-hint wc-hint-keys">↑ ↓ select · Enter confirm</p></section>' +
       // WORLD SELECT: one world per subject
       '<section class="wc-screen wc-worlds" id="wc-worlds" hidden aria-labelledby="wc-worlds-title">' +
       head("wc-worlds-title", w.selectWorld) +
@@ -1955,6 +1959,8 @@
       });
       if (ok) {
         stopAllTracks();
+        // Inside the mobile app, quitting closes the game and returns to the app's Arcade.
+        if (global.LearnIQApp && global.LearnIQApp.exit()) return;
         global.location.href = "arcade.html";
       } else {
         document.querySelector('[data-wc-action="quit"]')?.focus();

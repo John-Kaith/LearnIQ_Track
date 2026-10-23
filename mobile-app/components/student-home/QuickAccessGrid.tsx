@@ -2,12 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type QuickItem = {
   id: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color: string;
 };
 
 export function QuickAccessGrid({ items }: { items: QuickItem[] }) {
@@ -17,8 +17,8 @@ export function QuickAccessGrid({ items }: { items: QuickItem[] }) {
         <Pressable
           key={item.id}
           style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-          <View style={[styles.iconWrap, { backgroundColor: `${item.color}20` }]}>
-            <Ionicons name={item.icon} size={24} color={item.color} />
+          <View style={styles.iconWrap}>
+            <Ionicons name={item.icon} size={24} color={Colors.primary} />
           </View>
           <Text style={styles.label} numberOfLines={2}>
             {item.label}
@@ -37,10 +37,10 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     paddingVertical: 16,
     paddingHorizontal: 8,
     alignItems: 'center',
@@ -53,6 +53,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: WebTheme.softBg,
   },
   label: {
     color: Colors.textMuted,

@@ -8,6 +8,7 @@ import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import type { JournalEntry } from '@/data/studentJournalMock';
 import { fetchJournalById } from '@/services/journals';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function JournalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,6 +27,7 @@ export default function JournalDetailScreen() {
   if (!entry || entry.status !== 'submitted') {
     return (
       <View style={styles.root}>
+        <WebBackground />
         <StackHeader title="Journal" />
       </View>
     );
@@ -33,6 +35,7 @@ export default function JournalDetailScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title={entry.dateLabel} />
       <ScrollView
         showsVerticalScrollIndicator={false}

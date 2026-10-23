@@ -124,6 +124,53 @@
     return result;
   }
 
+  var SESSION_KEY = "learniq-current-user"; // same key as authSessionKey in script.js
+  var refreshing = null;
+
+  /**
+   * Swap the stored refresh token for a new access token. One refresh at a
+   * time: refresh tokens are single use. Resolves true when the session was
+   * renewed. Inside the mobile app the new tokens go to the app as well.
+   */
+  function refreshSession() {
+    if (refreshing) return refreshing;
+    var session = null;
+    try {
+      session = JSON.parse(global.sessionStorage.getItem(SESSION_KEY) || "null");
+    } catch (e) {
+      session = null;
+    }
+    if (!session || !session.refresh_token) return Promise.resolve(false);
+    refreshing = fetch(apiUrl("/auth/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (body) {
+        if (!body || !body.access_token) return false;
+        var next = Object.assign({}, session, { access_token: body.access_token });
+        if (body.refresh_token) next.refresh_token = body.refresh_token;
+        try {
+          global.sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
+        } catch (e) {
+          /* storage full */
+        }
+        if (global.LearnIQApp) global.LearnIQApp.sessionRefreshed(next);
+        return true;
+      })
+      .catch(function () {
+        return false;
+      })
+      .then(function (ok) {
+        refreshing = null;
+        return ok;
+      });
+    return refreshing;
+  }
+
   function warnIfApiBaseMissing() {
     var status = getApiBaseStatus();
     if (!status.needsConfiguration) return;
@@ -141,6 +188,7 @@
     getApiBaseStatus: getApiBaseStatus,
     apiUrl: apiUrl,
     readApiJson: readApiJson,
+    refreshSession: refreshSession,
     warnIfApiBaseMissing: warnIfApiBaseMissing,
   };
 
@@ -149,6 +197,7 @@
   global.setLearniqApiBase = setStoredApiBase;
   global.apiUrl = apiUrl;
   global.readApiJson = readApiJson;
+  global.learniqRefreshSession = refreshSession;
 
   warnIfApiBaseMissing();
 })(typeof window !== "undefined" ? window : globalThis);

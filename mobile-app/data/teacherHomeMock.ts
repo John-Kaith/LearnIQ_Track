@@ -8,7 +8,6 @@ export type TeacherQuickAction = {
   id: string;
   label: string;
   icon: 'cloud-upload-outline' | 'journal-outline' | 'list-outline';
-  color: string;
 };
 
 export const teacherHomeMock = {
@@ -29,9 +28,9 @@ export const teacherHomeMock = {
     pendingJournals: 2,
   },
   quickActions: [
-    { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline', color: '#ca8a04' },
-    { id: 'journals', label: 'Review Journals', icon: 'journal-outline', color: '#fbbf24' },
-    { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline', color: '#34d399' },
+    { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline' },
+    { id: 'journals', label: 'Review Journals', icon: 'journal-outline' },
+    { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline' },
   ] satisfies TeacherQuickAction[],
 };
 // .

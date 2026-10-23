@@ -794,6 +794,9 @@ function getCurrentUserSession() {
    * more than one refresh request at a time.
    */
   async function tryRefreshSession() {
+    // js/core/api.js owns the shared single-flight refresh (and tells the
+    // mobile app about new tokens); this older copy is the fallback.
+    if (typeof learniqRefreshSession === "function") return learniqRefreshSession();
     if (refreshInFlight) return refreshInFlight;
     refreshInFlight = (async () => {
       try {

@@ -6,8 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LessonActionCard } from '@/components/learn-flow/LessonActionCard';
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 import type { LessonDetail } from '@/data/studentLearnFlowMock';
 import { fetchLessonDetail } from '@/services/lessons';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function LessonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,6 +28,7 @@ export default function LessonDetailScreen() {
   if (loadError) {
     return (
       <View style={styles.root}>
+        <WebBackground />
         <StackHeader title="Lesson" />
         <Text style={styles.error}>{loadError}</Text>
       </View>
@@ -35,6 +38,7 @@ export default function LessonDetailScreen() {
   if (!lesson) {
     return (
       <View style={styles.root}>
+        <WebBackground />
         <StackHeader title="Lesson" />
       </View>
     );
@@ -42,6 +46,7 @@ export default function LessonDetailScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title={lesson.title} />
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -101,7 +106,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   error: {
-    color: '#f87171',
+    color: WebTheme.danger,
     fontSize: 14,
     textAlign: 'center',
     marginTop: 24,

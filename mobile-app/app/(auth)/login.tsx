@@ -16,6 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/store/authStore';
+import { WebTheme } from '@/constants/learniqTheme';
+import { WebBackground } from '@/components/ui/WebBackground';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 
 const SIGNUP_URL = 'https://learniqtrack.online/signup';
 
@@ -29,7 +32,12 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState<string | null>(null);
 
   async function handleLogin() {
-    if (!identifier.trim() || !password) return;
+    if (isSubmitting) return;
+    // Like the website: the button always looks ready, and empty fields get a message.
+    if (!identifier.trim() || !password) {
+      setFormError('Please enter your ID or email and your password.');
+      return;
+    }
     setFormError(null);
     setIsSubmitting(true);
     try {
@@ -54,12 +62,11 @@ export default function LoginScreen() {
     Linking.openURL(SIGNUP_URL);
   }
 
-  const canSubmit = identifier.trim().length > 0 && password.length > 0 && !isSubmitting;
-
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <WebBackground />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -69,6 +76,7 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.brand}>
           <View style={styles.mark}>
+            <AccentFill radius={14} />
             <Text style={styles.markText}>LQ</Text>
           </View>
           <Text style={styles.brandName}>LearnIQ Track</Text>
@@ -108,12 +116,9 @@ export default function LoginScreen() {
 
           <Pressable
             onPress={handleLogin}
-            disabled={!canSubmit}
-            style={({ pressed }) => [
-              styles.loginBtn,
-              pressed && styles.loginBtnPressed,
-              !canSubmit && styles.loginBtnDisabled,
-            ]}>
+            disabled={isSubmitting}
+            style={({ pressed }) => [styles.loginBtn, pressed && styles.loginBtnPressed]}>
+            <AccentFill radius={14} />
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -148,12 +153,13 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.5)',
+    borderColor: 'transparent',
     marginBottom: 12,
+    ...accentShadow,
   },
   markText: {
     color: '#fff',
@@ -167,10 +173,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 22,
   },
   title: {
@@ -207,18 +213,16 @@ const styles = StyleSheet.create({
   },
   loginBtn: {
     marginTop: 8,
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.45)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   loginBtnPressed: {
     opacity: 0.9,
-  },
-  loginBtnDisabled: {
-    opacity: 0.5,
   },
   loginBtnText: {
     color: '#fff',
@@ -226,7 +230,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorText: {
-    color: '#f87171',
+    color: WebTheme.danger,
     fontSize: 13,
     lineHeight: 18,
     marginTop: -4,

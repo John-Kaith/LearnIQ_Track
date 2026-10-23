@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 export function TodayJournalCard() {
   const router = useRouter();
@@ -14,6 +16,7 @@ export function TodayJournalCard() {
       <Pressable
         onPress={() => router.push('/journal/create')}
         style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
+        <AccentFill radius={10} />
         <Text style={styles.btnText}>Write Journal</Text>
       </Pressable>
     </View>
@@ -22,18 +25,17 @@ export function TodayJournalCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 16,
-    opacity: 0.92,
   },
   title: {
-    color: Colors.textMuted,
+    color: Colors.text,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 8,
     letterSpacing: 0.2,
   },
@@ -52,15 +54,16 @@ const styles = StyleSheet.create({
   btn: {
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.45)',
+    borderColor: 'transparent',
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    backgroundColor: WebTheme.accentSolid,
+    ...accentShadow,
   },
   pressed: { opacity: 0.88 },
   btnText: {
-    color: Colors.primary,
+    color: WebTheme.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

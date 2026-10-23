@@ -12,6 +12,7 @@ import {
   type TeacherLessonSummary,
   type TeacherSubject,
 } from '@/services/subjects';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function TeacherSubjectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,6 +48,7 @@ export default function TeacherSubjectScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title={subject?.name ?? 'Subject'} />
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -101,10 +103,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 20,
