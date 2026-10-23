@@ -1,6 +1,12 @@
-// Teacher Student Gradecard — strand → students → detail
+// Teacher Student Gradecard — strand → students → detail.
+// The detail is the same simple gradecard as the admin page (shared view in
+// js/shared/gradecard-view.js); the teacher's own subjects open into a small
+// editor for Written work / Performance tasks / Exam, an optional final-grade
+// override and remarks.
 
 (function () {
+  const G = window.LearnIQGradecard;
+
   const STRAND_META = {
     STEM: { icon: "fa-atom", color: "#ca8a04", blurb: "Science, Technology, Engineering & Mathematics" },
     ABM: { icon: "fa-chart-line", color: "#b45309", blurb: "Accountancy, Business & Management" },
@@ -8,6 +14,13 @@
     "TVL-HE": { icon: "fa-screwdriver-wrench", color: "#92400e", blurb: "Technical-Vocational-Livelihood" },
     __unassigned__: { icon: "fa-circle-question", color: "#78716c", blurb: "No strand on profile" },
   };
+
+  // Component fields: label, what the automatic score comes from, weight key.
+  const COMPONENTS = [
+    { field: "written_work_score", label: "Written work", source: "quizzes", weight: "ww", prefix: "written_work" },
+    { field: "performance_task_score", label: "Performance tasks", source: "activities", weight: "pt", prefix: "performance_task" },
+    { field: "quarterly_assessment_score", label: "Exam", source: "exam lessons", weight: "qa", prefix: "quarterly_assessment" },
+  ];
 
   const STATE = {
     view: "strands",
@@ -21,10 +34,10 @@
     activeStudentIdNumber: null,
     lastData: null,
     editedSubjects: new Map(),
+    loadToken: 0,
   };
 
   function $(id) { return document.getElementById(id); }
-  function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
 
   function getTeacherIdNumber() {
     const u = typeof getCurrentUserSession === "function" ? getCurrentUserSession() : null;
@@ -36,6 +49,8 @@
     const m = s.match(/\b(11|12)\b/);
     return m ? m[1] : "";
   }
+
+  // ---------- Picker: grade tabs, strands, students ----------
 
   function updateGradeTabUI() {
     document.querySelectorAll("[data-gradecard-grade]").forEach((btn) => {
@@ -143,73 +158,15 @@
     }
   }
 
-  function fmtNumber(v) {
-    if (v === null || v === undefined || v === "") return "—";
-    const n = Number(v);
-    if (Number.isNaN(n)) return "—";
-    return `${Math.round(n * 100) / 100}`;
-  }
-
-  function fmtPercent(v) {
-    if (v === null || v === undefined || v === "") return "—";
-    const n = Number(v);
-    if (Number.isNaN(n)) return "—";
-    return `${Math.round(n * 100) / 100}%`;
-  }
-
-  function scoreInput(sid, field, value, placeholder) {
-    const v = value == null ? "" : String(value);
-    return `<input
-      type="number"
-      class="form-input gradecard-score-input"
-      data-field="${field}"
-      data-subject-id="${sid}"
-      min="0" max="100" step="0.1"
-      value="${escapeHtml(v)}"
-      placeholder="${escapeHtml(placeholder || "—")}"
-      style="width: 72px; text-align:center;" />`;
-  }
-
-  function parseScoreInput(inp) {
-    const v = inp.value.trim();
-    return v === "" ? null : Number(v);
-  }
-
-  function initials(name) {
-    const s = String(name || "").trim();
-    if (!s) return "??";
-    const parts = s.split(/\s+/).slice(0, 2);
-    return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "??";
-  }
-
-  function setStatus(msg, kind = "muted") {
-    const el = $("gradecard-save-status");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.style.color = kind === "danger" ? "#fca5a5" : kind === "success" ? "#34d399" : "";
-  }
-
-  function renderEmptyState(text) {
-    const body = $("gradecard-subjects-body");
-    if (!body) return;
-    body.innerHTML = `
-      <tr>
-        <td colspan="7" class="empty-state">
-          <i class="fa-solid fa-id-card"></i>
-          <p>${escapeHtml(text || "Select a student to view their gradecard.")}</p>
-        </td>
-      </tr>`;
-  }
-
   function syncUrl() {
     const params = new URLSearchParams();
     if (STATE.selectedStrand) params.set("strand", STATE.selectedStrand);
     if (STATE.activeStudentIdNumber) params.set("student", STATE.activeStudentIdNumber);
-    const q = params.toString();
-    const url = q
-      ? `${window.location.pathname}?${q}`
-      : window.location.pathname;
-    window.history.replaceState(null, "", url);
+    try {
+      const url = new URL(window.location.href);
+      url.search = params.toString();
+      window.history.replaceState(null, "", url.href);
+    } catch (_) { /* e.g. a sandboxed or file:// copy of the page */ }
   }
 
   function renderBreadcrumb() {
@@ -225,12 +182,6 @@
           STATE.selectedStrandLabel || STATE.selectedStrand
         )}</button>`
       );
-    }
-    if (STATE.activeStudentIdNumber && STATE.view === "detail") {
-      const name =
-        STATE.lastData?.student?.display_name || STATE.activeStudentIdNumber;
-      parts.push('<span class="gradecard-crumb-sep">/</span>');
-      parts.push(`<span class="gradecard-crumb is-current">${escapeHtml(name)}</span>`);
     }
     nav.innerHTML = parts.join("");
     nav.querySelectorAll("[data-go]").forEach((btn) => {
@@ -248,6 +199,7 @@
     STATE.selectedStrandLabel = null;
     STATE.activeStudentIdNumber = null;
     STATE.lastData = null;
+    STATE.editedSubjects.clear();
     $("gradecard-strand-step")?.removeAttribute("hidden");
     $("gradecard-students-step")?.setAttribute("hidden", "");
     $("gradecard-picker")?.removeAttribute("hidden");
@@ -264,6 +216,8 @@
     STATE.view = "students";
     STATE.activeStudentIdNumber = null;
     STATE.lastData = null;
+    STATE.editedSubjects.clear();
+    STATE.loadToken += 1;
     $("gradecard-strand-step")?.setAttribute("hidden", "");
     $("gradecard-students-step")?.removeAttribute("hidden");
     $("gradecard-picker")?.removeAttribute("hidden");
@@ -271,7 +225,6 @@
     $("gradecard-sheet")?.setAttribute("hidden", "");
     renderBreadcrumb();
     syncUrl();
-    renderEmptyState();
   }
 
   function showDetailView() {
@@ -279,7 +232,6 @@
     $("gradecard-picker")?.setAttribute("hidden", "");
     $("gradecard-detail-toolbar")?.removeAttribute("hidden");
     $("gradecard-sheet")?.removeAttribute("hidden");
-    renderBreadcrumb();
     syncUrl();
   }
 
@@ -293,22 +245,21 @@
       STATE.periods = Array.isArray(data.periods) ? data.periods : [];
       STATE.currentPeriodId = data.current_id || (STATE.periods[0]?.id ?? null);
       if (!STATE.periods.length) {
-        sel.innerHTML = '<option value="">No grading periods yet</option>';
+        sel.innerHTML = '<option value="">No terms yet</option>';
         sel.disabled = true;
         return;
       }
       sel.disabled = false;
       sel.innerHTML = STATE.periods
         .map((p) => {
-          const label = `${p.school_year} · ${p.name}`;
           const isCur = p.id === STATE.currentPeriodId ? " (current)" : "";
-          return `<option value="${escapeHtml(p.id)}">${escapeHtml(label + isCur)}</option>`;
+          return `<option value="${escapeHtml(p.id)}">${escapeHtml(G.periodLabel(p) + isCur)}</option>`;
         })
         .join("");
       if (STATE.currentPeriodId) sel.value = STATE.currentPeriodId;
     } catch (err) {
       console.error("loadGradingPeriods:", err);
-      sel.innerHTML = '<option value="">Failed to load periods</option>';
+      sel.innerHTML = '<option value="">Couldn\'t load terms</option>';
       sel.disabled = true;
     }
   }
@@ -399,7 +350,7 @@
               class="gradecard-student-row"
               role="listitem"
               data-id-number="${idn}">
-              <span class="gradecard-student-row-avatar">${escapeHtml(initials(s.display_name || idn))}</span>
+              <span class="gradecard-student-row-avatar">${escapeHtml(G.initials(s.display_name || idn))}</span>
               <span class="gradecard-student-row-text">
                 <strong>${name}</strong>
                 <span class="small-note">ID ${idn}${meta ? ` · ${escapeHtml(meta)}` : ""}</span>
@@ -420,6 +371,61 @@
     }
   }
 
+  // ---------- Detail: the gradecard ----------
+
+  function setSheetStatus(message, kind) {
+    const box = $("gc-status");
+    const body = $("gc-body");
+    if (!box || !body) return;
+    if (!message) {
+      box.hidden = true;
+      body.hidden = false;
+      return;
+    }
+    box.className = `gc-status${kind ? ` is-${kind}` : ""}`;
+    box.innerHTML = message;
+    box.hidden = false;
+    body.hidden = true;
+  }
+
+  function setSaveStatus(msg, kind) {
+    const el = $("gradecard-save-status");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = `gc-save-status${kind ? ` is-${kind}` : ""}`;
+  }
+
+  function commentsChanged() {
+    const el = $("gradecard-comments-text");
+    if (!el || !STATE.lastData) return false;
+    return String(el.value || "").trim() !== String(STATE.lastData.summary?.adviser_comments || "").trim();
+  }
+
+  function hasUnsavedChanges() {
+    return STATE.editedSubjects.size > 0 || commentsChanged();
+  }
+
+  function refreshDirtyStatus() {
+    const n = STATE.editedSubjects.size;
+    const bits = [];
+    if (n) bits.push(`${n} subject${n === 1 ? "" : "s"}`);
+    if (commentsChanged()) bits.push("comments");
+    if (bits.length) setSaveStatus(`Unsaved changes: ${bits.join(" and ")}.`, "dirty");
+    else setSaveStatus("No changes yet.");
+  }
+
+  async function okToLeave() {
+    if (!hasUnsavedChanges()) return true;
+    const opts = {
+      title: "Discard unsaved changes?",
+      message: "You changed scores or comments that aren't saved yet.",
+      confirmText: "Discard",
+      cancelText: "Keep editing",
+      variant: "danger",
+    };
+    return window.LearnIQConfirm ? window.LearnIQConfirm.show(opts) : true;
+  }
+
   async function openStudentGradecard(studentIdNumber) {
     STATE.activeStudentIdNumber = studentIdNumber;
     showDetailView();
@@ -427,140 +433,150 @@
   }
 
   async function loadGradecardForStudent(studentIdNumber) {
-    const periodSel = $("gradecard-term-select");
-    const period = periodSel?.value || STATE.currentPeriodId || "";
-
+    const token = ++STATE.loadToken;
+    const period = $("gradecard-term-select")?.value || STATE.currentPeriodId || "";
     const params = new URLSearchParams({ student_id_number: studentIdNumber });
     if (period) params.set("period_id", period);
 
-    renderEmptyState("Loading gradecard…");
     STATE.editedSubjects.clear();
+    setSheetStatus('<i class="fa-solid fa-spinner fa-spin"></i> Loading gradecard…', "loading");
 
     try {
       const res = await fetch(apiUrl(`/gradecard?${params.toString()}`), {
         headers: typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {},
       });
       const data = await res.json().catch(() => ({}));
+      if (token !== STATE.loadToken) return;
       if (!res.ok) {
-        const msg = data?.error || `HTTP ${res.status}`;
-        renderEmptyState(msg);
-        if (typeof showToast === "function") showToast(msg, "danger");
+        const msg = escapeHtml(data?.error || `Couldn't load the gradecard (HTTP ${res.status}).`);
+        setSheetStatus(`<i class="fa-solid fa-circle-exclamation"></i> ${msg}`, "error");
         return;
       }
       STATE.lastData = data;
+      setSheetStatus("");
       renderGradecard(data);
-      renderBreadcrumb();
     } catch (err) {
+      if (token !== STATE.loadToken) return;
       console.error("loadGradecardForStudent:", err);
-      renderEmptyState(`Failed to load: ${err.message}`);
+      setSheetStatus(`<i class="fa-solid fa-circle-exclamation"></i> Couldn't load the gradecard: ${escapeHtml(err.message)}`, "error");
     }
   }
 
+  // Same rule as the server: a teacher grades only the subjects they own.
+  function isMine(s) {
+    const me = getTeacherIdNumber();
+    return !!me && s.owner_teacher_id_number === me;
+  }
+
+  function scoreField(s, comp) {
+    const sid = escapeHtml(s.subject_id);
+    const entered = s[`${comp.prefix}_entered`];
+    const auto = s[`${comp.prefix}_auto`];
+    const attempts = G.attemptsNote(s[`${comp.prefix}_attempts`]);
+    const weight = G.weightNote((s.weights || {})[comp.weight]);
+    const help = G.hasNumber(auto)
+      ? `Auto ${G.fmtNumber(auto)} from ${comp.source}${attempts ? ` (${attempts})` : ""}`
+      : `No automatic score from ${comp.source} yet`;
+    return `
+      <label class="gc-field">
+        <span>${comp.label}<em>${escapeHtml(weight)}</em></span>
+        <input type="number" class="form-input" inputmode="decimal" min="0" max="100" step="0.01"
+          data-subject-id="${sid}" data-field="${comp.field}"
+          value="${G.hasNumber(entered) ? escapeHtml(String(entered)) : ""}"
+          placeholder="${G.hasNumber(auto) ? escapeHtml(G.fmtNumber(auto)) : "—"}" />
+        <small>${escapeHtml(help)}</small>
+      </label>`;
+  }
+
+  function renderEditableSubject(s, semester) {
+    const sid = escapeHtml(s.subject_id);
+    const computed = G.hasNumber(s.computed_final) ? G.fmtNumber(s.computed_final) : "";
+    const overrideValue = s.final_is_override && G.hasNumber(s.final_grade) ? String(s.final_grade) : "";
+    return `
+      <details class="gc-subject gc-editable" data-subject-id="${sid}">
+        ${G.subjectSummary(s).replace("</strong>", '</strong><span class="gc-dirty-tag">Unsaved changes</span>')}
+        <div class="gc-breakdown">
+          <div class="gc-edit-grid">
+            ${COMPONENTS.map((c) => scoreField(s, c)).join("")}
+          </div>
+          <div class="gc-edit-row">
+            <label class="gc-field">
+              <span>Final grade override</span>
+              <input type="number" class="form-input" inputmode="numeric" min="60" max="100" step="1"
+                data-subject-id="${sid}" data-field="final_grade"
+                value="${escapeHtml(overrideValue)}"
+                placeholder="${computed ? `Computed: ${escapeHtml(computed)}` : "Not computed yet"}" />
+              <small>Leave blank to use the computed grade.</small>
+            </label>
+            <label class="gc-field">
+              <span>Remarks</span>
+              <input type="text" class="form-input" maxlength="200"
+                data-subject-id="${sid}" data-field="remarks"
+                value="${escapeHtml(s.remarks || "")}"
+                placeholder="Optional, e.g. Needs remediation" />
+              <small>&nbsp;</small>
+            </label>
+          </div>
+          ${G.gradeLines(s, semester)}
+        </div>
+      </details>`;
+  }
+
   function renderGradecard(data) {
-    const student = data.student || {};
-    const adviser = data.adviser || null;
-    const summary = data.summary || {};
-    const period = data.period || {};
     const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    const semester = data.semester || null;
+    const name = G.renderHeader(data);
 
-    const periodLabel = $("gradecard-period-label");
-    if (periodLabel) {
-      const py = period.school_year || "";
-      const pn = period.name || "";
-      periodLabel.textContent =
-        py || pn ? `Teacher Gradecard · ${py}${pn ? ` · ${pn}` : ""}` : "Teacher Gradecard View";
+    let mine = subjects.filter(isMine);
+    let others = subjects.filter((s) => !isMine(s));
+    // Nothing of the teacher's own here: show everything read-only.
+    const editable = mine.length > 0;
+    if (!editable) {
+      mine = [];
+      others = subjects;
     }
-
-    setText("gradecard-ref", summary.reference_no || "GR-XXXX-XXXX");
-    const av = $("gradecard-avatar");
-    const studentName = student.display_name || student.first_name || "—";
-    if (av) av.textContent = initials(studentName);
-    setText("gradecard-student-name", studentName);
-
-    const metaBits = [
-      student.id_number ? `ID No. ${student.id_number}` : null,
-      student.grade_level ? `Grade ${student.grade_level}` : null,
-      student.strand || null,
-      student.section ? `Section ${student.section}` : null,
-    ].filter(Boolean);
-    setText("gradecard-student-meta", metaBits.join(" · ") || "—");
-    setText("gradecard-student-adviser", `Adviser: ${adviser?.display_name || "—"}`);
-
-    setText("gradecard-gpa", fmtNumber(summary.general_average));
-    setText("gradecard-standing", summary.standing || "—");
-    setText("gradecard-conduct", summary.conduct || "—");
-    setText("gradecard-days-present", fmtNumber(summary.days_present));
-    setText("gradecard-days-absent", fmtNumber(summary.days_absent));
-    setText("gradecard-tardy", fmtNumber(summary.times_tardy));
-
-    const commentsEl = $("gradecard-comments-text");
-    if (commentsEl) commentsEl.value = summary.adviser_comments || "";
 
     const body = $("gradecard-subjects-body");
-    if (!body) return;
+    const mineTitle = $("gc-mine-title");
+    const mineNote = $("gc-mine-note");
+    if (body) {
+      body.closest(".gc-subjects").hidden = !editable && subjects.length > 0;
+      body.innerHTML = editable
+        ? mine.map((s) => renderEditableSubject(s, semester)).join("")
+        : `<p class="gc-empty"><i class="fa-solid fa-book-open" aria-hidden="true"></i>
+             No subjects for this term. ${escapeHtml(name)} isn't enrolled in a class this semester yet.</p>`;
+    }
+    if (mineTitle) mineTitle.textContent = "Your subjects";
+    if (mineNote) mineNote.hidden = !editable;
 
-    if (!subjects.length) {
-      body.innerHTML = `
-        <tr>
-          <td colspan="7" class="empty-state">
-            <i class="fa-solid fa-id-card"></i>
-            <p>No subject activity for <strong>${escapeHtml(student.display_name || student.id_number || "this student")}</strong> in this period.</p>
-            <p class="small-note">Enroll them in your subject or wait for quiz/activity submissions.</p>
-          </td>
-        </tr>`;
-      return;
+    const otherBox = $("gc-other-subjects");
+    const otherBody = $("gc-other-body");
+    if (otherBox && otherBody) {
+      otherBox.hidden = others.length === 0;
+      otherBox.querySelector("h3").textContent = editable ? "Other teachers' subjects" : "Subjects";
+      otherBody.innerHTML = others.map((s) => G.renderSubject(s, semester)).join("");
     }
 
-    body.innerHTML = subjects
-      .map((s) => {
-        const sid = escapeHtml(s.subject_id);
-        const finalVal = s.final_grade == null ? "" : String(s.final_grade);
-        const remarks = s.remarks || "";
-        const weightsLabel = s.weights_label || "—";
-        const incomplete = !s.grade_complete;
-        const attNote =
-          s.attendance_percent != null
-            ? `<span class="small-note">Att ${fmtPercent(s.attendance_percent)}</span>`
-            : "";
-        return `
-          <tr data-subject-id="${sid}">
-            <td>
-              <strong>${escapeHtml(s.subject_name || "Subject")}</strong>
-              ${attNote}
-            </td>
-            <td class="num">${scoreInput(sid, "written_work_score", s.written_work_score, fmtNumber(s.written_work_auto))}</td>
-            <td class="num">${scoreInput(sid, "performance_task_score", s.performance_task_score, fmtNumber(s.performance_task_auto))}</td>
-            <td class="num">${scoreInput(sid, "quarterly_assessment_score", s.quarterly_assessment_score, fmtNumber(s.quarterly_assessment_auto))}</td>
-            <td class="num"><span class="badge badge-soft" title="WW / PT / QA %">${escapeHtml(weightsLabel)}</span></td>
-            <td class="num">
-              <input
-                type="number"
-                class="form-input gradecard-final-input"
-                data-field="final_grade"
-                data-subject-id="${sid}"
-                min="0" max="100" step="0.1"
-                value="${escapeHtml(finalVal)}"
-                placeholder="${incomplete ? "Incomplete" : fmtNumber(s.computed_final)}"
-                style="width: 72px; text-align:center;" />
-              ${s.final_is_manual ? '<span class="small-note" title="Manual override">✎</span>' : ""}
-            </td>
-            <td>
-              <input
-                type="text"
-                class="form-input gradecard-remarks-input"
-                data-field="remarks"
-                data-subject-id="${sid}"
-                value="${escapeHtml(remarks)}"
-                placeholder="e.g. Passed"
-                style="width: 100%; min-width: 120px;" />
-            </td>
-          </tr>`;
-      })
-      .join("");
+    const commentsEl = $("gradecard-comments-text");
+    if (commentsEl) commentsEl.value = data.summary?.adviser_comments || "";
 
-    body.querySelectorAll(
-      "input.gradecard-score-input, input.gradecard-final-input, input.gradecard-remarks-input"
-    ).forEach((inp) => {
+    // Printed copy: every subject read-only, plus the comments as notes.
+    const printBody = $("gc-print-body");
+    if (printBody) printBody.innerHTML = subjects.map((s) => G.renderSubject(s, semester)).join("");
+    const printNotes = $("gc-print-notes");
+    if (printNotes) {
+      const comment = String(data.summary?.adviser_comments || "").trim();
+      printNotes.innerHTML = comment
+        ? `<h3>Adviser notes</h3><p class="gc-note-text">${escapeHtml(comment)}</p>`
+        : "";
+    }
+
+    bindEditors();
+    refreshDirtyStatus();
+  }
+
+  function bindEditors() {
+    document.querySelectorAll("#gradecard-subjects-body input[data-field]").forEach((inp) => {
       inp.addEventListener("input", () => {
         const sid = inp.getAttribute("data-subject-id");
         const field = inp.getAttribute("data-field");
@@ -569,63 +585,75 @@
         const entry = STATE.editedSubjects.get(sid);
         if (field === "remarks") {
           entry.remarks = inp.value;
-          return;
+        } else {
+          const v = inp.value.trim();
+          entry[field] = v === "" ? null : Number(v);
         }
-        if (field === "final_grade") {
-          entry.final_grade = parseScoreInput(inp);
-          entry.final_is_manual = true;
-          return;
-        }
-        entry[field] = parseScoreInput(inp);
+        inp.closest(".gc-subject")?.classList.add("is-dirty");
+        refreshDirtyStatus();
       });
     });
   }
 
-  async function saveRemarks() {
-    if (!STATE.activeStudentIdNumber || !STATE.lastData) {
-      setStatus("Load a student first.", "danger");
+  function gradeBody(subj, edit, periodId) {
+    const body = {
+      student_id_number: STATE.activeStudentIdNumber,
+      subject_id: String(subj.subject_id),
+      grading_period_id: periodId,
+    };
+    // Scores: send what the teacher entered (null = use the automatic score).
+    COMPONENTS.forEach((c) => {
+      body[c.field] = edit[c.field] !== undefined ? edit[c.field] : (subj[`${c.prefix}_entered`] ?? null);
+    });
+    // Final override: only when touched. A blank box turns it off.
+    if (edit.final_grade !== undefined) {
+      body.final_grade = edit.final_grade;
+      body.final_is_manual = edit.final_grade !== null;
+    }
+    if (edit.remarks !== undefined) body.remarks = edit.remarks;
+    return body;
+  }
+
+  function validEdit(edit) {
+    for (const c of COMPONENTS) {
+      const v = edit[c.field];
+      if (v !== undefined && v !== null && (Number.isNaN(v) || v < 0 || v > 100)) return `${c.label} must be 0 to 100.`;
+    }
+    const f = edit.final_grade;
+    if (f !== undefined && f !== null && (Number.isNaN(f) || f < 60 || f > 100)) return "A final grade must be 60 to 100.";
+    return "";
+  }
+
+  async function saveChanges() {
+    if (!STATE.activeStudentIdNumber || !STATE.lastData) return;
+    const periodId = $("gradecard-term-select")?.value || STATE.currentPeriodId;
+    if (!periodId) {
+      setSaveStatus("No grading period is set up.", "error");
+      return;
+    }
+    if (!hasUnsavedChanges()) {
+      setSaveStatus("No changes to save.");
       return;
     }
 
-    const periodId = $("gradecard-term-select")?.value || STATE.currentPeriodId;
-    if (!periodId) {
-      setStatus("No grading period configured.", "danger");
-      return;
+    const subjects = STATE.lastData.subjects || [];
+    for (const subj of subjects) {
+      const edit = STATE.editedSubjects.get(String(subj.subject_id));
+      const problem = edit && validEdit(edit);
+      if (problem) {
+        setSaveStatus(`${subj.subject_name || "Subject"}: ${problem}`, "error");
+        return;
+      }
     }
 
     const btn = $("gradecard-save-remarks-btn");
     if (btn) btn.disabled = true;
-    setStatus("Saving…");
-
-    const subjects = STATE.lastData.subjects || [];
-    const savedSubjects = [];
+    setSaveStatus("Saving…");
     const errors = [];
 
     for (const subj of subjects) {
-      const sid = String(subj.subject_id);
-      const edit = STATE.editedSubjects.get(sid);
+      const edit = STATE.editedSubjects.get(String(subj.subject_id));
       if (!edit) continue;
-
-      const body = {
-        student_id_number: STATE.activeStudentIdNumber,
-        subject_id: sid,
-        grading_period_id: periodId,
-        teacher_id_number: subj.teacher_id_number || null,
-        written_work_score:
-          edit.written_work_score !== undefined ? edit.written_work_score : subj.written_work_score,
-        performance_task_score:
-          edit.performance_task_score !== undefined
-            ? edit.performance_task_score
-            : subj.performance_task_score,
-        quarterly_assessment_score:
-          edit.quarterly_assessment_score !== undefined
-            ? edit.quarterly_assessment_score
-            : subj.quarterly_assessment_score,
-        final_grade: edit.final_grade !== undefined ? edit.final_grade : subj.final_grade,
-        final_is_manual: edit.final_is_manual === true,
-        remarks: edit.remarks !== undefined ? edit.remarks : subj.remarks,
-      };
-
       try {
         const res = await fetch(apiUrl("/student-grades"), {
           method: "POST",
@@ -633,23 +661,16 @@
             "Content-Type": "application/json",
             ...(typeof adminAuthHeaders === "function" ? adminAuthHeaders() : {}),
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify(gradeBody(subj, edit, periodId)),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          errors.push(`${subj.subject_name || sid}: ${data?.error || res.status}`);
-        } else {
-          savedSubjects.push(subj.subject_name || sid);
-        }
+        if (!res.ok) errors.push(`${subj.subject_name || subj.subject_id}: ${data?.error || res.status}`);
       } catch (e) {
-        errors.push(`${subj.subject_name || sid}: ${e.message}`);
+        errors.push(`${subj.subject_name || subj.subject_id}: ${e.message}`);
       }
     }
 
-    const commentsEl = $("gradecard-comments-text");
-    const newComments = commentsEl ? String(commentsEl.value || "").trim() : "";
-    const oldComments = String(STATE.lastData.summary?.adviser_comments || "").trim();
-    if (newComments !== oldComments) {
+    if (commentsChanged()) {
       try {
         const res = await fetch(apiUrl("/gradecards"), {
           method: "POST",
@@ -660,7 +681,7 @@
           body: JSON.stringify({
             student_id_number: STATE.activeStudentIdNumber,
             grading_period_id: periodId,
-            adviser_comments: newComments,
+            adviser_comments: String($("gradecard-comments-text")?.value || "").trim(),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -671,24 +692,24 @@
     }
 
     if (btn) btn.disabled = false;
-
     if (errors.length) {
-      setStatus(`Saved with ${errors.length} error(s). See console.`, "danger");
       console.error("Save errors:", errors);
-      if (typeof showToast === "function") showToast("Some changes failed to save.", "danger");
-    } else if (!savedSubjects.length && newComments === oldComments) {
-      setStatus("No changes to save.");
-    } else {
-      setStatus("Saved.", "success");
-      if (typeof showToast === "function") showToast("Gradecard saved.", "success");
+      setSaveStatus(`Couldn't save: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`, "error");
+      if (typeof showToast === "function") showToast("Some changes weren't saved.", "danger");
+      return;
     }
-
+    if (typeof showToast === "function") showToast("Gradecard saved.", "success");
     await loadGradecardForStudent(STATE.activeStudentIdNumber);
+    setSaveStatus("Saved. Grades are recomputed.", "ok");
   }
+
+  // ---------- Wiring ----------
 
   function bindControls() {
     $("gradecard-back-strands-btn")?.addEventListener("click", showStrandsView);
-    $("gradecard-back-students-btn")?.addEventListener("click", showStudentsView);
+    $("gradecard-back-students-btn")?.addEventListener("click", async () => {
+      if (await okToLeave()) showStudentsView();
+    });
 
     document.querySelectorAll("[data-gradecard-grade]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -703,12 +724,30 @@
       filterTimer = setTimeout(() => loadStudents(val), 280);
     });
 
-    $("gradecard-term-select")?.addEventListener("change", () => {
-      if (STATE.activeStudentIdNumber) loadGradecardForStudent(STATE.activeStudentIdNumber);
+    const termSel = $("gradecard-term-select");
+    let lastTerm = termSel?.value || "";
+    termSel?.addEventListener("focus", () => { lastTerm = termSel.value; });
+    termSel?.addEventListener("change", async () => {
+      if (!STATE.activeStudentIdNumber) return;
+      if (!(await okToLeave())) {
+        termSel.value = lastTerm;
+        return;
+      }
+      lastTerm = termSel.value;
+      loadGradecardForStudent(STATE.activeStudentIdNumber);
     });
 
+    $("gradecard-comments-text")?.addEventListener("input", refreshDirtyStatus);
     $("gradecard-print-btn")?.addEventListener("click", () => window.print());
-    $("gradecard-save-remarks-btn")?.addEventListener("click", saveRemarks);
+    $("gradecard-save-remarks-btn")?.addEventListener("click", saveChanges);
+    G.installPrintExpand();
+
+    window.addEventListener("beforeunload", (ev) => {
+      if (STATE.view === "detail" && hasUnsavedChanges()) {
+        ev.preventDefault();
+        ev.returnValue = "";
+      }
+    });
   }
 
   async function restoreFromUrl() {
@@ -731,7 +770,6 @@
     }
     bindControls();
     updateGradeTabUI();
-    renderEmptyState();
     await loadGradingPeriods();
     await loadStrands();
     const urlParams = new URLSearchParams(window.location.search);

@@ -12,9 +12,15 @@ export class ApiError extends Error {
 
 /** Lazily resolved so apiClient never has to import the auth store directly (would create a cycle). */
 let getAccessToken: (() => string | null) | null = null;
+/** Gets a new access token after a 401 (null = the session is over). Set by the auth store. */
+let refreshAccessToken: (() => Promise<string | null>) | null = null;
 
 export function setAccessTokenGetter(fn: () => string | null) {
   getAccessToken = fn;
+}
+
+export function setAccessTokenRefresher(fn: () => Promise<string | null>) {
+  refreshAccessToken = fn;
 }
 
 type ApiRequestOptions = {
@@ -24,6 +30,8 @@ type ApiRequestOptions = {
   formData?: FormData;
   /** Skip attaching the Authorization header for this call (e.g. /login itself). */
   skipAuth?: boolean;
+  /** Don't refresh the session and retry on a 401 (the refresh call itself, or a retry). */
+  noRefresh?: boolean;
   query?: Record<string, string | number | boolean | null | undefined>;
 };
 
@@ -47,7 +55,7 @@ export async function apiRequest<T = unknown>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, formData, skipAuth, query } = options;
+  const { method = 'GET', body, formData, skipAuth, noRefresh, query } = options;
 
   const headers: Record<string, string> = {};
   if (!skipAuth && getAccessToken) {
@@ -76,6 +84,12 @@ export async function apiRequest<T = unknown>(
       'Could not reach the LearnIQ server. Check your connection and the API address in settings.',
       0,
     );
+  }
+
+  // The access token lasts about an hour: on a 401, refresh it once and retry.
+  if (response.status === 401 && !skipAuth && !noRefresh && refreshAccessToken) {
+    const fresh = await refreshAccessToken();
+    if (fresh) return apiRequest<T>(path, { ...options, noRefresh: true });
   }
 
   const isJson = response.headers.get('content-type')?.includes('application/json');

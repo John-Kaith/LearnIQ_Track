@@ -5,7 +5,7 @@ const ACTIVE = '#ca8a04';
 const INACTIVE = '#78716c';
 const SIZE = 24;
 
-type TabName = 'home' | 'learn' | 'immersion' | 'profile';
+type TabName = 'home' | 'learn' | 'arcade' | 'immersion' | 'profile';
 
 export function StudentTabIcon({
   name,
@@ -36,6 +36,14 @@ function renderIcon(name: TabName, focused: boolean, color: string) {
       );
     case 'learn':
       return <Feather name="book-open" size={SIZE} color={color} />;
+    case 'arcade':
+      return (
+        <Ionicons
+          name={focused ? 'game-controller' : 'game-controller-outline'}
+          size={SIZE}
+          color={color}
+        />
+      );
     case 'immersion':
       return <Feather name="map-pin" size={SIZE} color={color} />;
     case 'profile':

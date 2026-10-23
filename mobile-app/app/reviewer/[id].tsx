@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import { fetchLessonDetail, fetchLessonReviewer } from '@/services/lessons';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function ReviewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function ReviewerScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title="Reviewer" />
       <ScrollView
         showsVerticalScrollIndicator={false}

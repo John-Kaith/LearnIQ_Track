@@ -6,11 +6,13 @@ import { Feather } from '@expo/vector-icons';
 
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 import {
   fetchLessonActivities,
   fetchLessonDetail,
   type ActivityItem,
 } from '@/services/lessons';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function ActivitiesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,6 +33,7 @@ export default function ActivitiesScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title="Activities" />
       <ScrollView
         contentContainerStyle={[
@@ -172,10 +175,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     marginBottom: 10,
     overflow: 'hidden',
   },
@@ -190,12 +193,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    backgroundColor: WebTheme.softBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   numText: {
-    color: '#34d399',
+    color: WebTheme.softText,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -238,14 +241,14 @@ const styles = StyleSheet.create({
   sampleBtn: {
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.4)',
-    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    borderColor: WebTheme.softBorder,
+    backgroundColor: WebTheme.softBg,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   sampleBtnText: {
-    color: Colors.primary,
+    color: WebTheme.softText,
     fontSize: 12,
     fontWeight: '700',
   },

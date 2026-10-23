@@ -651,6 +651,43 @@ body.arcade-game {
   background: var(--arcade-bg-deep);
 }
 
+/* ---- Touch screens (phones, tablets and the mobile app) ----
+ * Quick taps on letters and squares shouldn't zoom the page, a drag on the
+ * D-pad shouldn't pull-to-refresh or bounce it, a long press shouldn't select
+ * text or open the "copy / share" menu, and taps shouldn't flash a highlight. */
+html:has(body.arcade-game) {
+  overscroll-behavior: none;
+}
+
+body.arcade-game {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body.arcade-game * {
+  touch-action: manipulation;
+}
+
+body.arcade-game :is(button, [role="button"], a, .wc-screen, .sk-play, .battle-fight-screen, .ttk-screen) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.arcade-game :is(input, textarea, select) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Keyboard-only hints mean nothing on a touch screen */
+@media (pointer: coarse) {
+  .wc-hint-keys {
+    display: none;
+  }
+}
+
 .wc-app {
   position: fixed;
   inset: 0;

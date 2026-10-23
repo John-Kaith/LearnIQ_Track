@@ -8,6 +8,7 @@ import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import type { LessonSummary } from '@/data/studentLearnFlowMock';
 import { fetchSubjectLessons, fetchSubjectTitle } from '@/services/lessons';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function SubjectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +29,7 @@ export default function SubjectScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title={title} />
       <ScrollView
         showsVerticalScrollIndicator={false}

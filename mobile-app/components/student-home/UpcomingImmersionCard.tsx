@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type UpcomingImmersionCardProps = {
   timeIn: string;
@@ -13,8 +14,8 @@ export function UpcomingImmersionCard({ timeIn, timeOut }: UpcomingImmersionCard
     <View style={styles.card}>
       <View style={styles.times}>
         <View style={styles.timeRow}>
-          <View style={[styles.iconBox, { backgroundColor: 'rgba(234, 179, 8, 0.2)' }]}>
-            <Ionicons name="log-in-outline" size={18} color="#fbbf24" />
+          <View style={[styles.iconBox, { backgroundColor: WebTheme.softBg }]}>
+            <Ionicons name="log-in-outline" size={18} color={Colors.primary} />
           </View>
           <View>
             <Text style={styles.timeLabel}>Time In</Text>
@@ -22,8 +23,8 @@ export function UpcomingImmersionCard({ timeIn, timeOut }: UpcomingImmersionCard
           </View>
         </View>
         <View style={styles.timeRow}>
-          <View style={[styles.iconBox, { backgroundColor: 'rgba(248, 113, 113, 0.15)' }]}>
-            <Ionicons name="log-out-outline" size={18} color="#f87171" />
+          <View style={[styles.iconBox, { backgroundColor: WebTheme.dangerBg }]}>
+            <Ionicons name="log-out-outline" size={18} color={WebTheme.danger} />
           </View>
           <View>
             <Text style={styles.timeLabel}>Time Out</Text>
@@ -43,10 +44,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 22,
     gap: 12,

@@ -42,10 +42,10 @@ export function JournalField({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 14,
     marginBottom: 14,
   },

@@ -66,10 +66,64 @@ export const LearnIQThemeDark = {
 /** Active default theme for the mobile app. */
 export const LearnIQTheme = LearnIQThemeLight;
 
+/**
+ * How the website actually renders its light theme — the app copies these.
+ * Sources: frontend/style.css (body), css/learniq-design-system.css (cards,
+ * .btn-primary, .btn-secondary, tabs). Keep in sync with the website.
+ */
+export const WebTheme = {
+  /** body: linear-gradient(165deg, #ffffff 0%, #fffbeb 45%, #fef9c3 100%) */
+  pageGradient: ['#ffffff', '#fffbeb', '#fef9c3'] as const,
+  /** body: gold glows, top left rgba(251,191,36,.2) and top right rgba(234,179,8,.16) */
+  pageGlowLeft: 'rgba(251, 191, 36, 0.2)',
+  pageGlowRight: 'rgba(234, 179, 8, 0.16)',
+  /** .glass-card / .panel-header: --panel is 96% white over the cream page,
+   * which looks plain white; solid here so Android shadows draw cleanly. */
+  surface: '#ffffff',
+  /** .glass-card border: --lq-border-accent */
+  surfaceBorder: 'rgba(217, 119, 6, 0.28)',
+  /** --lq-shadow-card: 0 12px 32px rgba(120, 53, 15, 0.08) */
+  shadowColor: '#78350f',
+  /** .btn-primary: --lq-gradient-accent (135deg) with white text */
+  accentGradient: ['#fbbf24', '#eab308'] as const,
+  /** Solid stand-in for the gradient (its middle) */
+  accentSolid: '#f3b716',
+  onAccent: '#ffffff',
+  /** --lq-shadow-btn: 0 12px 28px rgba(234, 179, 8, 0.28) */
+  accentShadow: '#eab308',
+  /** .btn-secondary (light): pale gold pill with dark gold text */
+  softBg: 'rgba(251, 191, 36, 0.18)',
+  softBorder: 'rgba(217, 119, 6, 0.35)',
+  softText: '#a16207',
+  /** .pill (light): small gold tag, e.g. the "Subject" label on a card */
+  pillBg: 'rgba(251, 191, 36, 0.16)',
+  pillBorder: 'rgba(217, 119, 6, 0.24)',
+  /** Light-mode status colors (style.css .status-badge and .btn-danger, light):
+   * dark text on a pale tint, since the dark-theme colors wash out on white */
+  success: '#166534',
+  successBg: 'rgba(34, 197, 94, 0.14)',
+  warning: '#92400e',
+  warningBg: 'rgba(245, 158, 11, 0.16)',
+  danger: '#b91c1c',
+  dangerBg: 'rgba(220, 38, 38, 0.08)',
+  dangerBorder: 'rgba(220, 38, 38, 0.3)',
+  /** Active tab (.workspace-tab.is-active) */
+  tabActiveBg: 'rgba(202, 138, 4, 0.14)',
+  tabActiveBorder: 'rgba(202, 138, 4, 0.42)',
+  /** Avatar circle: gradient rgba(251,191,36,.25) → rgba(234,179,8,.25) */
+  avatarBg: 'rgba(245, 185, 22, 0.25)',
+  /** .stat-card i: --lq-accent-violet-soft */
+  statIcon: '#fbbf24',
+} as const;
+
 /** @deprecated Use LearnIQTheme.colors — kept for existing imports */
 export const Colors = {
   background: LearnIQTheme.colors.background,
   backgroundSoft: LearnIQTheme.colors.backgroundSoft,
+  /** Cards, like the website's white glass cards */
+  surface: WebTheme.surface,
+  /** Card outline, like the website's gold card border */
+  cardBorder: WebTheme.surfaceBorder,
   text: LearnIQTheme.colors.textBody,
   textMuted: LearnIQTheme.colors.textMuted,
   primary: LearnIQTheme.colors.accentBlue,

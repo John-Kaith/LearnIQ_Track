@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 10,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
   },
   previewMeta: { flex: 1, minWidth: 0 },
   badge: {

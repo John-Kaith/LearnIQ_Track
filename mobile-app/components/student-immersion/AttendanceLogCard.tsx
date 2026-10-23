@@ -2,15 +2,16 @@ import { Feather } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 import type { AttendanceLogEntry, AttendanceLogStatus } from '@/data/studentImmersionMock';
 
 const STATUS_STYLES: Record<
   AttendanceLogStatus,
   { label: string; bg: string; color: string }
 > = {
-  completed: { label: 'Completed', bg: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' },
-  incomplete: { label: 'Incomplete', bg: 'rgba(248, 113, 113, 0.15)', color: '#f87171' },
-  partial: { label: 'Partial', bg: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24' },
+  completed: { label: 'Completed', bg: WebTheme.successBg, color: WebTheme.success },
+  incomplete: { label: 'Incomplete', bg: WebTheme.dangerBg, color: WebTheme.danger },
+  partial: { label: 'Partial', bg: WebTheme.warningBg, color: WebTheme.warning },
 };
 
 export function AttendanceLogCard({
@@ -57,10 +58,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 14,
     marginBottom: 10,
     gap: 12,

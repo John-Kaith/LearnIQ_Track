@@ -2,6 +2,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type ProfileCardProps = {
   initials: string;
@@ -29,11 +30,11 @@ export function ProfileCard({
 }: ProfileCardProps) {
   const badge =
     approvalStatus === 'approved'
-      ? { label: 'Approved', color: '#22c55e' }
+      ? { label: 'Approved', color: WebTheme.success, bg: WebTheme.successBg }
       : approvalStatus === 'pending'
-        ? { label: 'Pending', color: '#f59e0b' }
+        ? { label: 'Pending', color: WebTheme.warning, bg: WebTheme.warningBg }
         : approvalStatus === 'rejected'
-          ? { label: 'Rejected', color: '#ef4444' }
+          ? { label: 'Rejected', color: WebTheme.danger, bg: WebTheme.dangerBg }
           : null;
 
   return (
@@ -63,7 +64,7 @@ export function ProfileCard({
             <Text style={styles.meta}>ID: {idNumber}</Text>
           </View>
           {badge ? (
-            <View style={[styles.badge, { borderColor: `${badge.color}44` }]}>
+            <View style={[styles.badge, { borderColor: `${badge.color}44`, backgroundColor: badge.bg }]}>
               <Feather name="check-circle" size={12} color={badge.color} />
               <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
             </View>
@@ -73,7 +74,7 @@ export function ProfileCard({
         <Pressable
           onPress={() => Alert.alert('Edit Profile', 'Profile editor — coming soon (mock).')}
           style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}>
-          <Feather name="edit-2" size={14} color={Colors.primary} />
+          <Feather name="edit-2" size={14} color={WebTheme.softText} />
           <Text style={styles.editText}>Edit Profile</Text>
         </Pressable>
       </View>
@@ -116,10 +117,10 @@ function InfoCell({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 16,
     marginBottom: 24,
   },
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: '#eab308',
     borderWidth: 2,
-    borderColor: Colors.backgroundSoft,
+    borderColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -196,7 +197,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
   badgeText: {
     fontSize: 11,
@@ -206,14 +206,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(202, 138, 4, 0.4)',
-    backgroundColor: 'rgba(161, 98, 7, 0.12)',
+    borderColor: WebTheme.softBorder,
+    backgroundColor: WebTheme.softBg,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
   editText: {
-    color: Colors.primary,
+    color: WebTheme.softText,
     fontSize: 10,
     fontWeight: '700',
   },

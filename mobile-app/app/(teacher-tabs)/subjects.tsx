@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TeacherSubjectListCard } from '@/components/teacher-subjects/TeacherSubjectListCard';
 import { Colors } from '@/constants/colors';
 import { fetchTeacherSubjects, type TeacherSubject } from '@/services/subjects';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function TeacherSubjectsScreen() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function TeacherSubjectsScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

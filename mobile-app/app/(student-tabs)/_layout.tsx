@@ -43,6 +43,13 @@ export default function StudentTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="arcade"
+        options={{
+          title: 'Arcade',
+          tabBarIcon: ({ focused }) => <StudentTabIcon name="arcade" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="immersion"
         options={{
           title: 'Immersion',

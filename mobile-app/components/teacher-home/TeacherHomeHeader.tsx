@@ -12,10 +12,7 @@ export function TeacherHomeHeader({ greeting, name, subtitle }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.greeting}>{greeting}</Text>
-      <Text style={styles.name}>
-        <Text style={styles.nameAccent}>{name}</Text>
-        {' 👋'}
-      </Text>
+      <Text style={styles.name}>{name} 👋</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
     </View>
   );
@@ -36,9 +33,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
     marginBottom: 8,
-  },
-  nameAccent: {
-    color: Colors.secondary,
   },
   subtitle: {
     color: Colors.textMuted,

@@ -1,0 +1,220 @@
+/* ============================================================
+   Admin School Year page (admin-school-year.html).
+   Light is the default theme; html[data-theme="dark"] overrides the
+   few local tokens below.
+   ============================================================ */
+
+.sy-main {
+  --sy-accent-bg: rgba(var(--lq-accent-blue-rgb), 0.08);
+  --sy-accent-border: rgba(var(--lq-accent-blue-rgb), 0.28);
+  --sy-ok: #15803d;
+  --sy-warn: #b45309;
+  --sy-warn-bg: rgba(245, 158, 11, 0.14);
+  --sy-error: #b91c1c;
+}
+
+html[data-theme="dark"] .sy-main {
+  --sy-ok: #4ade80;
+  --sy-warn: #fbbf24;
+  --sy-error: #f87171;
+}
+
+.sy-main [hidden] {
+  display: none !important;
+}
+
+.sy-muted {
+  color: var(--muted);
+  margin: 0;
+}
+
+.sy-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sy-error {
+  margin: 0;
+  color: var(--sy-error);
+}
+
+/* Today */
+.sy-now {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sy-now-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.sy-now-row > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.sy-now-row strong {
+  font-size: 1.2rem;
+}
+
+.sy-now-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--lq-accent-blue);
+  font-size: 1.15rem;
+}
+
+.sy-review-note,
+.sy-review {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  color: var(--sy-warn);
+  background: var(--sy-warn-bg);
+  font-weight: 500;
+}
+
+/* Form */
+.sy-form {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.sy-form-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.sy-form-head h2,
+.sy-next h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.15rem;
+}
+
+.sy-year-pick {
+  min-width: 220px;
+}
+
+.sy-semesters {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.sy-sem {
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--sy-accent-bg);
+  min-width: 0;
+}
+
+.sy-sem legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+
+.sy-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.sy-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.sy-field > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.sy-field .form-input {
+  width: 100%;
+  min-height: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-preview {
+  margin: 0.7rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-preview.is-error {
+  color: var(--sy-error);
+}
+
+.sy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem 1rem;
+}
+
+.sy-status {
+  margin-right: auto;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.sy-status.is-ok { color: var(--sy-ok); }
+.sy-status.is-dirty { color: var(--sy-warn); }
+.sy-status.is-error { color: var(--sy-error); }
+
+/* Next school year */
+.sy-next-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.sy-next-row > div {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* Admin dashboard: reminder to check the dates */
+.sy-dashboard-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--text);
+}
+
+.sy-dashboard-banner i {
+  color: #d97706;
+}
+
+.sy-dashboard-banner span {
+  flex: 1 1 260px;
+}

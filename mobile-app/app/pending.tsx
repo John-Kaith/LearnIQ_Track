@@ -3,6 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
+import { WebBackground } from '@/components/ui/WebBackground';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 
 export default function PendingScreen() {
   const router = useRouter();
@@ -14,7 +17,9 @@ export default function PendingScreen() {
         styles.container,
         { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
       ]}>
+      <WebBackground />
       <View style={styles.mark}>
+        <AccentFill radius={14} />
         <Text style={styles.markText}>LQ</Text>
       </View>
       <Text style={styles.message}>
@@ -39,12 +44,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.45)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   markText: {
     color: '#fff',

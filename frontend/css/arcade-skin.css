@@ -18,6 +18,7 @@ body.arcade-skin {
   --sk-mid: #22223a; /* solid panel colour */
   --sk-panel: rgba(0, 0, 0, 0.18); /* cards and panels */
   --sk-btn: rgba(0, 0, 0, 0.12); /* buttons */
+  --sk-under: transparent; /* solid base under see-through panels (phones) */
   --sk-hover-bg: rgba(255, 255, 255, 0.08);
   --sk-decor: none; /* page decoration behind the screens */
   --sk-overlay: none; /* page decoration over the screens (e.g. a frame) */
@@ -106,6 +107,9 @@ body.arcade-skin .wc-screen {
 body.arcade-skin .wc-logo-top {
   color: var(--sk-logo-top);
   text-shadow: var(--sk-logo-shadow);
+  /* An outline for pale logos that can land on a pale moon or cloud */
+  -webkit-text-stroke: var(--sk-logo-stroke, 0px) var(--sk-ghost);
+  paint-order: stroke fill;
 }
 
 body.arcade-skin .wc-logo-main {
@@ -134,7 +138,7 @@ body.arcade-skin .wc-press-start:focus-visible {
 }
 
 body.arcade-skin .wc-player-card {
-  background: var(--sk-panel);
+  background: linear-gradient(var(--sk-panel), var(--sk-panel)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line-soft);
   border-radius: var(--sk-radius);
   box-shadow: none;
@@ -163,7 +167,7 @@ body.arcade-skin .wc-back,
 body.arcade-skin .wc-stage,
 body.arcade-skin .wc-log-item {
   color: var(--sk-ink);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: var(--sk-shadow);
@@ -177,7 +181,7 @@ body.arcade-skin .wc-back:hover,
 body.arcade-skin .wc-back:focus-visible {
   outline: none;
   color: var(--sk-select);
-  background: var(--sk-hover-bg);
+  background: linear-gradient(var(--sk-hover-bg), var(--sk-hover-bg)) var(--sk-under);
   border-color: var(--sk-select);
   box-shadow: var(--sk-shadow);
 }
@@ -214,7 +218,7 @@ body.arcade-skin .wc-setup-note {
 
 /* ---- Subjects ---- */
 body.arcade-skin .wc-world {
-  background: var(--sk-panel);
+  background: linear-gradient(var(--sk-panel), var(--sk-panel)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: var(--sk-shadow);
@@ -250,7 +254,7 @@ body.arcade-skin .wc-log-item:focus-visible {
 }
 
 body.arcade-skin .wc-stage.is-selected {
-  background: var(--sk-hover-bg);
+  background: linear-gradient(var(--sk-hover-bg), var(--sk-hover-bg)) var(--sk-under);
   border-color: var(--sk-accent);
   box-shadow: var(--sk-shadow);
 }
@@ -281,7 +285,7 @@ body.arcade-skin .wc-stage-empty {
 
 body.arcade-skin .wc-stage-panel,
 body.arcade-skin .wc-card {
-  background: var(--sk-panel);
+  background: linear-gradient(var(--sk-panel), var(--sk-panel)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: var(--sk-shadow);
@@ -300,7 +304,7 @@ body.arcade-skin .wc-selected-stage {
 
 body.arcade-skin .wc-stage-alert {
   color: var(--sk-ink);
-  background: var(--sk-hover-bg);
+  background: linear-gradient(var(--sk-hover-bg), var(--sk-hover-bg)) var(--sk-under);
   border: 2px solid var(--sk-bad);
 }
 
@@ -310,7 +314,7 @@ body.arcade-skin .wc-seg .battle-difficulty-option {
   font: inherit;
   font-size: 0.5rem;
   color: var(--sk-ink);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-ink-faint);
   border-radius: var(--sk-radius);
   box-shadow: 2px 2px 0 var(--sk-ghost);
@@ -372,7 +376,7 @@ body.arcade-skin .battle-result-stat span {
 }
 
 body.arcade-skin .battle-result-stat {
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: 2px 2px 0 var(--sk-ghost);
@@ -403,7 +407,7 @@ body.arcade-skin .battle-result-flag.is-levelup {
 }
 
 body.arcade-skin .wc-review-item {
-  background: var(--sk-panel);
+  background: linear-gradient(var(--sk-panel), var(--sk-panel)) var(--sk-under);
   border: 2px var(--sk-border-style) var(--sk-ink-faint);
 }
 
@@ -506,7 +510,7 @@ body.arcade-skin .battle-character-option.is-active {
 body.arcade-skin .learniq-confirm-actions .btn {
   color: var(--sk-ink);
   text-shadow: none;
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: 3px solid var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: 2px 2px 0 var(--sk-ghost);
@@ -547,13 +551,13 @@ body.arcade-skin .battle-loading-ground {
 body.arcade-skin .battle-loading-cells {
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
 }
 
 body.arcade-skin .battle-loading-tip {
   border-color: var(--sk-line-soft);
   border-radius: var(--sk-radius);
-  background: var(--sk-panel);
+  background: linear-gradient(var(--sk-panel), var(--sk-panel)) var(--sk-under);
 }
 
 /* ============================================================
@@ -613,7 +617,7 @@ body.arcade-skin .battle-loading-tip {
   font: inherit;
   font-size: 0.55rem;
   color: var(--sk-ink);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: 2px 2px 0 var(--sk-ghost);
@@ -702,7 +706,7 @@ body.arcade-skin .battle-loading-tip {
   font: inherit;
   font-size: 0.7rem;
   color: var(--sk-ink);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: var(--sk-shadow);
@@ -881,7 +885,7 @@ body.arcade-skin .battle-loading-tip {
   line-height: 1.5;
   text-align: left;
   color: var(--sk-ink);
-  background: var(--sk-btn);
+  background: linear-gradient(var(--sk-btn), var(--sk-btn)) var(--sk-under);
   border: var(--sk-border-w) var(--sk-border-style) var(--sk-line);
   border-radius: var(--sk-radius);
   box-shadow: 2px 2px 0 var(--sk-ghost);
@@ -899,7 +903,7 @@ body.arcade-skin .battle-loading-tip {
   outline: none;
   color: var(--sk-select);
   border-color: var(--sk-select);
-  background: var(--sk-hover-bg);
+  background: linear-gradient(var(--sk-hover-bg), var(--sk-hover-bg)) var(--sk-under);
 }
 
 .aq-choice:disabled {
@@ -914,7 +918,7 @@ body.arcade-skin .battle-loading-tip {
 .aq-choice.is-correct {
   color: var(--sk-good);
   border-color: var(--sk-good);
-  background: var(--sk-hover-bg);
+  background: linear-gradient(var(--sk-hover-bg), var(--sk-hover-bg)) var(--sk-under);
 }
 
 .aq-choice.is-wrong {
@@ -975,6 +979,23 @@ html.reduce-motion .aq-continue {
   }
 }
 
+/* ---- Phones and small tablets ----
+ * The menus fill the screen there, so the scene's moon, sun, clouds or floor
+ * sit right behind the menu buttons, lesson lists and pause panel: give the
+ * see-through panels a solid base, and the pause panel and dialogs a plain
+ * background instead of a copy of the scene. */
+@media (max-width: 900px) {
+  body.arcade-skin {
+    --sk-under: var(--sk-mid);
+  }
+
+  body.arcade-skin .wc-pause-panel,
+  body.arcade-skin .battle-character-panel,
+  body.arcade-skin .learniq-confirm-panel {
+    background: var(--sk-mid);
+  }
+}
+
 /* ---- Phones ---- */
 @media (max-width: 720px) {
   body.arcade-skin .wc-screen {
@@ -994,7 +1015,9 @@ html.reduce-motion .aq-continue {
   }
 }
 
-@media (max-width: 380px) {
+/* One answer per row only on the narrowest phones: two columns keep the card
+   short enough that all four answers stay on screen with the game. */
+@media (max-width: 340px) {
   .aq-choices {
     grid-template-columns: minmax(0, 1fr);
   }

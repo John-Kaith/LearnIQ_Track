@@ -1,10 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function TeacherProfileScreen() {
   return (
     <View style={styles.container}>
+      <WebBackground />
       <Text style={styles.label}>Teacher Profile</Text>
     </View>
   );

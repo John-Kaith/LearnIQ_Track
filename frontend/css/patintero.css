@@ -41,6 +41,7 @@ body.patintero-page {
   --sk-bad: #fda4af;
   --sk-info: #93c5fd;
   --sk-logo-top: #eef2ff;
+  --sk-logo-stroke: 3px; /* the cream title crosses the white clouds / the moon */
   --sk-logo-main: var(--pt-lamp);
   --sk-logo-shadow: 4px 4px 0 #3b82f6, 8px 8px 0 #05081a;
   --sk-cursor: ">";
@@ -82,6 +83,7 @@ body.patintero-page .wc-logo-main {
 .pt-court {
   position: relative;
   height: min(60vh, 34rem);
+  height: min(60dvh, 34rem);
   aspect-ratio: 5 / 9;
   max-width: 100%;
   background:
@@ -273,6 +275,7 @@ html.reduce-motion .pt-guard {
 @media (max-width: 720px) {
   .pt-court {
     height: min(52vh, 30rem);
+    height: min(52dvh, 30rem);
   }
 
   .pt-pad {
@@ -280,3 +283,17 @@ html.reduce-motion .pt-guard {
     grid-template-rows: repeat(2, 3rem);
   }
 }
+
+/* Touch screens with room to spare: a bigger pad for thumbs. */
+@media (pointer: coarse) and (max-width: 720px) and (min-height: 700px) {
+  .pt-pad {
+    grid-template-columns: repeat(3, 4.4rem);
+    grid-template-rows: repeat(2, 3.6rem);
+    gap: 0.45rem;
+  }
+
+  .pt-pad-btn {
+    font-size: 1.35rem;
+  }
+}
+

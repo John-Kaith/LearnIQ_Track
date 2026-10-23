@@ -17,6 +17,9 @@ import { JournalField } from '@/components/journal/JournalField';
 import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import { submitJournal } from '@/services/journals';
+import { WebTheme } from '@/constants/learniqTheme';
+import { WebBackground } from '@/components/ui/WebBackground';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 
 export default function JournalCreateScreen() {
   const router = useRouter();
@@ -47,6 +50,7 @@ export default function JournalCreateScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title="Today's Journal" />
       <KeyboardAvoidingView
         style={styles.flex}
@@ -98,6 +102,7 @@ export default function JournalCreateScreen() {
               pressed && !submitting && styles.pressed,
               submitting && styles.disabled,
             ]}>
+            <AccentFill radius={14} />
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -134,12 +139,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   submitBtn: {
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.4)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   pressed: { opacity: 0.9 },
   disabled: { opacity: 0.6 },

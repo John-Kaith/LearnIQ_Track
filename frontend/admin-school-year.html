@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>School Year | Admin · LearnIQ Track</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="js/shared/theme-boot.js"></script>
+<link rel="stylesheet" href="style.css?v=2026102301" />
+  <link rel="stylesheet" href="css/school-year.css?v=2026102301" />
+  <script src="js/shared/theme-toggle.js"></script>
+  <script src="js/shared/confirm-dialog.js" defer></script>
+  <script src="js/learniq-config.js"></script>
+  <script src="js/core/api.js"></script>
+  <script src="script.js?v=2026102302" defer></script>
+  <script src="js/pages/admin-school-year.entry.js?v=2026102301" defer></script>
+</head>
+<body data-sidebar-active="school-year" class="admin-school-year-page">
+  <main class="page-shell container">
+    <div class="dashboard-shell">
+      <aside class="sidebar lq-sidebar fade-up">
+        <div class="sidebar-header">
+          <div class="brand" style="gap:0.85rem;">
+            <span class="brand-mark">LQ</span>
+            <span>
+              <strong>LearnIQ Track</strong>
+              <small>Admin Control Center</small>
+            </span>
+          </div>
+          <p class="small-note">Review approvals, activity, and system health from one view.</p>
+        </div>
+        <nav class="side-links" aria-label="Admin navigation"></nav>
+
+<div class="sidebar-footer">
+          <a href="admin-profile.html" class="user-chip user-chip-profile-link" title="Profile information">
+            <span class="avatar" id="admin-sidebar-avatar">PC</span>
+            <div class="user-chip-text">
+              <strong id="admin-sidebar-name">Principal Cruz</strong>
+              <small id="admin-sidebar-role">Admin / Principal</small>
+            </div>
+          </a>
+          <button id="sidebar-logout" type="button" class="btn btn-secondary btn-block" onclick="logoutAdmin()">
+            <i class="fa-solid fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <section class="main-panel sy-main">
+        <section class="glass-card panel-header fade-up delay-1">
+          <div class="panel-title">
+            <h1><i class="fa-solid fa-calendar-days"></i> School Year</h1>
+            <p>Set the semester dates. Grades, enrollment and the leaderboard follow them.</p>
+          </div>
+        </section>
+
+        <section class="glass-card content-card sy-now fade-up delay-2" id="sy-now" aria-live="polite">
+          <p class="sy-muted"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</p>
+        </section>
+
+        <form class="glass-card content-card sy-form fade-up delay-3" id="sy-form" hidden novalidate>
+          <div class="sy-form-head">
+            <div>
+              <h2 id="sy-form-title">S.Y. —</h2>
+              <p class="sy-muted">Each semester needs three dates. Finals starts the day after Midterm ends.</p>
+            </div>
+            <label class="form-field sy-year-pick" id="sy-year-pick" hidden>
+              <span class="sy-label">School year</span>
+              <select id="sy-year-select" class="form-select"></select>
+            </label>
+          </div>
+
+          <div class="sy-review" id="sy-review" hidden>
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span>These dates were filled in automatically. Check them against the school calendar, then save.</span>
+          </div>
+
+          <div id="sy-semesters" class="sy-semesters"></div>
+
+          <div class="sy-actions">
+            <span class="sy-status" id="sy-status" aria-live="polite"></span>
+            <button type="submit" class="btn btn-primary" id="sy-save-btn">
+              <i class="fa-solid fa-floppy-disk"></i> Save dates
+            </button>
+          </div>
+        </form>
+
+        <section class="glass-card content-card sy-next fade-up delay-4" id="sy-next" hidden></section>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

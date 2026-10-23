@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
+import { AccentFill, accentShadow } from '@/components/ui/AccentFill';
 
 type ContinueLearningCardProps = {
   grade: string;
@@ -40,6 +42,7 @@ export function ContinueLearningCard({
         <Pressable
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           onPress={onPress}>
+          <AccentFill radius={12} />
           <Ionicons name="play" size={16} color="#fff" style={styles.playIcon} />
           <Text style={styles.ctaText}>Continue Lesson</Text>
         </Pressable>
@@ -66,7 +69,7 @@ export function ContinueLearningCard({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(202, 138, 4, 0.22)',
@@ -123,12 +126,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#a16207',
+    backgroundColor: WebTheme.accentSolid,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.4)',
+    borderColor: 'transparent',
+    ...accentShadow,
   },
   ctaPressed: { opacity: 0.9 },
   playIcon: { marginRight: 6 },

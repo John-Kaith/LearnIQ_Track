@@ -9,15 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026100804" />
+<link rel="stylesheet" href="style.css?v=2026102301" />
+  <link rel="stylesheet" href="css/gradecard.css?v=2026102303" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
   <script src="js/core/api.js"></script>
-  <script src="script.js?v=2026100803" defer></script>
-  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026100201" defer></script>
+  <script src="script.js?v=2026102302" defer></script>
+  <script src="js/shared/gradecard-view.js?v=2026102302" defer></script>
+  <script src="js/pages/teacher-student-gradecard.entry.js?v=2026102303" defer></script>
 </head>
-<body class="teacher-learniq-page teacher-student-gradecard-page" data-sidebar-active="gradecard">
+<body class="teacher-learniq-page teacher-student-gradecard-page gc-page" data-sidebar-active="gradecard">
   <div class="dashboard-shell container">
     <aside class="sidebar lq-sidebar">
       <div class="sidebar-header">
@@ -46,7 +48,7 @@
       </div>
     </aside>
 
-    <main class="main-panel">
+    <main class="main-panel gc-main">
       <section class="glass-card panel-header">
         <div class="panel-title">
           <h1><i class="fa-solid fa-id-card"></i> Student Gradecard</h1>
@@ -101,118 +103,130 @@
         </div>
       </section>
 
-      <section class="gradecard-detail-toolbar glass-card content-card" id="gradecard-detail-toolbar" hidden>
-        <button type="button" class="btn btn-secondary btn-sm" id="gradecard-back-students-btn">
+      <div class="gc-toolbar" id="gradecard-detail-toolbar" hidden>
+        <button type="button" class="btn btn-secondary" id="gradecard-back-students-btn">
           <i class="fa-solid fa-arrow-left"></i> Back to students
         </button>
-        <label class="form-field" style="flex:1; min-width: 200px; max-width: 280px;">
-          <span class="small-note">Term</span>
-          <select id="gradecard-term-select" class="form-select">
-            <option value="">Loading…</option>
-          </select>
-        </label>
-        <button type="button" id="gradecard-print-btn" class="btn btn-secondary">
-          <i class="fa-solid fa-print"></i> Print
-        </button>
-      </section>
-
-      <article class="glass-card gradecard-sheet" id="gradecard-sheet" hidden>
-        <header class="gradecard-header">
-          <div class="gradecard-school">
-            <div class="gradecard-school-logo"><span>LQ</span></div>
-            <div>
-              <strong>LearnIQ Academy</strong>
-              <p class="small-note" id="gradecard-period-label">Teacher Gradecard View</p>
-            </div>
+        <div class="gc-toolbar-right">
+          <div class="gc-term-slot">
+            <label class="form-field gc-term-field">
+              <span class="gc-label">Term</span>
+              <select id="gradecard-term-select" class="form-select">
+                <option value="">Loading…</option>
+              </select>
+            </label>
           </div>
-          <div class="gradecard-id-block">
-            <p class="small-note">Reference</p>
+          <button type="button" id="gradecard-print-btn" class="btn btn-secondary">
+            <i class="fa-solid fa-print"></i> Print
+          </button>
+        </div>
+      </div>
+
+      <article class="glass-card gradecard-sheet gc-report" id="gradecard-sheet" hidden aria-live="polite">
+        <!-- Printed copy only -->
+        <header class="gc-print-only gc-print-head">
+          <div>
+            <strong>LearnIQ Academy</strong>
+            <span id="gc-print-term">Official Student Gradecard</span>
+          </div>
+          <div class="gc-print-ref">
+            <span>Reference</span>
             <strong id="gradecard-ref">—</strong>
           </div>
         </header>
 
-        <section class="gradecard-student">
-          <div class="gradecard-avatar" id="gradecard-avatar">—</div>
-          <div class="gradecard-student-info">
-            <h3 id="gradecard-student-name">—</h3>
-            <p class="small-note" id="gradecard-student-meta">—</p>
-            <p class="small-note" id="gradecard-student-adviser">Adviser: —</p>
-          </div>
-          <div class="gradecard-summary">
-            <div class="gradecard-summary-item">
-              <span class="small-note">My subject avg</span>
+        <div class="gc-status" id="gc-status" hidden></div>
+
+        <div id="gc-body">
+          <section class="gc-student">
+            <div class="gc-avatar" id="gradecard-avatar" aria-hidden="true">?</div>
+            <div class="gc-student-text">
+              <h2 id="gradecard-student-name">—</h2>
+              <p id="gradecard-student-meta">—</p>
+            </div>
+            <p class="gc-term-tag" id="gc-term-tag"></p>
+          </section>
+
+          <section class="gc-stats" aria-label="Summary">
+            <div class="gc-stat">
+              <span id="gc-term-avg-label">Term average</span>
               <strong id="gradecard-gpa">—</strong>
+              <small id="gc-term-avg-note"></small>
             </div>
-            <div class="gradecard-summary-item">
-              <span class="small-note">Standing</span>
+            <div class="gc-stat" id="gc-sem-stat" hidden>
+              <span id="gc-sem-label">Semester average</span>
+              <strong id="gc-sem-avg">—</strong>
+              <small id="gc-sem-note"></small>
+            </div>
+            <div class="gc-stat">
+              <span>Standing</span>
               <strong id="gradecard-standing">—</strong>
+              <small id="gc-standing-note"></small>
             </div>
-          </div>
-        </section>
+            <div class="gc-stat">
+              <span>Attendance</span>
+              <strong id="gc-attendance">—</strong>
+              <small id="gc-attendance-note"></small>
+            </div>
+          </section>
 
-        <section class="gradecard-section">
-          <h4><i class="fa-solid fa-table-list"></i> Performance breakdown (WW / PT / QA)</h4>
-          <p class="small-note" style="margin-bottom:0.75rem;">Weights follow DepEd Table 5. Enter QA when ready; final computes when WW, PT, and QA are all set.</p>
-          <div class="table-responsive">
-            <table class="data-table gradecard-table">
-              <thead>
-                <tr>
-                  <th>Subject</th>
-                  <th class="num">WW</th>
-                  <th class="num">PT</th>
-                  <th class="num">QA</th>
-                  <th class="num">Weights</th>
-                  <th class="num">Final</th>
-                  <th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody id="gradecard-subjects-body">
-                <tr>
-                  <td colspan="7" class="empty-state">
-                    <i class="fa-solid fa-id-card"></i>
-                    <p>Select a student to view their gradecard.</p>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <section class="gc-subjects gc-screen-only">
+            <div class="gc-subjects-head">
+              <h3 id="gc-mine-title">Your subjects</h3>
+              <span>Final</span>
+              <span>Status</span>
+              <span aria-hidden="true"></span>
+            </div>
+            <div id="gradecard-subjects-body" class="gc-subject-list"></div>
+            <p class="gc-footnote" id="gc-mine-note">Open a subject to enter scores. Leave a score blank to use the automatic one from quizzes and activities.</p>
+          </section>
 
-        <section class="gradecard-section">
-          <h4><i class="fa-solid fa-pen-to-square"></i> Teacher remarks</h4>
-          <div class="gradecard-conduct-grid">
-            <div class="gradecard-conduct-item">
-              <span class="small-note">Conduct</span>
-              <strong id="gradecard-conduct">—</strong>
+          <section class="gc-subjects gc-screen-only" id="gc-other-subjects" hidden>
+            <div class="gc-subjects-head">
+              <h3>Other teachers' subjects</h3>
+              <span>Final</span>
+              <span>Status</span>
+              <span aria-hidden="true"></span>
             </div>
-            <div class="gradecard-conduct-item">
-              <span class="small-note">Days present</span>
-              <strong id="gradecard-days-present">—</strong>
-            </div>
-            <div class="gradecard-conduct-item">
-              <span class="small-note">Days absent</span>
-              <strong id="gradecard-days-absent">—</strong>
-            </div>
-            <div class="gradecard-conduct-item">
-              <span class="small-note">Times tardy</span>
-              <strong id="gradecard-tardy">—</strong>
-            </div>
-          </div>
-          <label class="form-field gradecard-comments">
-            <span class="small-note">Your comments</span>
-            <textarea
-              id="gradecard-comments-text"
-              class="form-input gradecard-comments-text"
-              rows="3"
-              placeholder="Comments for this student…"></textarea>
-          </label>
-        </section>
+            <div id="gc-other-body" class="gc-subject-list"></div>
+          </section>
 
-        <footer class="gradecard-footer">
-          <span id="gradecard-save-status" class="small-note gradecard-save-status" aria-live="polite"></span>
-          <button type="button" class="btn btn-primary" id="gradecard-save-remarks-btn">
-            <i class="fa-solid fa-floppy-disk"></i> Save remarks
-          </button>
+          <!-- Printed copy: every subject read-only, like the admin gradecard -->
+          <section class="gc-subjects gc-print-list">
+            <div class="gc-subjects-head">
+              <h3>Subjects</h3>
+              <span>Final</span>
+              <span>Status</span>
+              <span aria-hidden="true"></span>
+            </div>
+            <div id="gc-print-body" class="gc-subject-list"></div>
+          </section>
+          <section class="gc-notes gc-print-list" id="gc-print-notes"></section>
+
+          <section class="gc-notes gc-teacher-notes gc-screen-only">
+            <label class="form-field">
+              <span class="gc-label">Comments for this student</span>
+              <textarea
+                id="gradecard-comments-text"
+                class="form-input"
+                rows="3"
+                placeholder="Optional — shown on the gradecard as adviser notes."></textarea>
+            </label>
+          </section>
+
+          <div class="gc-savebar">
+            <span id="gradecard-save-status" class="gc-save-status" aria-live="polite">No changes yet.</span>
+            <button type="button" class="btn btn-primary" id="gradecard-save-remarks-btn">
+              <i class="fa-solid fa-floppy-disk"></i> Save changes
+            </button>
+          </div>
+        </div>
+
+        <!-- Printed copy only -->
+        <footer class="gc-print-only gc-print-sigs">
+          <div><span class="gc-sig-line"></span>Class Adviser</div>
+          <div><span class="gc-sig-line"></span>Principal</div>
+          <div><span class="gc-sig-line"></span>Parent / Guardian</div>
         </footer>
       </article>
     </main>

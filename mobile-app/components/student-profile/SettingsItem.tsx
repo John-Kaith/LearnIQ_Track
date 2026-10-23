@@ -2,10 +2,10 @@ import { Feather } from '@expo/vector-icons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type SettingsItemProps = {
   icon: keyof typeof Feather.glyphMap;
-  iconColor: string;
   title: string;
   subtitle: string;
   onPress?: () => void;
@@ -13,7 +13,6 @@ type SettingsItemProps = {
 
 export function SettingsItem({
   icon,
-  iconColor,
   title,
   subtitle,
   onPress,
@@ -22,8 +21,8 @@ export function SettingsItem({
     <Pressable
       onPress={onPress ?? (() => Alert.alert(title, 'Coming soon (mock).'))}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={[styles.iconWrap, { backgroundColor: `${iconColor}22` }]}>
-        <Feather name={icon} size={20} color={iconColor} />
+      <View style={styles.iconWrap}>
+        <Feather name={icon} size={20} color={Colors.primary} />
       </View>
       <View style={styles.text}>
         <Text style={styles.title}>{title}</Text>
@@ -38,10 +37,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.cardBorder,
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -53,6 +52,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: WebTheme.softBg,
   },
   text: {
     flex: 1,

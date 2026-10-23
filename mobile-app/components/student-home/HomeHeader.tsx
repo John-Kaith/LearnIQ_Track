@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
+import { WebTheme } from '@/constants/learniqTheme';
 
 type HomeHeaderProps = {
   greeting: string;
@@ -68,9 +69,9 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: WebTheme.avatarBg,
     borderWidth: 2,
-    borderColor: 'rgba(202, 138, 4, 0.5)',
+    borderColor: WebTheme.surfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

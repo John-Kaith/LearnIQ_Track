@@ -9,6 +9,7 @@ import { SubjectCard } from '@/components/student-learn/SubjectCard';
 import { Colors } from '@/constants/colors';
 import type { StudentSubject } from '@/data/studentLearnMock';
 import { fetchStudentSubjects } from '@/services/lessons';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function StudentLearnScreen() {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function StudentLearnScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

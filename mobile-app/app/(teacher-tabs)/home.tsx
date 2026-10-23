@@ -13,11 +13,12 @@ import { fetchTeacherDashboardStats, type TeacherDashboardStats } from '@/servic
 import { fetchTeacherSubjects, type TeacherSubject } from '@/services/subjects';
 import { useAuthStore } from '@/store/authStore';
 import { getTimeGreeting } from '@/utils/greeting';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 const QUICK_ACTIONS = [
-  { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline' as const, color: '#ca8a04' },
-  { id: 'journals', label: 'Review Journals', icon: 'journal-outline' as const, color: '#fbbf24' },
-  { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline' as const, color: '#34d399' },
+  { id: 'upload', label: 'Upload Lesson', icon: 'cloud-upload-outline' as const },
+  { id: 'journals', label: 'Review Journals', icon: 'journal-outline' as const },
+  { id: 'attendance', label: 'Attendance Logs', icon: 'list-outline' as const },
 ];
 
 export default function TeacherHomeScreen() {
@@ -48,30 +49,27 @@ export default function TeacherHomeScreen() {
       label: 'Subjects',
       value: stats?.subjectsCount ?? subjects.length,
       icon: 'layers-outline' as const,
-      color: '#ca8a04',
     },
     {
       label: 'Published Lessons',
       value: stats?.lessonsPublished ?? 0,
       icon: 'book-outline' as const,
-      color: '#fbbf24',
     },
     {
       label: 'Enrolled Students',
       value: stats?.enrolledStudents ?? 0,
       icon: 'people-outline' as const,
-      color: '#34d399',
     },
     {
       label: 'Quiz Attempts',
       value: stats?.quizAttemptsTotal ?? 0,
       icon: 'stats-chart-outline' as const,
-      color: '#fb923c',
     },
   ];
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

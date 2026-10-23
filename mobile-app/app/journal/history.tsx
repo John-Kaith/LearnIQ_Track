@@ -9,6 +9,7 @@ import { StackHeader } from '@/components/navigation/StackHeader';
 import { Colors } from '@/constants/colors';
 import type { JournalEntry } from '@/data/studentJournalMock';
 import { fetchJournalHistory } from '@/services/journals';
+import { WebBackground } from '@/components/ui/WebBackground';
 
 export default function JournalHistoryScreen() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function JournalHistoryScreen() {
 
   return (
     <View style={styles.root}>
+      <WebBackground />
       <StackHeader title="Journal History" />
       <ScrollView
         showsVerticalScrollIndicator={false}
