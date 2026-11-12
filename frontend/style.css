@@ -10451,16 +10451,26 @@ html:not([data-theme="dark"]) .gradecard-footer {
   body[data-sidebar-active="reports"] .page-shell,
   body[data-sidebar-active="reports"] .dashboard-shell,
   body[data-sidebar-active="reports"] .main-panel {
-    display: flex !important;
-    flex-direction: column;
+    display: block !important;
+    visibility: visible !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
-  body[data-sidebar-active="reports"] .main-panel {
-    min-height: 100vh;
+  body[data-sidebar-active="reports"] .main-panel > .glass-card,
+  body[data-sidebar-active="reports"] .content-card,
+  body[data-sidebar-active="reports"] .report-card,
+  body[data-sidebar-active="reports"] .reports-print-only,
+  body[data-sidebar-active="reports"] .reports-print-only * {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  body[data-sidebar-active="reports"] .reports-grid {
+    display: grid !important;
+    visibility: visible !important;
   }
 
   body[data-sidebar-active="reports"] .glass-card,
@@ -10522,13 +10532,32 @@ html:not([data-theme="dark"]) .gradecard-footer {
   body[data-sidebar-active="reports"] .data-table,
   body[data-sidebar-active="reports"] .data-table th,
   body[data-sidebar-active="reports"] .data-table td {
+    visibility: visible !important;
     border: 1px solid #111 !important;
     color: #111 !important;
     background: #fff !important;
   }
 
+  body[data-sidebar-active="reports"] .data-table {
+    display: table !important;
+    width: 100% !important;
+  }
+
+  body[data-sidebar-active="reports"] .data-table thead {
+    display: table-header-group !important;
+  }
+
+  body[data-sidebar-active="reports"] .data-table tbody {
+    display: table-row-group !important;
+  }
+
+  body[data-sidebar-active="reports"] .data-table tr {
+    display: table-row !important;
+  }
+
   body[data-sidebar-active="reports"] .data-table th,
   body[data-sidebar-active="reports"] .data-table td {
+    display: table-cell !important;
     padding: 0.35rem 0.4rem !important;
   }
 
