@@ -360,7 +360,7 @@ def _can_view_teacher_data(authorization: str | None, target_teacher_id_number: 
 
 
 GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_BACKUP_MODEL = "gemini-2.5-flash-lite"  # lighter, with its own quota: used when the main model is busy
+GEMINI_BACKUP_MODEL = "gemini-2.5-flash-lite"
 GEMINI_BUSY_STATUSES = (429, 500, 503)
 
 
@@ -1035,6 +1035,37 @@ def get_admin_dashboard_stats(authorization: str | None = Header(default=None)):
         return bad
     try:
         return db_supabase.get_admin_dashboard_stats()
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
+@app.get("/admin/reports")
+def admin_system_report(
+    school_year: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+):
+    """Printable admin report: account totals, attendance, and subject scores."""
+    err = require_supabase()
+    if err is not None:
+        return err
+    _, bad = _resolve_admin_id(authorization)
+    if bad is not None:
+        return bad
+    storage_status = "Healthy"
+    try:
+        if not UPLOADS_DIR.is_dir() or not os.access(UPLOADS_DIR, os.W_OK):
+            storage_status = "Check storage"
+    except Exception:
+        storage_status = "Unavailable"
+    ai_ready = bool(API_KEY and str(API_KEY).strip())
+    try:
+        return db_supabase.get_admin_system_report(
+            school_year,
+            ai_ready=ai_ready,
+            storage_status=storage_status,
+        )
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=503)
 

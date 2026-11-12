@@ -799,6 +799,457 @@ def get_admin_dashboard_stats() -> dict[str, Any]:
     }
 
 
+_REPORT_BAD_STATUSES = frozenset({"flagged", "rejected", "invalid", "suspicious", "absent"})
+
+
+def _report_day(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    day = str(value).strip()[:10]
+    return day if len(day) == 10 and day[4] == "-" else None
+
+
+def _report_in_window(value: Any, start: str | None, end: str | None) -> bool:
+    if not start and not end:
+        return True
+    day = _report_day(value)
+    if not day:
+        return False
+    if start and day < start:
+        return False
+    if end and day > end:
+        return False
+    return True
+
+
+def _lesson_content_dict(row: dict[str, Any]) -> dict[str, Any]:
+    nested = row.get("lesson_content")
+    if isinstance(nested, list):
+        return nested[0] if nested and isinstance(nested[0], dict) else {}
+    return nested if isinstance(nested, dict) else {}
+
+
+def _lesson_has_quiz(row: dict[str, Any]) -> bool:
+    quiz = _lesson_content_dict(row).get("quiz")
+    if isinstance(quiz, list):
+        return any(bool(item) for item in quiz)
+    return bool(quiz)
+
+
+def _report_fetch_pages(table: str, columns: str, order_col: str) -> list[dict[str, Any]]:
+    """Page through a table so a school-wide report is not cut at the API default limit."""
+    out: list[dict[str, Any]] = []
+    start = 0
+    page = 1000
+    while start < 8000:
+        res = (
+            _sb()
+            .table(table)
+            .select(columns)
+            .order(order_col, desc=True)
+            .range(start, start + page - 1)
+            .execute()
+        )
+        batch = res.data or []
+        out.extend(batch)
+        if len(batch) < page:
+            break
+        start += page
+    return out
+
+
+def _report_fetch_first(table: str, selects: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    last_error: Exception | None = None
+    for columns, order_col in selects:
+        try:
+            return _report_fetch_pages(table, columns, order_col)
+        except Exception as e:
+            last_error = e
+            print(f"admin report {table} select '{columns}': {e}")
+    if last_error is not None:
+        print(f"admin report {table}: giving up ({last_error})")
+    return []
+
+
+def _report_rendered_hours(row: dict[str, Any]) -> float | None:
+    """Hours for a closed check-in. Open rows (no time out) stay unknown."""
+    th = row.get("total_hours")
+    if th is not None and th != "":
+        try:
+            return max(0.0, float(th))
+        except (TypeError, ValueError):
+            pass
+    if row.get("time_out") and row.get("time_in"):
+        return _hours_from_attendance_row(row)
+    return None
+
+
+def _report_add_hours(bucket: dict[str, Any], row: dict[str, Any]) -> None:
+    hours = _report_rendered_hours(row)
+    if hours is None:
+        return
+    bucket["rendered_hours"] = round(float(bucket.get("rendered_hours") or 0) + hours, 2)
+    bucket["_hours_known"] = True
+
+
+def _report_list_lessons() -> list[dict[str, Any]]:
+    """All lessons for the report, including quizzes past the default API page size."""
+    embedded = (
+        "id, filename, file_type, is_published, created_at, teacher_id_number, subject_id, "
+        "lesson_content(reviewer, quiz, activities)"
+    )
+    rows = _report_fetch_first("lessons", [(embedded, "created_at")])
+    if rows and any("lesson_content" in row for row in rows[:30]):
+        return rows
+    try:
+        fallback = list_all_lessons()
+    except Exception as e:
+        print(f"admin report lessons fallback: {e}")
+        fallback = []
+    if fallback:
+        return fallback
+    if rows:
+        return rows
+    return _report_fetch_first(
+        "lessons",
+        [("id, filename, file_type, is_published, created_at, teacher_id_number, subject_id", "created_at")],
+    )
+
+
+def _report_list_profiles() -> list[dict[str, Any]]:
+    try:
+        rows = _report_fetch_pages("profiles", "*", "created_at")
+    except Exception as e:
+        print(f"admin report profiles: {e}")
+        rows = []
+    if not rows:
+        rows = get_all_profiles()
+    for profile in rows:
+        profile.pop("password", None)
+    return rows
+
+
+def _report_person_key(row: dict[str, Any], uuid_map: dict[str, str]) -> str | None:
+    num = str(row.get("student_id_number") or row.get("teacher_id_number") or "").strip()
+    if num:
+        return num
+    pid = row.get("student_id") or row.get("teacher_id")
+    if not pid:
+        return None
+    ps = str(pid)
+    mapped = uuid_map.get(ps)
+    return mapped or f"uuid:{ps}"
+
+
+def _immersion_row_flagged(row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "").strip().lower()
+    if status in _REPORT_BAD_STATUSES:
+        return True
+    if row.get("location_verified") is False:
+        return True
+    if "latitude" in row or "longitude" in row:
+        if row.get("latitude") is None or row.get("longitude") is None:
+            return True
+    return False
+
+
+def _class_row_flagged(row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "").strip().lower()
+    if status in _REPORT_BAD_STATUSES:
+        return True
+    return row.get("location_verified") is False
+
+
+def get_admin_system_report(
+    school_year: str | None,
+    *,
+    ai_ready: bool,
+    storage_status: str,
+) -> dict[str, Any]:
+    """One payload for the printable admin reports page.
+
+    School-year dates limit lessons, quiz attempts, and attendance.
+    Account totals stay school-wide. With no year selected, "active" is today.
+    """
+    years = list_school_years()
+    year_rows = [
+        {
+            "school_year": y.get("school_year"),
+            "start": y.get("start"),
+            "end": y.get("end"),
+        }
+        for y in years
+        if y.get("school_year")
+    ]
+    current = get_current_grading_period() or {}
+    current_sy = str(current.get("school_year") or "").strip() or None
+
+    requested = (school_year or "").strip()
+    if requested.lower() in ("", "current"):
+        requested = current_sy or "all"
+
+    applied: str | None = None
+    start: str | None = None
+    end: str | None = None
+    if requested.lower() != "all":
+        match = next((y for y in year_rows if str(y["school_year"]) == requested), None)
+        if match is None:
+            raise ValueError("Unknown school year.")
+        applied = str(match["school_year"])
+        start = _report_day(match.get("start"))
+        end = _report_day(match.get("end"))
+
+    window = bool(start or end)
+    profiles = _report_list_profiles()
+    uuid_map: dict[str, str] = {}
+    for profile in profiles:
+        pid = profile.get("id")
+        num = profile_lrn_from_row(profile)
+        if pid and num:
+            uuid_map[str(pid)] = str(num).strip()
+    by_lrn: dict[str, str] = {}
+    for p in profiles:
+        num = profile_lrn_from_row(p)
+        if num:
+            by_lrn[num] = profile_display_name(p)
+
+    def person_name(id_number: str) -> str:
+        return by_lrn.get(id_number) or id_number or "—"
+
+    lessons = _report_list_lessons()
+    lessons_in_window = [
+        row for row in lessons if not window or _report_in_window(row.get("created_at"), start, end)
+    ]
+    published = [row for row in lessons_in_window if row.get("is_published")]
+    ai_quizzes = sum(1 for row in lessons_in_window if _lesson_has_quiz(row))
+
+    subjects = list_subjects()
+    subject_name = {str(s.get("id")): (s.get("name") or "Untitled subject") for s in subjects if s.get("id")}
+
+    attempts = _report_fetch_first(
+        "quiz_attempts",
+        [
+            ("lesson_id, student_id, student_id_number, score, total_questions, created_at, submitted_at", "created_at"),
+            ("lesson_id, student_id, score, total_questions, created_at", "created_at"),
+        ],
+    )
+    lesson_subject: dict[str, str] = {}
+    for row in lessons:
+        lid = row.get("id")
+        sid = row.get("subject_id")
+        if lid and sid:
+            lesson_subject[str(lid)] = str(sid)
+
+    scores_by_subject: dict[str, list[float]] = defaultdict(list)
+    active_keys: set[str] = set()
+    for attempt in attempts:
+        stamp = attempt.get("submitted_at") or attempt.get("created_at")
+        if window and not _report_in_window(stamp, start, end):
+            continue
+        key = _report_person_key(attempt, uuid_map)
+        if key:
+            active_keys.add(key)
+        sid = lesson_subject.get(str(attempt.get("lesson_id") or ""))
+        if not sid:
+            continue
+        try:
+            score = float(attempt.get("score") or 0)
+            total = float(attempt.get("total_questions") or 0)
+        except (TypeError, ValueError):
+            continue
+        if total <= 0:
+            continue
+        scores_by_subject[sid].append(max(0.0, min(100.0, (score / total) * 100.0)))
+
+    teachers_by_subject: dict[str, set[str]] = defaultdict(set)
+    published_by_subject: dict[str, int] = defaultdict(int)
+    quizzes_by_subject: dict[str, int] = defaultdict(int)
+    for row in lessons_in_window:
+        sid = str(row.get("subject_id") or "")
+        tid = str(row.get("teacher_id_number") or "").strip()
+        if tid:
+            if window:
+                active_keys.add(tid)
+            if sid:
+                teachers_by_subject[sid].add(person_name(tid))
+        if sid and row.get("is_published"):
+            published_by_subject[sid] += 1
+            if _lesson_has_quiz(row):
+                quizzes_by_subject[sid] += 1
+
+    for subject in subjects:
+        sid = str(subject.get("id") or "")
+        owner = str(subject.get("created_by_teacher_id_number") or "").strip()
+        if sid and owner:
+            teachers_by_subject[sid].add(person_name(owner))
+
+    academics: list[dict[str, Any]] = []
+    seen_subjects: set[str] = set()
+    for subject in subjects:
+        sid = str(subject.get("id") or "")
+        if not sid:
+            continue
+        seen_subjects.add(sid)
+        pcts = scores_by_subject.get(sid) or []
+        teachers = sorted(teachers_by_subject.get(sid) or [])
+        academics.append(
+            {
+                "subject": subject.get("name") or "Untitled subject",
+                "teachers": ", ".join(teachers) if teachers else "—",
+                "published_lessons": published_by_subject.get(sid, 0),
+                "published_quizzes": quizzes_by_subject.get(sid, 0),
+                "average_score": round(sum(pcts) / len(pcts), 1) if pcts else None,
+            }
+        )
+    for sid, pcts in scores_by_subject.items():
+        if sid in seen_subjects:
+            continue
+        teachers = sorted(teachers_by_subject.get(sid) or [])
+        academics.append(
+            {
+                "subject": subject_name.get(sid, "Unassigned subject"),
+                "teachers": ", ".join(teachers) if teachers else "—",
+                "published_lessons": published_by_subject.get(sid, 0),
+                "published_quizzes": quizzes_by_subject.get(sid, 0),
+                "average_score": round(sum(pcts) / len(pcts), 1) if pcts else None,
+            }
+        )
+    academics.sort(key=lambda row: str(row["subject"]).lower())
+
+    attendance = _report_fetch_first(
+        "attendance_logs",
+        [
+            (
+                "student_id, student_id_number, time_in, time_out, total_hours, status, date, "
+                "latitude, longitude, captured_photo_path, time_out_photo_path, location_verified",
+                "time_in",
+            ),
+            (
+                "student_id, student_id_number, time_in, time_out, total_hours, status, date, latitude, longitude",
+                "time_in",
+            ),
+            ("student_id, student_id_number, time_in, time_out, total_hours, status, date", "time_in"),
+            ("student_id, student_id_number, time_in, time_out, total_hours, status", "time_in"),
+        ],
+    )
+    immersion_bucket: dict[str, dict[str, Any]] = {}
+    for row in attendance:
+        stamp = row.get("date") or row.get("time_in") or row.get("logged_at")
+        if window and not _report_in_window(stamp, start, end):
+            continue
+        key = _report_person_key(row, uuid_map) or "unknown"
+        if key not in immersion_bucket:
+            label = person_name(key) if not key.startswith("uuid:") else "Student"
+            immersion_bucket[key] = {
+                "kind": "immersion",
+                "name": label,
+                "logs": 0,
+                "rendered_hours": 0.0,
+                "verified": 0,
+                "flagged": 0,
+            }
+        bucket = immersion_bucket[key]
+        bucket["logs"] += 1
+        _report_add_hours(bucket, row)
+        if _immersion_row_flagged(row):
+            bucket["flagged"] += 1
+        else:
+            bucket["verified"] += 1
+        if key != "unknown":
+            active_keys.add(key)
+
+    class_records = _report_fetch_first(
+        "class_attendance_records",
+        [
+            ("session_id, student_id, student_id_number, time_in, time_out, status, location_verified", "time_in"),
+            ("session_id, student_id, student_id_number, time_in, time_out, status", "time_in"),
+            ("session_id, student_id, student_id_number, time_in, status", "time_in"),
+        ],
+    )
+    sessions = _report_fetch_first(
+        "class_attendance_sessions",
+        [
+            ("id, subject_id, session_date", "session_date"),
+            ("id, subject_id, started_at", "started_at"),
+        ],
+    )
+    session_subject = {str(s.get("id")): str(s.get("subject_id") or "") for s in sessions if s.get("id")}
+    session_day = {
+        str(s.get("id")): s.get("session_date") or s.get("started_at")
+        for s in sessions
+        if s.get("id")
+    }
+    class_bucket: dict[str, dict[str, Any]] = {}
+    for row in class_records:
+        sess = str(row.get("session_id") or "")
+        stamp = session_day.get(sess) or row.get("time_in")
+        if window and not _report_in_window(stamp, start, end):
+            continue
+        sid = session_subject.get(sess) or ""
+        label = subject_name.get(sid, "Class attendance")
+        if sid not in class_bucket:
+            class_bucket[sid] = {
+                "kind": "class",
+                "name": label,
+                "logs": 0,
+                "rendered_hours": None,
+                "verified": 0,
+                "flagged": 0,
+            }
+        bucket = class_bucket[sid]
+        bucket["logs"] += 1
+        _report_add_hours(bucket, row)
+        if _class_row_flagged(row):
+            bucket["flagged"] += 1
+        else:
+            bucket["verified"] += 1
+        key = _report_person_key(row, uuid_map)
+        if key:
+            active_keys.add(key)
+
+    for bucket in list(immersion_bucket.values()) + list(class_bucket.values()):
+        if not bucket.pop("_hours_known", False):
+            bucket["rendered_hours"] = None
+
+    immersion = sorted(immersion_bucket.values(), key=lambda row: str(row["name"]).lower())
+    immersion.extend(sorted(class_bucket.values(), key=lambda row: str(row["name"]).lower()))
+
+    if applied:
+        active_users = len(active_keys)
+        active_label = "Active in S.Y."
+    else:
+        active_users = distinct_active_id_numbers_today_utc()
+        active_label = "Active Today"
+
+    def role_of(profile: dict[str, Any]) -> str:
+        return str(profile.get("role") or "").strip().lower()
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "applied_school_year": applied,
+        "period_start": start,
+        "period_end": end,
+        "active_label": active_label,
+        "school_years": year_rows,
+        "summary": {
+            "total_users": len(profiles),
+            "students": sum(1 for profile in profiles if role_of(profile) == "student"),
+            "teachers": sum(1 for profile in profiles if role_of(profile) == "teacher"),
+            "active_users": active_users,
+            "total_lessons": len(lessons_in_window),
+            "published_lessons": len(published),
+            "ai_quizzes": ai_quizzes,
+            "health": {
+                "database": "Online",
+                "ai_api": "Online" if ai_ready else "Not configured",
+                "storage": storage_status,
+            },
+        },
+        "immersion": immersion,
+        "academics": academics,
+    }
+
+
 def set_reviewer(lesson_id: str, reviewer: str) -> None:
     _sb().table("lesson_content").update({"reviewer": reviewer}).eq("lesson_id", lesson_id).execute()
 
