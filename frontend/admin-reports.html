@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <script src="js/shared/theme-boot.js"></script>
-<link rel="stylesheet" href="style.css?v=2026102301" />
+<link rel="stylesheet" href="style.css?v=2026111302" />
   <script src="js/shared/theme-toggle.js"></script>
   <script src="js/shared/confirm-dialog.js" defer></script>
   <script src="js/learniq-config.js"></script>
@@ -17,7 +17,7 @@
   <script src="script.js?v=2026102302" defer></script>
   <script src="js/pages/admin-reports.entry.js" defer></script>
 </head>
-<body data-sidebar-active="reports">
+<body data-sidebar-active="reports" class="reports-page">
   <main class="page-shell container">
     <div class="dashboard-shell">
       <aside class="sidebar lq-sidebar fade-up">
@@ -48,28 +48,63 @@
       </aside>
 
       <section class="main-panel">
-        <section class="glass-card panel-header fade-up delay-1">
+        <header class="reports-print-only reports-official-head">
+          <p class="reports-kicker">LearnIQ Track</p>
+          <h1>LearnIQ Track - Official System Report</h1>
+          <dl class="reports-meta">
+            <div>
+              <dt>Date generated</dt>
+              <dd id="report-print-generated">—</dd>
+            </div>
+            <div>
+              <dt>Current user</dt>
+              <dd id="report-print-user">—</dd>
+            </div>
+            <div>
+              <dt>Period</dt>
+              <dd id="report-print-period">—</dd>
+            </div>
+          </dl>
+        </header>
+
+        <section class="glass-card panel-header fade-up delay-1 reports-screen-only">
           <div class="panel-title">
             <h1>System Reports</h1>
-            <p>View analytics and system performance reports.</p>
+            <p>School-wide attendance, lessons, and quiz results for the selected school year.</p>
+          </div>
+          <div class="panel-actions reports-toolbar">
+            <label for="report-school-year">School year</label>
+            <select id="report-school-year" class="form-select">
+              <option value="current">Current school year</option>
+            </select>
+            <button type="button" id="print-reports-btn" class="btn btn-primary">
+              <i class="fa-solid fa-print" aria-hidden="true"></i> Print / Export PDF
+            </button>
           </div>
         </section>
+
+        <p class="small-note reports-period-live reports-screen-only" id="report-period-note" aria-live="polite">Loading report…</p>
+
         <section class="glass-card fade-up delay-2">
           <div class="reports-grid">
             <div class="report-card">
               <h3>User Statistics</h3>
               <div class="stats">
                 <div class="stat">
-                  <span class="label">Total Users:</span>
+                  <span class="label">Total Users</span>
                   <span class="value" id="report-total-users">0</span>
                 </div>
                 <div class="stat">
-                  <span class="label">Active Today:</span>
+                  <span class="label" id="report-active-label">Active Today</span>
                   <span class="value" id="report-active-today">0</span>
                 </div>
                 <div class="stat">
-                  <span class="label">Pending Approval:</span>
-                  <span class="value" id="report-pending">0</span>
+                  <span class="label">Students</span>
+                  <span class="value" id="report-students">0</span>
+                </div>
+                <div class="stat">
+                  <span class="label">Teachers</span>
+                  <span class="value" id="report-teachers">0</span>
                 </div>
               </div>
             </div>
@@ -77,15 +112,15 @@
               <h3>Content Statistics</h3>
               <div class="stats">
                 <div class="stat">
-                  <span class="label">Total Lessons:</span>
+                  <span class="label">Total Lessons</span>
                   <span class="value" id="report-lessons">0</span>
                 </div>
                 <div class="stat">
-                  <span class="label">Published:</span>
+                  <span class="label">Published</span>
                   <span class="value" id="report-published">0</span>
                 </div>
                 <div class="stat">
-                  <span class="label">AI Generated:</span>
+                  <span class="label">AI-generated quizzes</span>
                   <span class="value" id="report-ai-content">0</span>
                 </div>
               </div>
@@ -94,21 +129,81 @@
               <h3>System Health</h3>
               <div class="stats">
                 <div class="stat">
-                  <span class="label">Database:</span>
-                  <span class="value status-online">Online</span>
+                  <span class="label">Database</span>
+                  <span class="value" id="report-health-db">—</span>
                 </div>
                 <div class="stat">
-                  <span class="label">AI API:</span>
-                  <span class="value status-online">Online</span>
+                  <span class="label">AI API</span>
+                  <span class="value" id="report-health-ai">—</span>
                 </div>
                 <div class="stat">
-                  <span class="label">Storage:</span>
-                  <span class="value status-online">Healthy</span>
+                  <span class="label">Storage</span>
+                  <span class="value" id="report-health-storage">—</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
+
+        <section class="glass-card content-card fade-up delay-2" aria-labelledby="report-immersion-heading">
+          <div class="reports-section-head">
+            <h2 id="report-immersion-heading">Immersion &amp; Attendance Summary</h2>
+            <p class="small-note" id="report-immersion-note">Attendance logs, rendered hours, and verified versus flagged check-ins.</p>
+          </div>
+          <div class="table-overflow">
+            <table class="data-table" id="report-immersion-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Logs</th>
+                  <th>Rendered hours</th>
+                  <th>Verified</th>
+                  <th>Flagged</th>
+                </tr>
+              </thead>
+              <tbody id="report-immersion-body">
+                <tr><td colspan="6">Loading attendance…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="glass-card content-card fade-up delay-2" aria-labelledby="report-academic-heading">
+          <div class="reports-section-head">
+            <h2 id="report-academic-heading">Academic &amp; Content Overview</h2>
+            <p class="small-note" id="report-academic-note">Subjects, assigned teachers, published lessons and quizzes, and average scores.</p>
+          </div>
+          <div class="table-overflow">
+            <table class="data-table" id="report-academic-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>Assigned teachers</th>
+                  <th>Published lessons</th>
+                  <th>Published quizzes</th>
+                  <th>Average score</th>
+                </tr>
+              </thead>
+              <tbody id="report-academic-body">
+                <tr><td colspan="5">Loading subjects…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer class="reports-print-only reports-signoff">
+          <div>
+            <div class="reports-sign-line"></div>
+            <strong>Prepared by (System Admin)</strong>
+            <span id="report-print-prepared">—</span>
+          </div>
+          <div>
+            <div class="reports-sign-line"></div>
+            <strong>Noted by (Principal / Coordinator)</strong>
+            <span>Signature over printed name</span>
+          </div>
+        </footer>
       </section>
     </div>
   </main>
