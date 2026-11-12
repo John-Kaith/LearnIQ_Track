@@ -5,9 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let requestSeq = 0;
   let yearOptionsReady = false;
 
-  document.getElementById("print-reports-btn")?.addEventListener("click", () => {
-    window.print();
-  });
+  document.getElementById("print-reports-btn")?.addEventListener("click", printReport);
 
   yearSelect?.addEventListener("change", () => {
     if (!yearOptionsReady) return;
@@ -243,5 +241,115 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       if (seq === requestSeq && yearSelect) yearSelect.disabled = false;
     }
+  }
+
+  function printReport() {
+    const source = document.querySelector(".main-panel");
+    if (!source) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "width=1200,height=900");
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const report = source.cloneNode(true);
+    report.querySelectorAll(".reports-screen-only").forEach((el) => el.remove());
+    report.querySelectorAll(".reports-print-only").forEach((el) => {
+      el.style.display = "block";
+    });
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <title>LearnIQ Track - Official System Report</title>
+          <style>
+            @page { margin: 12mm 14mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: #111827;
+              background: #fff;
+              font-family: Arial, sans-serif;
+              font-size: 11pt;
+            }
+            .main-panel { display: block !important; width: 100%; }
+            .reports-print-only { display: block !important; }
+            .glass-card, .report-card {
+              display: block !important;
+              margin: 0 0 12px;
+              padding: 12px;
+              border: 1px solid #111827;
+              border-radius: 0;
+              background: #fff;
+              break-inside: avoid;
+            }
+            .reports-grid {
+              display: grid !important;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 8px;
+            }
+            .reports-official-head {
+              display: block !important;
+              margin: 0 0 14px;
+              padding: 0 0 10px;
+              border-bottom: 2px solid #111827;
+            }
+            .reports-official-head h1 { margin: 3px 0 10px; font-size: 18pt; }
+            .reports-kicker { margin: 0; font-size: 9pt; text-transform: uppercase; }
+            .reports-meta {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 8px;
+              margin: 0;
+            }
+            .reports-meta dt { font-size: 8pt; text-transform: uppercase; }
+            .reports-meta dd { margin: 2px 0 0; font-weight: 700; }
+            .reports-section-head h2 { margin: 0 0 4px; font-size: 13pt; }
+            .reports-section-head p { margin: 0 0 10px; }
+            .stats { display: grid; gap: 6px; }
+            .stat { display: flex; justify-content: space-between; gap: 12px; }
+            .data-table {
+              display: table !important;
+              width: 100%;
+              border-collapse: collapse;
+              min-width: 0 !important;
+            }
+            .data-table thead { display: table-header-group !important; }
+            .data-table tbody { display: table-row-group !important; }
+            .data-table tr { display: table-row !important; }
+            .data-table th, .data-table td {
+              display: table-cell !important;
+              padding: 5px 6px;
+              border: 1px solid #111827;
+              text-align: left;
+            }
+            .data-table th:nth-child(n + 3),
+            .data-table td:nth-child(n + 3) { text-align: right; }
+            .reports-signoff {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin-top: 30px;
+              break-inside: avoid;
+            }
+            .reports-sign-line { height: 36px; border-top: 1px solid #111827; }
+            .reports-signoff strong, .reports-signoff span { display: block; }
+          </style>
+        </head>
+        <body>${report.outerHTML}</body>
+      </html>`);
+    printWindow.document.close();
+
+    printWindow.addEventListener("afterprint", () => printWindow.close(), { once: true });
+    printWindow.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 100);
   }
 });
