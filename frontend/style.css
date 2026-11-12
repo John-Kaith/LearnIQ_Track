@@ -8220,6 +8220,106 @@ html[data-theme="dark"] .learniq-dashboard-page .bento-explore .explore-icon {
   color: var(--text-secondary);
 }
 
+.reports-page .reports-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.reports-page .reports-toolbar label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.reports-page .reports-toolbar .form-select {
+  width: auto;
+  min-width: 12.5rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.reports-page .reports-period-live {
+  margin: 0.15rem 0 0;
+}
+
+.reports-page .report-card {
+  text-align: left;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--lq-border-subtle);
+  border-radius: var(--lq-radius-lg);
+}
+
+.reports-page .report-card h3 {
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+}
+
+.reports-page .stats {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.reports-page .stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.reports-page .stat .label {
+  color: var(--muted);
+}
+
+.reports-page .stat .value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-page .value.status-online {
+  color: #15803d;
+}
+
+.reports-page .value.status-warn {
+  color: #b45309;
+}
+
+html[data-theme="dark"] .reports-page .value.status-online {
+  color: #86efac;
+}
+
+html[data-theme="dark"] .reports-page .value.status-warn {
+  color: #fdba74;
+}
+
+.reports-page .reports-section-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+}
+
+.reports-page .reports-section-head .small-note {
+  margin: 0;
+}
+
+.reports-page .report-total-row td {
+  font-weight: 700;
+  border-top: 1px solid var(--lq-border-accent);
+}
+
+.reports-page .data-table {
+  min-width: 40rem;
+}
+
+.reports-page .data-table th:nth-child(n + 3),
+.reports-page .data-table td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-print-only {
+  display: none;
+}
+
 /* Generation Options Styles */
 .generation-options {
   margin-top: 1.5rem;
@@ -10288,8 +10388,12 @@ html:not([data-theme="dark"]) .gradecard-footer {
 }
 
 /* Print friendly */
+@page learniq-report {
+  margin: 12mm 14mm;
+}
+
 @media print {
-  body * {
+  body:not([data-sidebar-active="reports"]) * {
     visibility: hidden;
   }
   .gradecard-sheet,
@@ -10303,6 +10407,154 @@ html:not([data-theme="dark"]) .gradecard-footer {
     box-shadow: none;
     background: #fff !important;
     color: #111 !important;
+  }
+}
+
+@media print {
+  body[data-sidebar-active="reports"],
+  body[data-sidebar-active="reports"] * {
+    visibility: visible !important;
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body[data-sidebar-active="reports"] {
+    page: learniq-report;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body[data-sidebar-active="reports"],
+  body[data-sidebar-active="reports"] * {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  body[data-sidebar-active="reports"] .sidebar,
+  body[data-sidebar-active="reports"] .sidebar *,
+  body[data-sidebar-active="reports"] .lms-topnav,
+  body[data-sidebar-active="reports"] .lms-topnav *,
+  body[data-sidebar-active="reports"] .theme-toggle-btn,
+  body[data-sidebar-active="reports"] .theme-toggle-btn *,
+  body[data-sidebar-active="reports"] .reports-screen-only,
+  body[data-sidebar-active="reports"] .reports-screen-only * {
+    display: none !important;
+  }
+
+  body[data-sidebar-active="reports"] .reports-print-only {
+    display: block !important;
+  }
+
+  body[data-sidebar-active="reports"] .page-shell,
+  body[data-sidebar-active="reports"] .dashboard-shell,
+  body[data-sidebar-active="reports"] .main-panel {
+    display: flex !important;
+    flex-direction: column;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body[data-sidebar-active="reports"] .main-panel {
+    min-height: 100vh;
+  }
+
+  body[data-sidebar-active="reports"] .glass-card,
+  body[data-sidebar-active="reports"] .report-card {
+    border: 1px solid #111 !important;
+    border-radius: 0 !important;
+    padding: 0.75rem !important;
+    margin: 0 0 0.75rem !important;
+    break-inside: avoid;
+  }
+
+  body[data-sidebar-active="reports"] .reports-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem !important;
+    margin: 0 0 0.75rem !important;
+  }
+
+  body[data-sidebar-active="reports"] .reports-official-head {
+    border-bottom: 2px solid #111 !important;
+    margin: 0 0 0.85rem !important;
+    padding: 0 0 0.65rem !important;
+  }
+
+  body[data-sidebar-active="reports"] .reports-official-head h1 {
+    margin: 0.15rem 0 0.55rem;
+    font-size: 1.35rem;
+  }
+
+  body[data-sidebar-active="reports"] .reports-kicker {
+    margin: 0;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  body[data-sidebar-active="reports"] .reports-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem 1rem;
+    margin: 0;
+  }
+
+  body[data-sidebar-active="reports"] .reports-meta div {
+    margin: 0;
+  }
+
+  body[data-sidebar-active="reports"] .reports-meta dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  body[data-sidebar-active="reports"] .reports-meta dd {
+    margin: 0.1rem 0 0;
+    font-weight: 700;
+  }
+
+  body[data-sidebar-active="reports"] .data-table,
+  body[data-sidebar-active="reports"] .data-table th,
+  body[data-sidebar-active="reports"] .data-table td {
+    border: 1px solid #111 !important;
+    color: #111 !important;
+    background: #fff !important;
+  }
+
+  body[data-sidebar-active="reports"] .data-table th,
+  body[data-sidebar-active="reports"] .data-table td {
+    padding: 0.35rem 0.4rem !important;
+  }
+
+  body[data-sidebar-active="reports"] .data-table tr,
+  body[data-sidebar-active="reports"] .report-card {
+    break-inside: avoid;
+  }
+
+  body[data-sidebar-active="reports"] .reports-signoff {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    margin-top: auto;
+    padding-top: 2.25rem;
+    break-inside: avoid;
+  }
+
+  body[data-sidebar-active="reports"] .reports-sign-line {
+    border-top: 1px solid #111 !important;
+    height: 2.4rem;
+    margin-bottom: 0.35rem;
+  }
+
+  body[data-sidebar-active="reports"] .reports-signoff strong,
+  body[data-sidebar-active="reports"] .reports-signoff span {
+    display: block;
   }
 }
 
