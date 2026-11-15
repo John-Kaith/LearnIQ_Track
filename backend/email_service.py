@@ -9,7 +9,7 @@ import ssl
 from email.message import EmailMessage
 from typing import Any
 
-_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
 
 
 def generate_registration_password(length: int = 12) -> str:

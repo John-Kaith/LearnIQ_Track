@@ -30,6 +30,7 @@ from supabase import create_client, Client
 import db_supabase
 import email_service
 import immersion_upload
+from password_policy import PasswordBreachCheckUnavailable, validate_password
 from supabase_client import is_configured
 
 # Always load `backend/.env` (same folder as this file), not only when cwd is `backend/`.
@@ -728,7 +729,7 @@ async def forgot_password(body: dict, request: Request):
     try:
         # Use Supabase Auth to send password reset email
         supabase.auth.reset_password_for_email(email, {
-            "redirectTo": _reset_password_redirect_url()
+            "redirect_to": _reset_password_redirect_url()
         })
     except Exception as e:
         print("FORGOT PASSWORD ERROR:", type(e).__name__)
@@ -753,11 +754,17 @@ async def reset_password(body: dict):
         {"error": "Could not reset password. The link may have expired — request a new one."},
         status_code=400,
     )
+    new_password = (body.get("new_password") or "").strip()
     try:
-        new_password = (body.get("new_password") or "").strip()
-        if len(new_password) < 8:
-            return JSONResponse({"error": "Password must be at least 8 characters."}, status_code=400)
-
+        password_check = validate_password(new_password)
+    except PasswordBreachCheckUnavailable:
+        return JSONResponse(
+            {"error": "Password security check is temporarily unavailable. Please try again."},
+            status_code=503,
+        )
+    if not password_check.ok:
+        return JSONResponse({"error": password_check.message}, status_code=400)
+    try:
         access_token = body.get("access_token")
         code = body.get("code")
 
@@ -853,6 +860,15 @@ async def register_user(body: dict, authorization: str | None = Header(default=N
                 {"error": "password is required, or leave it blank to auto-generate."},
                 status_code=400,
             )
+        try:
+            password_check = validate_password(password)
+        except PasswordBreachCheckUnavailable:
+            return JSONResponse(
+                {"error": "Password security check is temporarily unavailable. Please try again."},
+                status_code=503,
+            )
+        if not password_check.ok:
+            return JSONResponse({"error": password_check.message}, status_code=400)
 
         if role not in ("student", "teacher"):
             role = "student"
