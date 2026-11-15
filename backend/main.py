@@ -728,7 +728,7 @@ async def forgot_password(body: dict, request: Request):
     try:
         # Use Supabase Auth to send password reset email
         supabase.auth.reset_password_for_email(email, {
-            "redirectTo": _reset_password_redirect_url()
+            "redirect_to": _reset_password_redirect_url()
         })
     except Exception as e:
         print("FORGOT PASSWORD ERROR:", type(e).__name__)
