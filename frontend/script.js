@@ -2365,6 +2365,9 @@ async function setupImmersionDashboard() {
   let canClockOut = false;
   let sessionRowForDetails = null;
   let recentAttendanceRows = [];
+  let attendanceRowsForReport = [];
+  let journalEntriesForReport = [];
+  let reportProfile = { ...user };
   let qrScanStream = null;
   let qrScanRafId = null;
   let qrScanBusy = false;
@@ -2495,6 +2498,10 @@ async function setupImmersionDashboard() {
     const active = data.active || null;
     const todayKey = immersionTodayKeyLocal();
     const todayRow = immersionPickTodayRow(data.history, todayKey);
+    attendanceRowsForReport = Array.isArray(data.history) ? [...data.history] : [];
+    if (active && !attendanceRowsForReport.some((row) => String(row.id || "") === String(active.id || ""))) {
+      attendanceRowsForReport.unshift(active);
+    }
 
     if (durationTimer) {
       clearInterval(durationTimer);
@@ -2598,6 +2605,7 @@ async function setupImmersionDashboard() {
       const res = await fetch(apiUrl("/journals"), { headers: immersionAuthHeaders() });
       const entries = await readApiJson(res);
       const arr = Array.isArray(entries) ? entries : [];
+      journalEntriesForReport = arr;
       box.innerHTML = arr.length
         ? arr
             .slice(0, 12)
@@ -2644,6 +2652,212 @@ async function setupImmersionDashboard() {
       box.innerHTML = `<p class="small-note">${escapeHtml(e?.message || "Could not load journals.")}</p>`;
     }
   }
+
+  function getPdfDocument() {
+    const jsPdf = window.jspdf;
+    if (!jsPdf || typeof jsPdf.jsPDF !== "function") {
+      throw new Error("The PDF generator is still loading. Please try again.");
+    }
+    const doc = new jsPdf.jsPDF();
+    if (typeof doc.autoTable !== "function") {
+      throw new Error("The PDF table generator is still loading. Please try again.");
+    }
+    return doc;
+  }
+
+  function reportStudentName() {
+    return getProfileDisplayName(reportProfile) || getProfileDisplayName(user) || "Student";
+  }
+
+  function reportStudentId() {
+    return String(reportProfile.id_number || user.id_number || "Unknown").trim();
+  }
+
+  function reportFilePart(value) {
+    return String(value || "Unknown").replace(/[^a-z0-9_-]+/gi, "_");
+  }
+
+  function reportDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toLocaleDateString();
+  }
+
+  function reportTime(value) {
+    return value ? fmtImmersionClock(value) : "—";
+  }
+
+  function addReportHeader(doc, title) {
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Student Name: ${reportStudentName()}`, 14, 28);
+    doc.text(`Student ID/LRN: ${reportStudentId()}`, 14, 35);
+    doc.text(`Date Generated: ${reportDate(new Date())}`, 14, 42);
+  }
+
+  function attendanceReport() {
+    if (!attendanceRowsForReport.length) {
+      showToast("There is no attendance data available to export yet.", "info");
+      return;
+    }
+    const doc = getPdfDocument();
+    addReportHeader(doc, "LearnIQ Track - Work Immersion Attendance Report");
+    doc.autoTable({
+      startY: 50,
+      head: [["Date", "Time In", "Time Out", "Location", "Verification Status"]],
+      body: attendanceRowsForReport.map((row) => [
+        row.date || row.calendar_date || (row.time_in ? String(row.time_in).slice(0, 10) : "—"),
+        reportTime(row.time_in),
+        reportTime(row.time_out),
+        row.readable_location_name || row.location || "—",
+        row.location_verified === true
+          ? "Verified"
+          : row.location_verified === false
+          ? "Not verified"
+          : row.status || (row.time_out ? "Completed" : "Active"),
+      ]),
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [245, 180, 0] },
+    });
+    doc.save(`Attendance_Report_${reportFilePart(reportStudentId())}.pdf`);
+  }
+
+  function hoursReport() {
+    if (!attendanceRowsForReport.length) {
+      showToast("There is no rendered-hours data available to export yet.", "info");
+      return;
+    }
+    const required = 600;
+    const total = attendanceRowsForReport.reduce((sum, row) => {
+      const hours = Number(row.total_hours);
+      return sum + (Number.isFinite(hours) ? hours : 0);
+    }, 0);
+    const remaining = Math.max(0, required - total);
+    const percent = required ? Math.min(100, (total / required) * 100) : 0;
+    const weekly = {};
+    attendanceRowsForReport.forEach((row) => {
+      const rawDate = row.date || row.calendar_date || row.time_in;
+      const date = rawDate ? new Date(String(rawDate).slice(0, 10) + "T00:00:00") : null;
+      const hours = Number(row.total_hours);
+      if (!date || Number.isNaN(date.getTime()) || !Number.isFinite(hours)) return;
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+      const key = weekStart.toISOString().slice(0, 10);
+      weekly[key] = (weekly[key] || 0) + hours;
+    });
+
+    const doc = getPdfDocument();
+    addReportHeader(doc, "LearnIQ Track - Work Immersion Hours Summary");
+    doc.autoTable({
+      startY: 50,
+      theme: "grid",
+      body: [
+        ["Required Hours", `${required.toFixed(2)} hours`],
+        ["Total Rendered Hours", `${total.toFixed(2)} hours`],
+        ["Remaining Hours", `${remaining.toFixed(2)} hours`],
+        ["Completion Percentage", `${percent.toFixed(1)}%`],
+      ],
+      styles: { fontSize: 10, cellPadding: 3 },
+      columnStyles: { 0: { fontStyle: "bold", cellWidth: 55 } },
+    });
+    const weeklyRows = Object.keys(weekly)
+      .sort()
+      .map((start) => [reportDate(start), `${weekly[start].toFixed(2)} hours`]);
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 10,
+      head: [["Week Starting", "Rendered Hours"]],
+      body: weeklyRows.length ? weeklyRows : [["—", "0.00 hours"]],
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [245, 180, 0] },
+    });
+    doc.save(`Hours_Summary_${reportFilePart(reportStudentId())}.pdf`);
+  }
+
+  function journalPlainText(value) {
+    const html = journalBodyToHtml(value);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    return (container.textContent || container.innerText || String(value || ""))
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .trim();
+  }
+
+  function journalReport() {
+    if (!journalEntriesForReport.length) {
+      showToast("There are no journal entries available to export yet.", "info");
+      return;
+    }
+    const entries = [...journalEntriesForReport].sort((a, b) => {
+      const aDate = a.entry_date || a.submitted_at || a.created_at || "";
+      const bDate = b.entry_date || b.submitted_at || b.created_at || "";
+      return String(aDate).localeCompare(String(bDate));
+    });
+    const doc = getPdfDocument();
+    addReportHeader(doc, "LearnIQ Track - Work Immersion Journal Compilation");
+    let y = 52;
+    entries.forEach((entry, index) => {
+      const date = entry.entry_date || entry.submitted_at || entry.created_at;
+      const text = journalPlainText(entry.body || entry.journal_text);
+      if (!text) return;
+      if (y > 270) {
+        doc.addPage();
+        y = 18;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(`Entry ${index + 1} - ${reportDate(date)}`, 14, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(text, 182);
+      lines.forEach((line) => {
+        if (y > 285) {
+          doc.addPage();
+          y = 18;
+        }
+        doc.text(line, 14, y);
+        y += 5;
+      });
+      y += 5;
+    });
+    if (y > 255) {
+      doc.addPage();
+      y = 25;
+    }
+    doc.setFontSize(10);
+    doc.line(18, y + 12, 88, y + 12);
+    doc.line(115, y + 12, 185, y + 12);
+    doc.text("Student Signature", 18, y + 19);
+    doc.text("Work Immersion Supervisor / Teacher", 115, y + 19);
+    doc.save(`Journal_Compilation_${reportFilePart(reportStudentId())}.pdf`);
+  }
+
+  const reportGenerators = {
+    attendance: attendanceReport,
+    hours: hoursReport,
+    journal: journalReport,
+  };
+  document.querySelectorAll("[data-report-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const generator = reportGenerators[button.dataset.reportType];
+      if (!generator || button.disabled) return;
+      const originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.textContent = "Generating…";
+      try {
+        generator();
+      } catch (e) {
+        showToast(e?.message || "Could not generate the PDF.", "error");
+      } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+      }
+    });
+  });
 
 
   viewTimeInDetailsBtn?.addEventListener("click", () => {
@@ -2760,6 +2974,13 @@ async function setupImmersionDashboard() {
     }
   });
 
+  try {
+    const profileResponse = await fetch(apiUrl("/me"), { headers: immersionAuthHeaders() });
+    const fetchedProfile = await readApiJson(profileResponse);
+    reportProfile = { ...reportProfile, ...fetchedProfile };
+  } catch (e) {
+    console.error("immersion profile:", e);
+  }
   await refreshAttendanceUi();
   await loadJournals();
 }

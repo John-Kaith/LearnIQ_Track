@@ -9958,11 +9958,25 @@ html:not([data-theme="dark"]) .admin-lesson-preview-tabs .workspace-tab.is-activ
   padding: 1.1rem 1.15rem;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--gc-surface, rgba(255, 255, 255, 0.7));
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
-  color: inherit;
+  color: var(--text);
   font: inherit;
+}
+
+.gradecard-strand-card .small-note,
+.gradecard-strand-count {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .gradecard-strand-card {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .gradecard-strand-card .small-note,
+html[data-theme="dark"] .gradecard-strand-count {
+  color: #cbd5e1;
 }
 
 .gradecard-strand-card:hover {
