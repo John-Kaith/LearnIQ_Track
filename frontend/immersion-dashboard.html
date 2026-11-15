@@ -20,6 +20,8 @@
   <script src="https://cdn.jsdelivr.net/npm/turndown@7.2.0/dist/turndown.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js" defer></script>
   <script src="script.js?v=2026102302" defer></script>
 </head>
 <body>
@@ -299,21 +301,21 @@
             <div class="report-card">
               <h4>Attendance Report</h4>
               <p>Monthly attendance summary with detailed time logs.</p>
-              <button class="btn btn-secondary">
+              <button type="button" class="btn btn-secondary" id="download-attendance-report-btn" data-report-type="attendance">
                 <i class="fa-solid fa-download"></i> Download PDF
               </button>
             </div>
             <div class="report-card">
               <h4>Hours Summary</h4>
               <p>Weekly and monthly hours breakdown with trends.</p>
-              <button class="btn btn-secondary">
+              <button type="button" class="btn btn-secondary" id="download-hours-report-btn" data-report-type="hours">
                 <i class="fa-solid fa-download"></i> Download PDF
               </button>
             </div>
             <div class="report-card">
               <h4>Journal Compilation</h4>
               <p>All journal entries compiled into a single document.</p>
-              <button class="btn btn-secondary">
+              <button type="button" class="btn btn-secondary" id="download-journal-report-btn" data-report-type="journal">
                 <i class="fa-solid fa-download"></i> Download PDF
               </button>
             </div>
