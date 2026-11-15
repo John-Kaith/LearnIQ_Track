@@ -3207,6 +3207,7 @@ function setupAdminTeacherRegistrationPage() {
     window.location.href = "login.html";
     return;
   }
+  bindPasswordStrength("atr-password", document.getElementById("atr-password-strength"));
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3227,6 +3228,10 @@ function setupAdminTeacherRegistrationPage() {
     }
     if (!lastName || !firstName) {
       showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+    if (passwordRaw.trim() && !getPasswordStrength(passwordRaw.trim()).valid) {
+      showAuthMessage(getPasswordStrength(passwordRaw.trim()).message, messageEl, "error");
       return;
     }
 
@@ -3322,6 +3327,7 @@ function setupAdminStudentRegistrationPage() {
     window.location.href = "login.html";
     return;
   }
+  bindPasswordStrength("asr-password", document.getElementById("asr-password-strength"));
 
   document.getElementById("asr-grade-level")?.addEventListener("change", refreshAdminRegSectionOptions);
   document.getElementById("asr-strand")?.addEventListener("change", refreshAdminRegSectionOptions);
@@ -3348,6 +3354,10 @@ function setupAdminStudentRegistrationPage() {
     }
     if (!lastName || !firstName) {
       showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+    if (passwordRaw.trim() && !getPasswordStrength(passwordRaw.trim()).valid) {
+      showAuthMessage(getPasswordStrength(passwordRaw.trim()).message, messageEl, "error");
       return;
     }
     if (!gradeLevel || !strand) {
@@ -3419,6 +3429,7 @@ function setupTeacherStudentRegistrationPage() {
     window.location.href = role === "student" ? "subjects.html" : "login.html";
     return;
   }
+  bindPasswordStrength("tsr-password", document.getElementById("tsr-password-strength"));
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3441,6 +3452,10 @@ function setupTeacherStudentRegistrationPage() {
     }
     if (!lastName || !firstName) {
       showAuthMessage("Last name and first name are required.", messageEl, "error");
+      return;
+    }
+    if (passwordRaw.trim() && !getPasswordStrength(passwordRaw.trim()).valid) {
+      showAuthMessage(getPasswordStrength(passwordRaw.trim()).message, messageEl, "error");
       return;
     }
     if (!gradeLevel || !strand) {
@@ -3605,6 +3620,23 @@ function buildLoginPayload(identifierRaw, password) {
   return payload;
 }
 
+function authenticatedLandingPage(user) {
+  const role = String(user?.role || "").trim().toLowerCase();
+  if (role === "admin") return "admin-approval.html";
+  if (role === "teacher") return "teacher-learniq-dashboard.html";
+  if (role === "student") return "module-selection.html";
+  return "";
+}
+
+function redirectAuthenticatedFromLogin() {
+  const user = getCurrentUserSession();
+  if (!user?.access_token) return false;
+  const target = authenticatedLandingPage(user);
+  if (!target) return false;
+  window.location.replace(target);
+  return true;
+}
+
 function setupLoginPage() {
   const loginForm = document.querySelector("#login-form");
   const loginMessage = document.querySelector("#login-message");
@@ -3682,13 +3714,13 @@ function setupLoginPage() {
           /* keep redirect even if theme sync fails */
         }
         if (user.role === "admin") {
-          window.location.href = "admin-approval.html";
+          window.location.replace("admin-approval.html");
         } else if (user.role === "teacher") {
-          window.location.href = "teacher-learniq-dashboard.html";
+          window.location.replace("teacher-learniq-dashboard.html");
         } else if (user.role === "student") {
-          window.location.href = "module-selection.html";
+          window.location.replace("module-selection.html");
         } else {
-          window.location.href = "login.html";
+          window.location.replace("login.html");
         }
       }, 1000);
     } catch (error) {
@@ -3743,13 +3775,59 @@ function setupForgotPasswordPage() {
   });
 }
 
+function getPasswordStrength(password) {
+  const value = String(password || "");
+  const common = new Set(["password", "password1", "password123", "qwerty123", "admin123", "welcome123"]);
+  const checks = [
+    value.length >= 10,
+    /[A-Z]/.test(value),
+    /[a-z]/.test(value),
+    /\d/.test(value),
+    /[^A-Za-z0-9\s]/.test(value),
+    !common.has(value.toLowerCase()),
+  ];
+  const score = checks.filter(Boolean).length;
+  const missing = [];
+  if (!checks[0]) missing.push("at least 10 characters");
+  if (!checks[1]) missing.push("an uppercase letter");
+  if (!checks[2]) missing.push("a lowercase letter");
+  if (!checks[3]) missing.push("a number");
+  if (!checks[4]) missing.push("a symbol");
+  return {
+    score,
+    label: score >= 6 ? "Strong" : score >= 4 ? "Fair" : "Weak",
+    valid: checks.slice(0, 5).every(Boolean) && checks[5],
+    message: missing.length ? `Weak password: add ${missing.join(", ")}.` : "Strong password.",
+  };
+}
+
+function bindPasswordStrength(inputId, messageElement) {
+  const input = document.getElementById(inputId);
+  if (!input || !messageElement) return;
+  const update = () => {
+    const value = input.value;
+    if (!value) {
+      messageElement.style.display = "none";
+      return;
+    }
+    const strength = getPasswordStrength(value);
+    messageElement.textContent = `${strength.label} password${strength.valid ? "" : ` — ${strength.message}`}`;
+    messageElement.style.display = "block";
+    messageElement.style.color = strength.valid ? "#15803d" : "#b45309";
+  };
+  input.addEventListener("input", update);
+  update();
+}
+
 function setupResetPasswordPage() {
   const form = document.querySelector("#reset-password-form");
   const message = document.querySelector("#reset-password-message");
   const fieldError = document.querySelector("#reset-password-field-error");
   const subtitle = document.querySelector("#reset-password-subtitle");
   const submitBtn = document.querySelector("#reset-password-submit-btn");
+  const strengthMessage = document.querySelector("#reset-password-strength");
   if (!form) return;
+  bindPasswordStrength("reset-new-password", strengthMessage);
 
   // Supabase sends the recovery token as a hash fragment (implicit flow)
   // or as a ?code= query param (PKCE flow) — support both.
@@ -3786,8 +3864,9 @@ function setupResetPasswordPage() {
     const confirmPassword = document.querySelector("#reset-confirm-password").value;
     if (fieldError) fieldError.style.display = "none";
 
-    if (newPassword.length < 8) {
-      showAuthMessage("Password must be at least 8 characters.", fieldError || message, "error");
+    const strength = getPasswordStrength(newPassword);
+    if (!strength.valid) {
+      showAuthMessage(strength.message, fieldError || message, "error");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -11021,7 +11100,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Only run page-specific setup if we're on the correct page
   if (window.location.pathname.includes('login.html') || window.location.pathname.endsWith('/login')) {
-    setupLoginPage();
+    if (!redirectAuthenticatedFromLogin()) setupLoginPage();
   }
   if (window.location.pathname.includes('signup.html') || window.location.pathname.endsWith('/signup')) {
     // signupPage is already handled by setupSignupPage()
